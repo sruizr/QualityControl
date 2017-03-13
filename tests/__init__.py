@@ -1,8 +1,8 @@
 from quactrl import dal
 
 
-class TestApp:
+class TestBase:
 
     @classmethod
     def setUpClass(cls):
-        dal.db_init('sqlite:///:memory:')
+        dal.db_init('sqlite:///:memory:', echo=True)
