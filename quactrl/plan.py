@@ -1,3 +1,7 @@
+from sqlalchemy import Column, String, Integer
+from quactrl import Base
+
+
 class Characteristic(Base):
     __tablename__ = 'characteristics'
 
@@ -6,6 +10,11 @@ class Characteristic(Base):
     element = Column(String)
     element_key = Column(String)
     specs = Column(String)
+
+    def __init__(self, attribute, element, element_key):
+        self.attribute = attribute
+        self.element = element
+        self.element_key = element_key
 
     def identify(self, key, specs=None):
         self.element_key = key
