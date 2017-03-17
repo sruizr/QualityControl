@@ -1,14 +1,14 @@
 from sqlalchemy import Column, String, Integer
-from quactrl import Base
+from sqlalchemy.orm import relationship
+from quactrl import Model
 
 
-class Characteristic(Base):
+class Characteristic(Model):
     __tablename__ = 'characteristics'
 
     id = Column(Integer, primary_key=True)
     attribute = Column(String)
-    element = Column(String)
-    element_key = Column(String)
+    element_id = Column(Integer)
     specs = Column(String)
 
     def __init__(self, attribute, element, element_key):
@@ -31,32 +31,51 @@ class Characteristic(Base):
         return description
 
 
-class Control:
+class Control(Model):
+    __tablename__ = 'controls'
+
+    characteristic_id = Column(Integer)
+    sampling = Column(Integer)
+    method_id = Column(Integer)
+    parent_id = Column(Integer)
+    detection_point_id = Column(Integer)
+    measure_system_id = Column(Integer)
+
+    reaction_id = Column(Integer)
+
     def __init__(self, characteristic, method, pars=None):
         self.characteristic = characteristic
         self.method = method
         self.pars = pars
 
 
-class Failure:
-    def __init__(self, mode, attribute, element, key_element=None):
-        self.failure_mode = mode
-        self.attribute = attribute
-        self.element = element
-        self.key_element = key_element
+class Method(Model):
+    __tablename__ = 'methods'
+    name = Column(String)
+    content = Column(String)
 
-    @property
-    def description(self):
-        description = '{} {} en {}'.format(self.failure_mode, self.attribute, self.element)
-        if self.key_element:
-            description = description + ' {}'.format(self.key_element)
+
+class FailureMode(Model):
+    __tablename__ = 'failures'
+
+    mode = Column(String(30))
+    characteristic_id = Column(Integer)
+    characteristic = 'f'
+
+    def __init__(self, characteristic, mode):
+        self.characteristic = characteristic
+        self.mode = mode
+
+    def __str__(self):
+        description = '{} {}'.format(self.mode, self.characteristic)
 
         return description
 
-    def __eq__(self, other):
-        is_equal = self.failure_mode == other.failure_mode
-        is_equal = is_equal and (self.attribute == other.attribute)
-        is_equal = is_equal and (self.element == other.element)
-        is_equal = is_equal and (self.key_element == other.key_element)
 
-        return is_equal
+class Reaction(Model):
+    __tablename__ = 'reactions'
+
+
+class PlanDAO:
+    """ Class to operate with Plan Objects"""
+    pass

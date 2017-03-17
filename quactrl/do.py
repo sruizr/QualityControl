@@ -35,3 +35,8 @@ class Check:
     def end_check(self):
         if not self.failures:
             self.result = 'OK'
+
+
+class DoDAO:
+    """Class to operate with Do Objects"""
+    pass

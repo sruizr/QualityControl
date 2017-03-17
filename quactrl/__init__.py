@@ -1,10 +1,13 @@
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
-
 Base = declarative_base()
+
+
+class Model(Base):
+    id = Column(Integer, primary_key=True)
 
 
 class DataAccessLayer:
