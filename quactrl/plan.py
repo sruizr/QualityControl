@@ -22,7 +22,6 @@ class Characteristic(Base):
         return description
 
 
-
 class Control:
     def __init__(self, characteristic, method, pars=None):
         self.characteristic = characteristic
