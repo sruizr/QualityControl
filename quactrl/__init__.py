@@ -1,7 +1,7 @@
 
-from sqlalchemy import create_engine
-from sqlalchemy.types import Column, String, Integer
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
+from sqlalchemy.types import String, Integer
+from sqlalchemy.orm import sessionmaker, backref, relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()

@@ -1,6 +1,5 @@
-from sqlalchemy import Column, String, Integer
-from sqlalchemy.orm import relationship
-from quactrl import Model
+from quactrl import Model, ForeignKey, relationship, backref
+from quactrl.resources import Element
 
 
 class Characteristic(Model):
@@ -9,32 +8,35 @@ class Characteristic(Model):
     id = Column(Integer, primary_key=True)
     attribute = Column(String)
     element_id = Column(Integer)
+    element = relationship(
+        Element,
+        backref=backref('characteristics',
+                        uselist=True,
+                        cascade='delete,all')
+    )
     specs = Column(String)
+    requirements = None
 
-    def __init__(self, attribute, element, element_key):
+    def __init__(self, attribute, element, specs=None):
         self.attribute = attribute
         self.element = element
-        self.element_key = element_key
+        if specs:
+            self.specs = specs
 
     def identify(self, key, specs=None):
         self.element_key = key
         if specs is not None:
             self.specs = specs
 
-    def add_children(self, children):
-        self.children = children
-
     def __repr__(self):
         description = '{} en {}'.format(self.attribute, self.element)
-        if self.element_key:
-            description = description + ' - {}'.format(self.element_key)
         return description
 
 
 class Control(Model):
     __tablename__ = 'controls'
 
-    characteristic_id = Column(Integer)
+    characteristic_id = Column(Integer, ForeignKey('characteristics.id'))
     sampling = Column(Integer)
     method_id = Column(Integer)
     parent_id = Column(Integer)
