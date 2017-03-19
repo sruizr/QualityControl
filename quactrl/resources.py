@@ -1,4 +1,4 @@
-from quactrl import Model, Column, String, Integer
+from quactrl import Model, Column, String
 
 
 class Element(Model):
@@ -6,10 +6,19 @@ class Element(Model):
     name = Column(String(50))
     key = Column(String(10))
 
+    def __init__(self, name, key=None):
+        self.name = name
+        self.key = key
+
     def __str__(self):
         description = self.name
         if self.key:
                     description += '[{}]'.format(self.key)
+        return description
+
+    def __repr__(self):
+        identification = '#{} - '.format(self.id)
+        return identification + str(self)
 
 
 class DetectionPoint(Model):

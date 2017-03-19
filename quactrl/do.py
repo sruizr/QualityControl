@@ -1,3 +1,6 @@
+from quactrl import Column, ForeignKey
+
+
 class Batch:
     def __init__(self, part_number, batch_number, operator):
         self.part_number = part_number

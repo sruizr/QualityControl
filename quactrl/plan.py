@@ -1,18 +1,17 @@
-from quactrl import Model, ForeignKey, relationship, backref
+from quactrl import (
+    Model, ForeignKey, relationship, backref, Column, String, Integer
+)
 from quactrl.resources import Element
 
 
 class Characteristic(Model):
     __tablename__ = 'characteristics'
 
-    id = Column(Integer, primary_key=True)
     attribute = Column(String)
-    element_id = Column(Integer)
+    element_id = Column(Integer, ForeignKey('elements.id'), nullable=False)
     element = relationship(
         Element,
-        backref=backref('characteristics',
-                        uselist=True,
-                        cascade='delete,all')
+        backref=backref('characteristics', uselist=True, cascade='delete,all')
     )
     specs = Column(String)
     requirements = None
@@ -23,13 +22,25 @@ class Characteristic(Model):
         if specs:
             self.specs = specs
 
-    def identify(self, key, specs=None):
-        self.element_key = key
-        if specs is not None:
-            self.specs = specs
+    def __str__(self):
+        description = '{} @ {}'.format(self.attribute, self.element)
+        return description
 
-    def __repr__(self):
-        description = '{} en {}'.format(self.attribute, self.element)
+
+class FailureMode(Model):
+    __tablename__ = 'failures'
+
+    mode = Column(String(30))
+    characteristic_id = Column(Integer)
+    characteristic = 'f'
+
+    def __init__(self, characteristic, mode):
+        self.characteristic = characteristic
+        self.mode = mode
+
+    def __str__(self):
+        description = '{} {}'.format(self.mode, self.characteristic)
+
         return description
 
 
@@ -55,23 +66,6 @@ class Method(Model):
     __tablename__ = 'methods'
     name = Column(String)
     content = Column(String)
-
-
-class FailureMode(Model):
-    __tablename__ = 'failures'
-
-    mode = Column(String(30))
-    characteristic_id = Column(Integer)
-    characteristic = 'f'
-
-    def __init__(self, characteristic, mode):
-        self.characteristic = characteristic
-        self.mode = mode
-
-    def __str__(self):
-        description = '{} {}'.format(self.mode, self.characteristic)
-
-        return description
 
 
 class Reaction(Model):

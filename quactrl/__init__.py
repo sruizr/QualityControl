@@ -8,10 +8,16 @@ Base = declarative_base()
 
 
 class Model(Base):
+    __abstract__ = True
     id = Column(Integer, primary_key=True)
+
+    def __repr__(self):
+        identification = '#{} - '.format(self.id)
+        return identification + str(self)
 
 
 class DataAccessLayer:
+
     connection = None
     engine = None
     conn_string = None
