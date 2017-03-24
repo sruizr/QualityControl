@@ -14,3 +14,4 @@ class A_Characteristic(TestBase):
         assert str(characteristic) == 'atributo @ elemento[key]'
 
     def should_have_requirements(self):
+        pass

@@ -1,4 +1,3 @@
-
 from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
 from sqlalchemy.types import String, Integer
 from sqlalchemy.orm import sessionmaker, backref, relationship
