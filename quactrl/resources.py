@@ -25,8 +25,8 @@ class Element(Model):
     name = Column(String(50))
     key = Column(String(15))
     composed_by = relationship('ElementComposition',
-                               back_populates='child')
-    used_by = relationship('ElementCompostion', back_populates='parent')
+                               back_populates='parent')
+    used_by = relationship('ElementComposition', back_populates='child')
 
     def __init__(self, name, key=None):
         self.name = name
