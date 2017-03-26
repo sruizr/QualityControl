@@ -11,7 +11,7 @@ class Characteristic(Model):
     element_id = Column(Integer, ForeignKey('elements.id'), nullable=False)
     element = relationship(
         Element,
-        backref=backref('characteristics', uselist=True, cascade='delete,all')
+        backref=backref('characteristics', uselist=False, cascade='delete,all')
     )
     specs = Column(String)
     requirements = None
@@ -25,6 +25,16 @@ class Characteristic(Model):
     def __str__(self):
         description = '{} @ {}'.format(self.attribute, self.element)
         return description
+
+
+class CharacteristicRelation(Model):
+    __tablename__ = 'char_relations'
+    from_char_id = Column(Integer)
+
+    to_char_id =1
+
+    def __init__(self, requirem):
+        pass
 
 
 class FailureMode(Model):
@@ -48,6 +58,7 @@ class Control(Model):
     __tablename__ = 'controls'
 
     characteristic_id = Column(Integer, ForeignKey('characteristics.id'))
+    characteristic = relationship(Characteristic)
     sampling = Column(Integer)
     method_id = Column(Integer)
     parent_id = Column(Integer)

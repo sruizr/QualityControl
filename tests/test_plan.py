@@ -15,3 +15,9 @@ class A_Characteristic(TestBase):
 
     def should_have_requirements(self):
         pass
+
+
+class A_Control(TestBase):
+
+    def should_have_characteristics(self):
+        pass

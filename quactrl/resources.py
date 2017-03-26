@@ -7,10 +7,12 @@ class ElementComposition(Base):
     __tablename__ = 'element_compositions'
 
     parent_id = Column(Integer, ForeignKey('elements.id'), primary_key=True)
-    parent = relationship("Element", back_populates="composed_by")
+    parent = relationship("Element", back_populates="composed_by",
+                          foreign_keys=[parent_id])
 
-    child_id = Column(Integer, ForeignKey('element.id'), primary_key=True)
-    child = relationship("Element", back_populates="used_by")
+    child_id = Column(Integer, ForeignKey('elements.id'), primary_key=True)
+    child = relationship("Element", back_populates="used_by",
+                         foreign_keys=[child_id])
 
     qty = Column(Integer)
 
@@ -24,9 +26,10 @@ class Element(Model):
     __tablename__ = 'elements'
     name = Column(String(50))
     key = Column(String(15))
-    composed_by = relationship('ElementComposition',
-                               back_populates='parent')
-    used_by = relationship('ElementComposition', back_populates='child')
+    composed_by = relationship('ElementComposition',back_populates='parent',
+                               foreign_keys='ElementComposition.parent_id')
+    used_by = relationship('ElementComposition', back_populates='child',
+                           foreign_keys='ElementComposition.child_id')
 
     def __init__(self, name, key=None):
         self.name = name

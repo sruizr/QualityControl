@@ -20,6 +20,7 @@ class DataAccessLayer:
     connection = None
     engine = None
     conn_string = None
+    Session = None
 
     def db_init(self, conn_string, echo=False):
         self.engine = create_engine(conn_string or self.conn_string, echo=echo)
