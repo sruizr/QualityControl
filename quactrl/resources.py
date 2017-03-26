@@ -48,8 +48,9 @@ class Element(Model):
         return identification + str(self)
 
 
-class DetectionPoint(Model):
-    __tablename__ = 'locations'
+class Operation(Model):
+    __tablename__ = 'operations'
+    name = Column(String(100))
     responsible = Column(String)
 
 
