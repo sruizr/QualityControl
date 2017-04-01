@@ -58,8 +58,14 @@ class FailureMode(Model):
 
 class Method(Model):
     __tablename__ = 'methods'
-    name = Column(String)
+    number = Column(String(15))
+    name = Column(String(150))
     content = Column(String)
+
+    def __init__(self, number, name=None, content=None):
+        self.number = number
+        self.name = name
+        self.content = content
 
 
 class Reaction(enum.Enum):
@@ -109,10 +115,18 @@ class Control(Model):
 
     reaction = Column(Enum(Reaction))
 
-    def __init__(self, characteristic, method, pars=None):
+    def __init__(self, characteristic, sampling_class,
+                 method, detection_point, sampling_qty=1, method_details=None,
+                 reaction=Reaction.low_level):
+
         self.characteristic = characteristic
+        self.sampling_class = sampling_class
         self.method = method
-        self.pars = pars
+        self.detection_point = detection_point
+
+        self.sampling_qty = sampling_qty
+        self.method_details = method_details
+        self.reaction = reaction
 
 
 class PlanDAO:

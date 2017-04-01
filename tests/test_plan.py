@@ -1,7 +1,11 @@
 from tests import TestBase
 from unittest.mock import Mock
-from quactrl.resources import Element
-from quactrl.plan import Characteristic
+from quactrl.resources import (
+    Element, Operation
+)
+from quactrl.plan import (
+    Characteristic, Sampling, Reaction, Method, FailureMode, Control
+)
 
 
 class A_Characteristic(TestBase):
@@ -18,6 +22,12 @@ class A_Characteristic(TestBase):
 
 
 class A_Control(TestBase):
-
     def should_have_characteristics(self):
-        pass
+        element = Element('elemento, key')
+        characteristic = Characteristic('atributo', element)
+
+        method = Method('método')
+        detection_point = Operation('operacion', 'role')
+        control = Control(characteristic, Sampling.by_day, method,
+                          detection_point)
+

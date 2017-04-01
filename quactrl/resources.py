@@ -50,8 +50,14 @@ class Element(Model):
 
 class Operation(Model):
     __tablename__ = 'operations'
-    name = Column(String(100))
-    responsible = Column(String)
+    number = Column(String(15))
+    name = Column(String(150))
+    responsible = Column(String(50))
+
+    def __init__(self, number, responsible, name=None):
+        self.number = number
+        self.responsible = responsible
+        self.name = name
 
 
 class Device(Model):
