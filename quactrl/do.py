@@ -1,4 +1,6 @@
-from quactrl import Column, ForeignKey
+from quactrl import (
+                     Column, ForeignKey, relationship, Model
+)
 
 
 class Batch:
@@ -11,7 +13,8 @@ class Batch:
 
 
 class Item:
-    def __init__(self, serial_number):
+    def __init__(self, serial_number, batch):
+        self.batch = batch
         self.sn = serial_number
         self.status = None
         self.tests = []
@@ -24,12 +27,27 @@ class Item:
         return False
 
 
-class Check:
-    def __init__(self, control, item):
+class Test(Model):
+    def __init__(self, test_operation, sample, operator):
+        self.detection_point
+
+
+    def begin_test():
+        pass
+
+
+class Check(Model):
+    __tablename__ = 'checks'
+    control = Column(Integer)
+    failures = relationship('dnfas')
+    result = Column(Integer)
+    sampling = Column()
+
+    def __init__(self, control, sampling):
         self.control = control
         self.failures = []
         self.result = 'Pending'
-        self.item = item
+        self.sampling = sampling
 
     def report_failure(self, failure):
         self.failures.append(failure)
