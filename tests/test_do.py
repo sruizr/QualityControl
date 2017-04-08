@@ -12,6 +12,19 @@ from quactrl.do import (
 )
 
 
+class A_Test(TestBase):
+
+
+    def should_init_with_shift_and_batch(self):
+
+        test = Test(self.shift, self.batch)
+
+    def should_accept_(self):
+        pass
+
+
 class A_Check(TestBase):
 
-    def should_init_with
+    def should_init_with(self):
+        pass
+
