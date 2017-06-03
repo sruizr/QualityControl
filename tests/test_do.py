@@ -64,9 +64,7 @@ class A_Test(TestBase):
         test.check[1].eval.return_value = 'OK'
         assert test.eval() == 'OK'
 
-    def should_persist_every_check(self, mock_dal):
-        mock_time
-        mock_dal.session.assert_called_with(...)
+
 
     def should_close_with_result_ok(self, mock_dal, mock_time):
         now = datetime.datetime(2017, 1, 2)
@@ -96,26 +94,66 @@ class A_Test(TestBase):
         assert test.result = 'OK'
         mock_dal.session.commit.assert_called_with(test)
 
+    def should_(self):
+        pass
 
 class A_Check:
 
-    def should_eval_characteristic(self):
-        # Atribute characteristic without failures: OK
-        test.checks[0].result_is(None, failures=[])
+    def setup_method(self, method):
+        control = Mock()
+        control.characteristic = Mock()
+        sample = Mock()
+        test = Mock()
+        self.check = Check(control, sample, test)
 
-        # Value characteristic without failures: OK
-        value = 1
-        test.checks[1].result_is(value, failures=[])
-        check = self.load_check()
+    def should_eval_characteristic(self):
+        check = self.check
+
+        assert check.eval() == 'pending'
+
+        # Atribute characteristic without failures: OK
+        check.result_is(failures=[])
         assert check.eval() == 'OK'
 
-    def should_persist_values_and_failures(self):
+        # Atribute characteristic with failure: OK
+        check.result_is(failures=[Mock()])
+        assert check.eval() == 'NG'
+
+    @patch('quactrl.do.time')
+    @patch('quactrl.do.dal')
+    def should_archive_failures(self, mock_dal, mock_time):
+        now = datetime.datetime(2017, 5, 1)
+        mock_time.time.return_value = now
 
         # Atribute characteristic with failure: NOK
-        failure = [Mock()]
+        failure = Mock()
         test.checks[2].result_is(None, failures=failure)
 
-        # Value characteristic with failure: NOK
+        # Value characteristic
         test.checks[3].result_is(value, failures=failure)
 
+        # Characteristic with children
+        check.control.characteristic = Mock()
+        check.control.characteristic.children = [Mock() for _ in range(3)]
 
+        check.result_is(failures=[])
+
+    @patch('quactrl.do.dal')
+    def should_create_measurements(self, mock_dal):
+        now = datetime.datetime(2017, 5, 1)
+        mock_time.time.return_value = now
+
+        # Atribute characteristic with failure: NOK
+        failure = Mock()
+        test.checks[2].result_is(None, failures=failure)
+
+        # Value characteristic
+        test.checks[3].result_is(value, failures=failure)
+
+        # Characteristic with children
+        check.control.characteristic = Mock()
+        check.control.characteristic.children = [Mock() for _ in range(3)]
+
+        check.result_is(failures=[])
+
+    def shour
