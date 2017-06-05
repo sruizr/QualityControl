@@ -102,9 +102,38 @@ class A_Check:
     def setup_method(self, method):
         control = Mock()
         control.characteristic = Mock()
+        test = Mock()
+        self.check = Check(control, test)
+
+    @patch('quactrl.do.dal')
+    def should_init(self, mock_dal):
+        control = Mock()
+        control.characteristic = Mock()
         sample = Mock()
         test = Mock()
-        self.check = Check(control, sample, test)
+
+        # Basic value characteristic
+        control.characteristic.specs = [1, 2]
+        check = Check(test, control)
+        assert check.test == test
+        assert check.control =control
+        assert check.measurements[check.characteristic] = None
+
+        # Value characteristic with array value
+        control.characteristic.specs = [[1,2], [1, 2]]
+        check = Check(test, control)
+        assert len(check.measurements[check.characteristic]) == 2
+
+        # Basic attribute characteristic
+        control.characteristic.specs = 'abc'
+        check = Check(test, control)
+        assert control.characteristic not in check.measurements.keys()
+
+        # Characteristic with children
+        control.characteristic.children = [Mock() for _ in xrange(3)]
+        check = Check(test, control)
+        for characteristic in control.characteristic.children:
+            assert check.measurements[characteristic] == None
 
     def should_eval_characteristic(self):
         check = self.check
@@ -156,4 +185,15 @@ class A_Check:
 
         check.result_is(failures=[])
 
-    def shour
+    @patch('quactrl.do.dal')
+    def should_create(self, mock_dal):
+        pass
+
+    @patch('quactrl.do.dal')
+    def should_execute(self, mock_dal):
+
+        self.check.record_result = Mock()
+
+        self.check.execute()
+
+        self.check.record_result.assert_is_called_with()

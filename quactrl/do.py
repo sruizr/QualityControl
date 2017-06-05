@@ -1,5 +1,5 @@
 from quactrl import (
-                     Column, ForeignKey, relationship, Model
+                     Column, ForeignKey, relationship, Model, dal
 )
 
 
@@ -28,34 +28,75 @@ class Item:
 
 
 class Test(Model):
-    def __init__(self, test_operation, sample, operator):
-        self.detection_point
+    sample = Column(Integer)
+    operator = Column(String)
+    checks = []
+    open_date = Column(datetime)
+
+    def __init__(self, test_plan, sample, operator):
+        sel
+        for control in test_plan.controls:
+            check = Check(self, control)
 
 
-    def begin_test():
-        pass
+    def run_test(self):
+        try:
+            for check in self.checks:
+                check.execute()
+        finally:
+            self.result = self.eval()
+            dal.session.commit()
+
+    def eval(self):
+        results = set([check.eval() for check in self.checks])
+
+        if 'Pending' in results:
+            return 'Pending'
+        if 'NoOk' in results:
+            return 'NoOk'
+        if 'Suspicious' in results:
+            return 'Suspicious'
+
+        return 'OK'
+
+
+class Measurement(Model):
+    __tablename__ = 'measurements'
+    check = Column(Integer)
+    value = Column(Float)
+    index = Column(Integer)
+    characteristic = Column(Integer)
+
+
+class Failure(Model):
+    __tablename__ = 'failures'
+    check = Column(Integer)
+    failure_mode = Column(Integer)
+    key = Column(String)
 
 
 class Check(Model):
     __tablename__ = 'checks'
     control = Column(Integer)
-    failures = relationship('dnfas')
+    test = Column(Integer)
     result = Column(Integer)
-    sampling = Column()
 
-    def __init__(self, control, sampling):
+    failures = relationship('dnfas')
+    measurements = relationship()
+
+    def __init__(self, test, control):
+        self.test = test
         self.control = control
-        self.failures = []
+
         self.result = 'Pending'
-        self.sampling = sampling
+        self.failures = []
 
     def report_failure(self, failure):
         self.failures.append(failure)
         self.result = 'NOK'
 
-    def end_check(self):
-        if not self.failures:
-            self.result = 'OK'
+    def execute(**kwargs):
+        pass
 
 
 class DoDAO:
