@@ -12,6 +12,8 @@ from quactrl.do import (
     Sample, Test, Check
 )
 
+from pytest import mark
+
 
 class A_Test(TestBase):
 
@@ -55,7 +57,7 @@ class A_Test(TestBase):
 
         check = test.checks[0]
         check.eval.return_value = 'OK'
-        mock_dal.commit.assert_is_called_with(check..)
+        mock_dal.commit.assert_is_called_with()
         assert test.eval() == 'Pending'
 
         test.checks[1].eval.return_value = 'NOK'
@@ -77,7 +79,7 @@ class A_Test(TestBase):
         test.close()
 
         assert test.close_date == now
-        assert test.result = 'OK'
+        assert test.result == 'OK'
         mock_dal.session.commit.assert_called_with(test)
 
     def should_close_with_result_Nok(self, mock_dal, mock_time):
@@ -91,7 +93,7 @@ class A_Test(TestBase):
         test.close()
 
         assert test.close_date == now
-        assert test.result = 'OK'
+        assert test.result == 'OK'
         mock_dal.session.commit.assert_called_with(test)
 
     def should_(self):
@@ -113,11 +115,11 @@ class A_Check:
         test = Mock()
 
         # Basic value characteristic
-        control.characteristic.specs = [1, 2]
+        control.characteristic.limits = [1, 2]
         check = Check(test, control)
         assert check.test == test
-        assert check.control =control
-        assert check.measurements[check.characteristic] = None
+        assert check.control == control
+        assert check.measurements[check.characteristic] is None
 
         # Value characteristic with array value
         control.characteristic.specs = [[1,2], [1, 2]]
@@ -133,21 +135,43 @@ class A_Check:
         control.characteristic.children = [Mock() for _ in xrange(3)]
         check = Check(test, control)
         for characteristic in control.characteristic.children:
-            assert check.measurements[characteristic] == None
+            assert check.measurements[characteristic] is None
 
-    def should_eval_characteristic(self):
+    @mark.current
+    def should_eval_value_simple_with_limits(self):
         check = self.check
+        characteristic = check.control.characteristic
+        characteristic.limits = [1,2]
 
-        assert check.eval() == 'pending'
+        value = 1.5
+        check.eval_value(value, characteristic)
+        assert check.failures == []
 
-        # Atribute characteristic without failures: OK
-        check.result_is(failures=[])
-        assert check.eval() == 'OK'
+        value = 3
+        check.eval_value(value, characteristic)
+        assert check.failures[-1].mode == 'high'
 
-        # Atribute characteristic with failure: OK
-        check.result_is(failures=[Mock()])
-        assert check.eval() == 'NG'
+        value = 0
+        check.eval_value(value, characteristic)
+        assert check.failures[-1].mode == 'low'
 
+    @mark.current
+    def should_eval_value_simple_with_nominal_tol(self):
+        check = self.check
+        characteristic = check.control.characteristic
+        characteristic.nominal_tol = [0,1]
+
+        value = 0.5
+        check.eval_value(value, characteristic)
+        assert check.failures == []
+
+        value = 1.5
+        check.eval_value(value, characteristic)
+        assert check.failures[-1].mode == 'high'
+
+        value = -1.2
+        check.eval_value(value, characteristic)
+        assert check.failures[-1].mode == 'low'
     @patch('quactrl.do.time')
     @patch('quactrl.do.dal')
     def should_archive_failures(self, mock_dal, mock_time):

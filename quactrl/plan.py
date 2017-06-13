@@ -7,7 +7,7 @@ from quactrl.resources import Element, Operation, Device
 
 
 class Characteristic(Model):
-    __tablename__ = 'characteristics'
+    __tablename__ = 'characteristic'
 
     attribute = Column(String)
     element_id = Column(Integer, ForeignKey('elements.id'), nullable=False)
@@ -40,11 +40,11 @@ class CharacteristicRelation(Model):
 
 
 class FailureMode(Model):
-    __tablename__ = 'failures'
+    __tablename__ = 'failure_mode'
 
     mode = Column(String(30))
-    characteristic_id = Column(Integer, ForeignKey('characteristics.id'))
-    characteristic = relationship(Characteristic)
+    characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
+    characteristic = relationship('Characteristic')
 
     def __init__(self, characteristic, mode):
         self.characteristic = characteristic
@@ -97,7 +97,7 @@ class Sampling(enum.Enum):
 class Control(Model):
     __tablename__ = 'controls'
 
-    characteristic_id = Column(Integer, ForeignKey('characteristics.id'))
+    characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
     characteristic = relationship(Characteristic)
 
     sampling_qty = Column(Integer, default=1)

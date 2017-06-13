@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
-from sqlalchemy.types import String, Integer
+from sqlalchemy.types import String, Integer, DATETIME, DECIMAL
 from sqlalchemy.orm import sessionmaker, backref, relationship
 from sqlalchemy.ext.declarative import declarative_base
 

@@ -1,5 +1,6 @@
 from quactrl import (
-                     Column, ForeignKey, relationship, Model, dal
+    Column, ForeignKey, relationship, Model,
+    dal, Integer, String, DATETIME, DECIMAL
 )
 
 
@@ -28,10 +29,11 @@ class Item:
 
 
 class Test(Model):
+    __tablename__='test'
     sample = Column(Integer)
     operator = Column(String)
     checks = []
-    open_date = Column(datetime)
+    # open_date = Column(Datetime)
 
     def __init__(self, test_plan, sample, operator):
         sel
@@ -61,28 +63,37 @@ class Test(Model):
 
 
 class Measurement(Model):
-    __tablename__ = 'measurements'
-    check = Column(Integer)
-    value = Column(Float)
+    __tablename__ = 'measurement'
+    check_id = Column(Integer, ForeignKey('check.id'))
+    characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
+    value = Column(DECIMAL)
     index = Column(Integer)
-    characteristic = Column(Integer)
 
 
 class Failure(Model):
-    __tablename__ = 'failures'
-    check = Column(Integer)
-    failure_mode = Column(Integer)
-    key = Column(String)
+    __tablename__ = 'failure'
+    check_id = Column(Integer, ForeignKey('check.id'))
+    mode = Column(String)
+    characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
+    characteristic = relationship('Characteristic')
+
+    def __init__(self, mode, characterisc):
+        self.mode = mode
+        self.characteristic = characterisc
+
+class Sample:
+    pass
 
 
 class Check(Model):
-    __tablename__ = 'checks'
+    __tablename__ = 'check'
     control = Column(Integer)
     test = Column(Integer)
     result = Column(Integer)
+    state = Column(Integer)
 
-    failures = relationship('dnfas')
-    measurements = relationship()
+    failures = relationship('Failure', backref='check')
+    measurements = relationship('Measurement', backref='check')
 
     def __init__(self, test, control):
         self.test = test
@@ -90,6 +101,20 @@ class Check(Model):
 
         self.result = 'Pending'
         self.failures = []
+
+    def eval_value(self, value, characteristic, uncertainty=None):
+        if hasattr(obj, name)
+        if hasattr(characteristic, 'limits'):
+            limits = characteristic.limits
+        if type(limits[0]) != list:
+            if limits[1] is not None:
+                if value > limits[1]:
+                    self.failures.append(Failure('high', characteristic))
+            if limits[0] is not None:
+                if value < limits[0]:
+                    self.failures.append(Failure('low', characteristic))
+
+
 
     def report_failure(self, failure):
         self.failures.append(failure)
