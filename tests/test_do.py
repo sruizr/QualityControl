@@ -138,24 +138,29 @@ class A_Check:
             assert check.measurements[characteristic] is None
 
     @mark.current
-    def should_eval_value_simple_with_limits(self):
+    def should_eval_measure_simple_value(self):
         check = self.check
-        characteristic = check.control.characteristic
-        characteristic.limits = [1,2]
+        characteristic = Mock()
+        characteristic.limits = [1, 2]
+        del characteristic.modes
+
+        check.control.characteristic = characteristic
 
         value = 1.5
-        check.eval_value(value, characteristic)
+        check.eval_measure(value, characteristic)
         assert check.failures == []
 
+
         value = 3
-        check.eval_value(value, characteristic)
+        check.eval_measure(value, characteristic)
         assert check.failures[-1].mode == 'high'
 
         value = 0
-        check.eval_value(value, characteristic)
+        check.eval_measure(value, characteristic)
         assert check.failures[-1].mode == 'low'
 
-    @mark.current
+
+
     def should_eval_value_simple_with_nominal_tol(self):
         check = self.check
         characteristic = check.control.characteristic

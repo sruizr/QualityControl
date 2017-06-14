@@ -2,6 +2,7 @@ from quactrl import (
     Column, ForeignKey, relationship, Model,
     dal, Integer, String, DATETIME, DECIMAL
 )
+import pdb
 
 
 class Batch:
@@ -102,19 +103,33 @@ class Check(Model):
         self.result = 'Pending'
         self.failures = []
 
-    def eval_value(self, value, characteristic, uncertainty=None):
-        if hasattr(obj, name)
+    def eval_measure(self, value, characteristic, uncertainty=0):
         if hasattr(characteristic, 'limits'):
             limits = characteristic.limits
+        else:
+            CharacteristicValueError('There is no limit')
+
+        if hasattr(characteristic, 'modes'):
+            modes = characteristic.modes
+        else:
+            modes = ['low', 'high']
+        # pdb.set_trace()
+        failure = None
         if type(limits[0]) != list:
             if limits[1] is not None:
+                if value > limits[1] - uncertainty:
+                    failure = Failure(modes[1] + '?', characteristic)
                 if value > limits[1]:
-                    self.failures.append(Failure('high', characteristic))
+                    failure = Failure(modes[1], characteristic)
+
             if limits[0] is not None:
+                if value < limits[0] + uncertainty:
+                    failure = Failure(modes[0] + '?', characteristic)
                 if value < limits[0]:
-                    self.failures.append(Failure('low', characteristic))
+                    failure = Failure(modes[0], characteristic)
 
-
+        if failure:
+            self.failures.append(failure)
 
     def report_failure(self, failure):
         self.failures.append(failure)
