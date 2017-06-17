@@ -8,11 +8,12 @@ from quactrl.plan import (
     Characteristic, Sampling, Reaction, Method, FailureMode, Control
 )
 
-from quactrl.do import (
+from quactrl.check import (
     Sample, Test, Check
 )
 
 from pytest import mark
+import pdb
 
 
 class A_Test(TestBase):
@@ -57,7 +58,7 @@ class A_Test(TestBase):
 
         check = test.checks[0]
         check.eval.return_value = 'OK'
-        mock_dal.commit.assert_is_called_with()
+        mock_dal.commit.assert_called_with()
         assert test.eval() == 'Pending'
 
         test.checks[1].eval.return_value = 'NOK'
@@ -132,7 +133,7 @@ class A_Check:
         assert control.characteristic not in check.measurements.keys()
 
         # Characteristic with children
-        control.characteristic.children = [Mock() for _ in xrange(3)]
+        control.characteristic.children = [Mock() for _ in range(3)]
         check = Check(test, control)
         for characteristic in control.characteristic.children:
             assert check.measurements[characteristic] is None
@@ -143,22 +144,52 @@ class A_Check:
         characteristic = Mock()
         characteristic.limits = [1, 2]
         del characteristic.modes
+        check.add_measure = Mock()
 
         check.control.characteristic = characteristic
 
         value = 1.5
         check.eval_measure(value, characteristic)
-        assert check.failures == []
-
+        assert len(check.failures) == 0
+        check.add_measure.assert_called_with(value, characteristic)
 
         value = 3
         check.eval_measure(value, characteristic)
-        assert check.failures[-1].mode == 'high'
+        failure = check.failures[-1]
+        assert failure.mode == 'high'
+        assert failure.index == None
+        check.add_measure.assert_called_with(value, characteristic)
 
         value = 0
         check.eval_measure(value, characteristic)
         assert check.failures[-1].mode == 'low'
+        assert check.failures[0].index == 1
+        assert check.failures[1].index == 2
+        check.add_measure.assert_called_with(value, characteristic)
 
+    @mark.current
+    def should_add_measure(self):
+        check = self.check
+        characteristic = Mock()
+        characteristic.limits = [None, None]
+
+        value_1 = 1
+        check.add_measure(value_1, characteristic)
+        assert check.measures[characteristic] == value_1
+
+
+        value_2 = 4
+        check.add_measure(value_2, characteristic)
+        assert check.measures[characteristic] == [value_1, value_2]
+
+        value_3 = 4
+        check.add_measure(value_3, characteristic)
+        assert check.measures[characteristic] == [value_1, value_2, value_3]
+
+
+    @mark.current
+    def should_process_results(self):
+        pass
 
 
     def should_eval_value_simple_with_nominal_tol(self):
@@ -225,4 +256,4 @@ class A_Check:
 
         self.check.execute()
 
-        self.check.record_result.assert_is_called_with()
+        self.check.record_result.assert_called_with()
