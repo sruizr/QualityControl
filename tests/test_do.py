@@ -160,42 +160,6 @@ class A_Check:
         assert check.failures[-1].mode == 'low'
 
 
-
-    def should_eval_value_simple_with_nominal_tol(self):
-        check = self.check
-        characteristic = check.control.characteristic
-        characteristic.nominal_tol = [0,1]
-
-        value = 0.5
-        check.eval_value(value, characteristic)
-        assert check.failures == []
-
-        value = 1.5
-        check.eval_value(value, characteristic)
-        assert check.failures[-1].mode == 'high'
-
-        value = -1.2
-        check.eval_value(value, characteristic)
-        assert check.failures[-1].mode == 'low'
-    @patch('quactrl.do.time')
-    @patch('quactrl.do.dal')
-    def should_archive_failures(self, mock_dal, mock_time):
-        now = datetime.datetime(2017, 5, 1)
-        mock_time.time.return_value = now
-
-        # Atribute characteristic with failure: NOK
-        failure = Mock()
-        test.checks[2].result_is(None, failures=failure)
-
-        # Value characteristic
-        test.checks[3].result_is(value, failures=failure)
-
-        # Characteristic with children
-        check.control.characteristic = Mock()
-        check.control.characteristic.children = [Mock() for _ in range(3)]
-
-        check.result_is(failures=[])
-
     @patch('quactrl.do.dal')
     def should_create_measurements(self, mock_dal):
         now = datetime.datetime(2017, 5, 1)
