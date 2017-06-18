@@ -1,9 +1,17 @@
+from enum import Enum
 from quactrl import (
     Column, ForeignKey, relationship, Model,
-    dal, Integer, String, DATETIME, DECIMAL
+    dal, Integer, String, DATETIME, DECIMAL, method_directory
 )
+from datetime import datetime
 import pdb
 
+
+class Result(Enum):
+    PENDING = 0
+    SUSPICIOUS = 1
+    NOK = 2
+    OK = 3
 
 
 class Test(Model):
@@ -14,7 +22,7 @@ class Test(Model):
     # open_date = Column(Datetime)
 
     def __init__(self, test_plan, sample, operator):
-        sel
+
         for control in test_plan.controls:
             check = Check(self, control)
 
@@ -63,22 +71,35 @@ class Failure(Model):
 class Sample:
     pass
 
+class MethodFactory:
+    def __init__(self, method_directory):
+        self.method_directory = method_directory
+
+    def get_method(self, name):
+        def none_method(check):
+            pass
+
+        return none_method
+
+method_factory = MethodFactory(method_directory)
 
 class Check(Model):
     __tablename__ = 'check'
     control = Column(Integer)
-    test = Column(Integer)
+    test = Column(Integer, ForeignKey('test.id'))
     result = Column(Integer)
     state = Column(Integer)
 
-    failures = relationship('Failure', backref='check')
+    failuresss = relationship('Failure', backref='check')
     measuresss= relationship('Measurement', backref='check')
 
     def __init__(self, test, control):
         self.test = test
         self.control = control
 
-        self.result = 'Pending'
+        self.method = method_factory.get_method(control.method)
+
+        self.state = Result.PENDING
         self.failures = []
         self.measures = dict()
 
@@ -95,9 +116,11 @@ class Check(Model):
         self.add_measure(value, characteristic)
         limits = characteristic.limits
 
-        index = None
-        for
-        if type(limits[0]) != list:
+        index = 0
+        if type(self.measures[characteristic]) is list:
+            index = len(self.measures[characteristic])- 1
+
+        if type(limits[0]) is not list:
             if limits[1] is not None:
                 if value > limits[1] - uncertainty:
                     failure = Failure(modes[1] + '?', characteristic, index)
@@ -133,6 +156,17 @@ class Check(Model):
 
     def process_results(self):
         """"Persist measures and failures and state final result of check"""
+        if self.failures == []:
+            self.state = Result.OK
+        else:
+            self.state = Result.NOK
 
-    def execute(**kwargs):
-        pass
+    def execute(self, observer=None):
+        """Execute the check"""
+        self.open_date = datetime.now()
+        self.method()
+        self.process_results()
+        if observer:
+            observer.update(self)
+        self.close_date = datetime.now()
+

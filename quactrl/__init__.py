@@ -3,6 +3,8 @@ from sqlalchemy.types import String, Integer, DATETIME, DECIMAL
 from sqlalchemy.orm import sessionmaker, backref, relationship
 from sqlalchemy.ext.declarative import declarative_base
 
+method_directory = None
+
 Base = declarative_base()
 
 

@@ -9,8 +9,8 @@ from quactrl.plan import (
 )
 
 from quactrl.check import (
-    Sample, Test, Check
-)
+    Sample, Test, Check, Result
+    )
 
 from pytest import mark
 import pdb
@@ -18,12 +18,24 @@ import pdb
 
 class A_Test(TestBase):
 
+    def setup_method(self, method):
+        test_plan = Mock()
+        test_plan.controls = [Mock() for _ in range(3)]
+        for control in test_plan.controls:
+            control.characteristic = Mock()
+
+        sample = Mock()
+        operator = Mock()
+
+        self.test = Test(test_plan, sample, operator)
     """Defines procedure for creating and filling a test report(database)"""
-    @patch('quactrl.do.time')
-    @patch('quactrl.do.dal')
-    def should_init(self, mock_dal, mock_time):
-        now = datetime.datetime(2000, 1, 1)
-        mock_time.now.return_value = now
+
+    @mark.current
+    @patch('quactrl.check.datetime')
+    @patch('quactrl.check.dal')
+    def should_init(self, mock_dal, mock_datetime):
+        now = datetime(2000, 1, 1)
+        mock_datetime.now.return_value = now
 
         test_plan = self.helper.get_test_plan()
         mock_dal.query.return_value = test_plan
@@ -50,6 +62,7 @@ class A_Test(TestBase):
 
         mock_dal.session.commit.assertis_called()
 
+    @patch('quactrl.check.dal')
     def should_eval_test_from_check_evals(self, mock_dal):
         test = self.load_simple_test()
         test.checks = [Mock(), Mock()]
@@ -59,20 +72,19 @@ class A_Test(TestBase):
         check = test.checks[0]
         check.eval.return_value = 'OK'
         mock_dal.commit.assert_called_with()
-        assert test.eval() == 'Pending'
+        assert test.eval() == Result.PENDING
 
         test.checks[1].eval.return_value = 'NOK'
-        assert test.eval() == 'NoOK'
+        assert test.eval() == Result.NOK
 
         test.check[1].eval.return_value = 'OK'
-        assert test.eval() == 'OK'
+        assert test.eval() == Result.OK
 
-
-
-    def should_close_with_result_ok(self, mock_dal, mock_time):
-        now = datetime.datetime(2017, 1, 2)
-        mock_time.now.return_value = now
-
+    @patch('quactrl.check.datetime')
+    @patch('quactrl.check.dal')
+    def should_close_with_result_ok(self, mock_dal, mock_datetime):
+        now = datetime(2017, 1, 2)
+        mock_datetime.now.return_value = now
         test = self.load_simple_test()
 
         test.eval = Mock()
@@ -83,9 +95,11 @@ class A_Test(TestBase):
         assert test.result == 'OK'
         mock_dal.session.commit.assert_called_with(test)
 
-    def should_close_with_result_Nok(self, mock_dal, mock_time):
-        now = datetime.datetime(2017, 1, 2)
-        mock_time.now.return_value = now
+    @patch('quactrl.check.datetime')
+    @patch('quactrl.check.dal')
+    def should_close_with_result_Nok(self, mock_dal, mock_datetime):
+        now = datetime(2017, 1, 2)
+        mock_datetime.now.return_value = now
 
         test = self.load_simple_test()
 
@@ -97,8 +111,9 @@ class A_Test(TestBase):
         assert test.result == 'OK'
         mock_dal.session.commit.assert_called_with(test)
 
-    def should_(self):
+    def should_persist_results(self):
         pass
+
 
 class A_Check:
 
@@ -106,9 +121,9 @@ class A_Check:
         control = Mock()
         control.characteristic = Mock()
         test = Mock()
-        self.check = Check(control, test)
+        self.check = Check(test, control)
 
-    @patch('quactrl.do.dal')
+    @patch('quactrl.check.dal')
     def should_init(self, mock_dal):
         control = Mock()
         control.characteristic = Mock()
@@ -120,54 +135,38 @@ class A_Check:
         check = Check(test, control)
         assert check.test == test
         assert check.control == control
-        assert check.measurements[check.characteristic] is None
+        assert check.failures == []
+        assert len(check.measures) == 0
+        assert check.state == Result.PENDING
+        assert hasattr(check, 'method')
 
-        # Value characteristic with array value
-        control.characteristic.specs = [[1,2], [1, 2]]
-        check = Check(test, control)
-        assert len(check.measurements[check.characteristic]) == 2
-
-        # Basic attribute characteristic
-        control.characteristic.specs = 'abc'
-        check = Check(test, control)
-        assert control.characteristic not in check.measurements.keys()
-
-        # Characteristic with children
-        control.characteristic.children = [Mock() for _ in range(3)]
-        check = Check(test, control)
-        for characteristic in control.characteristic.children:
-            assert check.measurements[characteristic] is None
-
-    @mark.current
     def should_eval_measure_simple_value(self):
         check = self.check
         characteristic = Mock()
         characteristic.limits = [1, 2]
         del characteristic.modes
-        check.add_measure = Mock()
 
         check.control.characteristic = characteristic
 
         value = 1.5
         check.eval_measure(value, characteristic)
         assert len(check.failures) == 0
-        check.add_measure.assert_called_with(value, characteristic)
+        assert len(check.measures) == 1
+        assert check.measures[characteristic] == value
 
         value = 3
         check.eval_measure(value, characteristic)
         failure = check.failures[-1]
         assert failure.mode == 'high'
-        assert failure.index == None
-        check.add_measure.assert_called_with(value, characteristic)
+        assert failure.index == 1
+        assert len(check.measures[characteristic]) == 2
 
         value = 0
         check.eval_measure(value, characteristic)
         assert check.failures[-1].mode == 'low'
-        assert check.failures[0].index == 1
-        assert check.failures[1].index == 2
-        check.add_measure.assert_called_with(value, characteristic)
+        assert check.failures[-1].index == 2
+        assert check.measures[characteristic][-1] == value
 
-    @mark.current
     def should_add_measure(self):
         check = self.check
         characteristic = Mock()
@@ -187,37 +186,37 @@ class A_Check:
         assert check.measures[characteristic] == [value_1, value_2, value_3]
 
 
-    @mark.current
-    def should_process_results(self):
-        pass
+    def should_process_results_changing_state(self):
+        """From measures and evaluations fixes a check state"""
+        check = self.check
 
-    @patch('quactrl.do.dal')
-    def should_create_measurements(self, mock_dal):
-        now = datetime.datetime(2017, 5, 1)
-        mock_time.time.return_value = now
+        check.process_results()
+        assert check.state == Result.OK
 
-        # Atribute characteristic with failure: NOK
-        failure = Mock()
-        test.checks[2].result_is(None, failures=failure)
+        mock_failure = Mock()
+        check.failures = [mock_failure]
+        check.process_results()
+        assert check.state == Result.NOK
 
-        # Value characteristic
-        test.checks[3].result_is(value, failures=failure)
+    def should_process_results_updating_relations(self):
+        check = self.check
+        raise NotImplementedError()
 
-        # Characteristic with children
-        check.control.characteristic = Mock()
-        check.control.characteristic.children = [Mock() for _ in range(3)]
 
-        check.result_is(failures=[])
+    @patch('quactrl.check.datetime')
+    def should_execute(self, mock_datetime):
+        begin = datetime(2017, 1, 1)
+        end = datetime(2017,1,2)
+        mock_datetime.now.side_effect = [begin, end]
 
-    @patch('quactrl.do.dal')
-    def should_create(self, mock_dal):
-        pass
+        check = self.check
+        check.method = Mock()
+        check.process_results = Mock()
+        observer = Mock()
 
-    @patch('quactrl.do.dal')
-    def should_execute(self, mock_dal):
+        check.execute(observer)
 
-        self.check.record_result = Mock()
+        assert check.open_date == begin
+        assert check.close_date == end
+        observer.update.assert_called_with(check)
 
-        self.check.execute()
-
-        self.check.record_result.assert_called_with()
