@@ -3,31 +3,45 @@ from quactrl import (
     Column, ForeignKey, relationship, Model,
     dal, Integer, String, DATETIME, DECIMAL, method_directory
 )
+from quactrl.factories import ms_factory, method_factory
 from datetime import datetime
 import pdb
 
 
 class Result(Enum):
     PENDING = 0
-    SUSPICIOUS = 1
+    ONGOING = 1
+    SUSPICIOUS = 2
     NOK = 2
-    OK = 3
+    OK = 10
+
+
+class TestManager:
+    """It handles tests in paralllel and load  test plans"""
+    pass
 
 
 class Test(Model):
 
     __tablename__ = 'test'
     sample = Column(Integer)
-    actor = Column(String)
+
+    verifier = Column(String)
+    state = Column(Integer)
     checks = []
     # open_date = Column(Datetime)
 
-    def __init__(self, test_tree, sample, operator):
-        self.test_tree = test_tree
+    def __init__(self, controls, sample, verifier):
+        session = dal.Session()
+        self.verifier = verifier
         self.sample = sample
-        self.actor = operator
+        self.state = Result.PENDING
+        for control in controls:
+            check = Check(self, control)
+            self.checks.append(check)
 
-        dal.session.commit()
+        session.add(self)
+        session.commit()
 
     def run_test(self):
         try:
