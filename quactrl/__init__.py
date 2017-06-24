@@ -31,7 +31,7 @@ class DataAccessLayer:
         self.Session = sessionmaker()
 
     def prepare_db(self):
-        self.metadata.create_all(self.engine)
+        self.metadata.create_all(self.engine,  )
         self.Session.configure(bind=self.engine)
 
 

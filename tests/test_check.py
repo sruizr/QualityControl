@@ -1,22 +1,18 @@
+from pytest import mark
 from tests import TestBase
 from datetime import datetime
 from unittest.mock import Mock, patch
-from quactrl.resources import (
-    Element, Operation
-)
 from quactrl.plan import (
-    Characteristic, Sampling, Reaction, Method, FailureMode, Control
+    Characteristic, Reaction, Method, FailureMode, Control
 )
-
 from quactrl.check import (
     Sample, Test, Check, Result
     )
-
-from pytest import mark
 import pdb
 
 
 class A_Test(TestBase):
+
 
     def setup_method(self, method):
         test_plan = Mock()
@@ -25,45 +21,34 @@ class A_Test(TestBase):
             control.characteristic = Mock()
 
         sample = Mock()
-        operator = Mock()
+        verifier = Mock()
+        self.test = Test(test_plan, sample, verifier)
+        self.dal = patch('quactrl.check.dal')
 
-        self.test = Test(test_plan, sample, operator)
-    """Defines procedure for creating and filling a test report(database)"""
+        self.dal_patcher = patch('quactrl.check.dal')
+        self.dal = self.patcher.start()
+
+    def tear_down(self, method):
+        self.dal_patcher.stop()
 
     @mark.current
     @patch('quactrl.check.datetime')
-    @patch('quactrl.check.dal')
-    def should_init(self, mock_dal, mock_datetime):
+    def should_init(self, mock_datetime):
         now = datetime(2000, 1, 1)
         mock_datetime.now.return_value = now
 
-        test_plan = self.helper.get_test_plan()
-        mock_dal.query.return_value = test_plan
-
-        process = Mock()
+        test_plan = Mock()
         sample = Mock()
-        user = Mock()
-        measure_system = Mock()
+        inspector = Mock()
+        pdb.set_trace()
 
-        test = Test(process,
-                    sample,
-                    user,
-                    measure_system)
+        test = Test(test_plan, sample, inspector)
+        mock_dal.session.commit.assert_called_with()
 
-        assert test.user == user
-        assert len(test.checks) == len(test_plan.controls)
+    def _should_load_measure_systems(self):
+        pass
 
-        for check, control in zip(test.checks, test.controls):
-            assert check.characteristic == control.characteristic
-
-        assert test.sample == sample
-        assert test.measure_sytem == measure_system
-        assert test.open_date == now
-
-        mock_dal.session.commit.assertis_called()
-
-    @patch('quactrl.check.dal')
-    def should_eval_test_from_check_evals(self, mock_dal):
+    def should_eval_test_from_check_evals(self):
         test = self.load_simple_test()
         test.checks = [Mock(), Mock()]
 
@@ -81,8 +66,7 @@ class A_Test(TestBase):
         assert test.eval() == Result.OK
 
     @patch('quactrl.check.datetime')
-    @patch('quactrl.check.dal')
-    def should_close_with_result_ok(self, mock_dal, mock_datetime):
+    def should_close_with_result_ok(self, mock_datetime):
         now = datetime(2017, 1, 2)
         mock_datetime.now.return_value = now
         test = self.load_simple_test()
@@ -96,8 +80,7 @@ class A_Test(TestBase):
         mock_dal.session.commit.assert_called_with(test)
 
     @patch('quactrl.check.datetime')
-    @patch('quactrl.check.dal')
-    def should_close_with_result_Nok(self, mock_dal, mock_datetime):
+    def should_close_with_result_Nok(self, mock_datetime):
         now = datetime(2017, 1, 2)
         mock_datetime.now.return_value = now
 
@@ -111,7 +94,19 @@ class A_Test(TestBase):
         assert test.result == 'OK'
         mock_dal.session.commit.assert_called_with(test)
 
-    def should_persist_results(self):
+    def _should_persist_results(self):
+        pass
+
+    def _should_stop_parallel_check_when_failure(self):
+        pass
+
+    def _should_store_check_results(self):
+        pass
+
+    def _should_receive_checks_notifications(self):
+        pass
+
+    def _should_notify_to_observers(self):
         pass
 
 
@@ -202,11 +197,10 @@ class A_Check:
         check = self.check
         raise NotImplementedError()
 
-
     @patch('quactrl.check.datetime')
     def should_execute(self, mock_datetime):
         begin = datetime(2017, 1, 1)
-        end = datetime(2017,1,2)
+        end = datetime(2017, 1, 2)
         mock_datetime.now.side_effect = [begin, end]
 
         check = self.check

@@ -15,17 +15,19 @@ class Result(Enum):
 
 
 class Test(Model):
-    __tablename__='test'
+
+    __tablename__ = 'test'
     sample = Column(Integer)
-    operator = Column(String)
+    actor = Column(String)
     checks = []
     # open_date = Column(Datetime)
 
-    def __init__(self, test_plan, sample, operator):
+    def __init__(self, test_tree, sample, operator):
+        self.test_tree = test_tree
+        self.sample = sample
+        self.actor = operator
 
-        for control in test_plan.controls:
-            check = Check(self, control)
-
+        dal.session.commit()
 
     def run_test(self):
         try:
@@ -68,8 +70,10 @@ class Failure(Model):
         self.characteristic = characterisc
         self.index = index
 
+
 class Sample:
     pass
+
 
 class MethodFactory:
     def __init__(self, method_directory):
