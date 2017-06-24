@@ -5,7 +5,7 @@ class TestBase:
 
     @classmethod
     def setup_class(cls):
-        dal.db_init('sqlite:///:memory:', echo=True)
+        dal.db_init('sqlite:///:memory:', echo=False)
         dal.prepare_db()
 
     def setup_method(self, method):

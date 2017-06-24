@@ -1,6 +1,6 @@
 from tests import TestBase
 from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 from quactrl.resources import (
     Element, Operation
 )
@@ -19,55 +19,54 @@ import pdb
 class A_Test(TestBase):
 
     def setup_method(self, method):
-        test_plan = Mock()
-        test_plan.controls = [Mock() for _ in range(3)]
-        for control in test_plan.controls:
+        """Defines procedure for creating and filling a test report(database)"""
+        self.test_plan = Mock()
+        self.controls = [Mock() for _ in range(3)]
+        for control in self.controls:
             control.characteristic = Mock()
+            control.measure_systems = ['ms1', 'ms2']
 
-        sample = Mock()
-        operator = Mock()
+        self.sample = Mock()
+        self.verifier = Mock()
 
-        self.test = Test(test_plan, sample, operator)
-    """Defines procedure for creating and filling a test report(database)"""
+        self.dal_patcher = patch('quactrl.check.dal')
+        self.factories_patcher = patch('quactrl.factories')
+        self.check_patcher = patch('quactrl.check.Check')
+
+        self.mock_dal = self.dal_patcher.start()
+        self.mock_factories = self.factories_patcher.start()
+        self.mock_check= self.check_patcher.start()
+
+    def teardown_method(self, method):
+        self.dal_patcher.stop()
+        self.mock_factories.stop()
+        self.mock_check.stop()
+
 
     @mark.current
-    @patch('quactrl.check.datetime')
-    @patch('quactrl.check.dal')
-    def should_init(self, mock_dal, mock_datetime):
-        now = datetime(2000, 1, 1)
-        mock_datetime.now.return_value = now
+    def should_init(self):
 
-        test_plan = self.helper.get_test_plan()
-        mock_dal.query.return_value = test_plan
+        test = Test(self.controls, self.sample, self.verifier)
 
-        process = Mock()
-        sample = Mock()
-        user = Mock()
-        measure_system = Mock()
+        assert test.verifier == self.verifier
+        assert len(self.controls) == len(test.checks)
+        assert test.state == Result.PENDING
 
-        test = Test(process,
-                    sample,
-                    user,
-                    measure_system)
+        for control, arg_call in zip(self.controls, self.mock_check.Check.call_args_list):
+            assert call(test, control) == arg_call
 
-        assert test.user == user
-        assert len(test.checks) == len(test_plan.controls)
+        assert test.sample == self.sample
 
-        for check, control in zip(test.checks, test.controls):
-            assert check.characteristic == control.characteristic
+        self.mock_dal.Session.assert_called_with()
+        session = self.mock_dal.Session()
+        session.add.assert_called_with(test)
+        session.commit.assert_called_with()
 
-        assert test.sample == sample
-        assert test.measure_sytem == measure_system
-        assert test.open_date == now
+    def should_eval_test_from_check_states(self):
+        test = Test(self.controls, self.sample, self.verifier)
+        FOR
 
-        mock_dal.session.commit.assertis_called()
-
-    @patch('quactrl.check.dal')
-    def should_eval_test_from_check_evals(self, mock_dal):
-        test = self.load_simple_test()
-        test.checks = [Mock(), Mock()]
-
-        assert test.eval() == 'Pending'
+        assert test.eval() ==
 
         check = test.checks[0]
         check.eval.return_value = 'OK'
@@ -81,8 +80,7 @@ class A_Test(TestBase):
         assert test.eval() == Result.OK
 
     @patch('quactrl.check.datetime')
-    @patch('quactrl.check.dal')
-    def should_close_with_result_ok(self, mock_dal, mock_datetime):
+    def should_close_with_result_ok(self, mock_datetime):
         now = datetime(2017, 1, 2)
         mock_datetime.now.return_value = now
         test = self.load_simple_test()
@@ -111,7 +109,7 @@ class A_Test(TestBase):
         assert test.result == 'OK'
         mock_dal.session.commit.assert_called_with(test)
 
-    def should_persist_results(self):
+    def should_run(self):
         pass
 
 

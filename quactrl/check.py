@@ -3,6 +3,7 @@ from quactrl import (
     Column, ForeignKey, relationship, Model,
     dal, Integer, String, DATETIME, DECIMAL, method_directory
 )
+from quactrl.factories import ms_factory, method_factory
 from datetime import datetime
 import pdb
 
@@ -17,15 +18,22 @@ class Result(Enum):
 class Test(Model):
     __tablename__='test'
     sample = Column(Integer)
-    operator = Column(String)
+    verifier = Column(String)
+    state = Column(Integer)
     checks = []
     # open_date = Column(Datetime)
 
-    def __init__(self, test_plan, sample, operator):
-
-        for control in test_plan.controls:
+    def __init__(self, controls, sample, verifier):
+        session = dal.Session()
+        self.verifier = verifier
+        self.sample = sample
+        self.state = Result.PENDING
+        for control in controls:
             check = Check(self, control)
+            self.checks.append(check)
 
+        session.add(self)
+        session.commit()
 
     def run_test(self):
         try:
