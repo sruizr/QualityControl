@@ -58,26 +58,25 @@ class A_Test(TestBase):
         assert test.sample == self.sample
 
         self.mock_dal.Session.assert_called_with()
-        session = self.mock_dal.Session()
+        session = self.mock_dal.Session(
         session.add.assert_called_with(test)
         session.commit.assert_called_with()
 
     def should_eval_test_from_check_states(self):
         test = Test(self.controls, self.sample, self.verifier)
-        FOR
 
-        assert test.eval() ==
-
-        check = test.checks[0]
-        check.eval.return_value = 'OK'
-        mock_dal.commit.assert_called_with()
         assert test.eval() == Result.PENDING
 
-        test.checks[1].eval.return_value = 'NOK'
+        test.checks[0].state = Result.OK
+        assert test.eval() == Result.ONGOING
+
+        test.checks[1].state = Result.NOK
         assert test.eval() == Result.NOK
 
-        test.check[1].eval.return_value = 'OK'
-        assert test.eval() == Result.OK
+        test.checks
+
+        test.checks[1].state = Result.OK  # Correct check
+
 
     @patch('quactrl.check.datetime')
     def should_close_with_result_ok(self, mock_datetime):

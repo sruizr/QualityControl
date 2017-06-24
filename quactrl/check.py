@@ -10,9 +10,10 @@ import pdb
 
 class Result(Enum):
     PENDING = 0
-    SUSPICIOUS = 1
+    ONGOING = 1
+    SUSPICIOUS = 2
     NOK = 2
-    OK = 3
+    OK = 10
 
 
 class Test(Model):
