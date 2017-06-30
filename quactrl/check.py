@@ -52,17 +52,22 @@ class Test(Model):
             dal.session.commit()
 
     def eval(self):
-        results = set([check.eval() for check in self.checks])
+        results = set([check.state for check in self.checks])
 
-        if 'Pending' in results:
-            return 'Pending'
-        if 'NoOk' in results:
-            return 'NoOk'
-        if 'Suspicious' in results:
-            return 'Suspicious'
+        if results == set([Result.PENDING]):
+            return Result.PENDING
 
-        return 'OK'
+        if Result.NOK in results:
+            return Result.NOK
 
+        if Result.PENDING in results:
+            return Result.ONGOING
+
+        if Result.SUSPICIOUS in results:
+            return Result.SUSPICIOUS
+
+        if results == set([Result.OK]):
+            return Result.OK
 
 class Measurement(Model):
     __tablename__ = 'measurement'
