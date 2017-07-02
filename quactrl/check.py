@@ -13,6 +13,7 @@ class Result(Enum):
     ONGOING = 1
     SUSPICIOUS = 2
     NOK = 2
+    CANCELLED = 8
     OK = 10
 
 
@@ -32,7 +33,6 @@ class Test(Model):
     # open_date = Column(Datetime)
 
     def __init__(self, controls, sample, verifier):
-        session = dal.Session()
         self.verifier = verifier
         self.sample = sample
         self.state = Result.PENDING
@@ -40,16 +40,42 @@ class Test(Model):
             check = Check(self, control)
             self.checks.append(check)
 
-        session.add(self)
-        session.commit()
+        self.session = dal.Session()
+        self.session.add(self)
+        self.session.commit()
 
-    def run_test(self):
+        self.current_check_index = None
+        self.observers = []
+
+    def execute(self):
+        """Run sequence of tests sequentially"""
+
+        if self.current_check_index is None:
+            self.current_check_index = 0
+
         try:
-            for check in self.checks:
-                check.execute()
-        finally:
-            self.result = self.eval()
-            dal.session.commit()
+            check = self.checks[self.current_check_index]
+            check.execute()
+            self.update(check)
+        except Exception as e:
+            self.close()
+            raise e
+
+    def update(self, check, progress=100):
+        if self.observers:
+            self.notify(check, progress)
+
+        if progress == 100:
+            self.current_check_index += 1
+            if self.current_check_index == len(self.checks):
+                # check sequence  is finished
+                self.current_check_index = None
+                self.close()
+            else:
+                self.execute()
+
+    def notify(self, check, progress):
+        pass
 
     def eval(self):
         results = set([check.state for check in self.checks])
@@ -68,6 +94,17 @@ class Test(Model):
 
         if results == set([Result.OK]):
             return Result.OK
+
+    def close(self):
+        state = self.eval()
+
+        if state == Result.ONGOING:
+            state = Result.CANCELLED
+
+        self.state = state
+        self.close_date = datetime.now()
+        self.session.commit()
+
 
 class Measurement(Model):
     __tablename__ = 'measurement'

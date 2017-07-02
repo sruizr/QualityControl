@@ -16,6 +16,7 @@ from pytest import mark
 import pdb
 
 
+@mark.current
 class A_Test(TestBase):
 
     def setup_method(self, method):
@@ -45,7 +46,7 @@ class A_Test(TestBase):
         self.mock_factories.stop()
         self.mock_check.stop()
 
-    @mark.current
+
     def should_init(self):
 
         test = Test(self.controls, self.sample, self.verifier)
@@ -64,7 +65,7 @@ class A_Test(TestBase):
         session.add.assert_called_with(test)
         session.commit.assert_called_with()
 
-    @mark.current
+
     def should_eval_test_from_check_states(self):
         test = Test(self.controls, self.sample, self.verifier)
 
@@ -74,7 +75,6 @@ class A_Test(TestBase):
         assert test.eval() == Result.PENDING
 
         test.checks[0].state = Result.OK
-        pdb.set_trace()
         assert test.eval() == Result.ONGOING
 
         test.checks[1].state = Result.NOK
@@ -88,37 +88,32 @@ class A_Test(TestBase):
         assert test.eval() == Result.OK
 
     @patch('quactrl.check.datetime')
-    def should_close_with_result_ok(self, mock_datetime):
+    def should_close(self, mock_datetime):
         now = datetime(2017, 1, 2)
         mock_datetime.now.return_value = now
-        test = self.load_simple_test()
+        test = Test(self.controls, self.sample, self.verifier)
 
         test.eval = Mock()
-        test.eval.return_value = 'OK'
+        test.eval.return_value = Result.OK
         test.close()
 
         assert test.close_date == now
-        assert test.result == 'OK'
-        mock_dal.session.commit.assert_called_with(test)
+        assert test.state == Result.OK
+        test.session.commit.assert_called_with()
 
-    @patch('quactrl.check.datetime')
-    @patch('quactrl.check.dal')
-    def should_close_with_result_Nok(self, mock_dal, mock_datetime):
-        now = datetime(2017, 1, 2)
-        mock_datetime.now.return_value = now
-
-        test = self.load_simple_test()
-
-        test.eval = Mock()
-        test.eval.return_value = 'NOK'
+        test.eval.return_value = Result.ONGOING
         test.close()
+        assert test.state == Result.CANCELLED
 
-        assert test.close_date == now
-        assert test.result == 'OK'
-        mock_dal.session.commit.assert_called_with(test)
 
-    def should_run(self):
-        pass
+    def should_execute_checks_sequentially(self):
+
+        test = Test(self.controls, self.sample, self.verifier)
+
+        test.execute()
+
+        for check in test.checks:
+            check.execute.assert_called_with()
 
 
 class A_Check:
