@@ -56,14 +56,15 @@ class Test(Model):
         try:
             check = self.checks[self.current_check_index]
             check.execute()
-            self.update(check)
         except Exception as e:
             self.close()
             raise e
 
     def update(self, check, progress=100):
-        if self.observers:
-            self.notify(check, progress)
+        self.notify(check, progress)
+
+        if self.state == Result.CANCELLED:
+            return None
 
         if progress == 100:
             self.current_check_index += 1
@@ -75,7 +76,8 @@ class Test(Model):
                 self.execute()
 
     def notify(self, check, progress):
-        pass
+        for observer in self.observers:
+            observer.update(chek, progress)
 
     def eval(self):
         results = set([check.state for check in self.checks])
@@ -95,8 +97,12 @@ class Test(Model):
         if results == set([Result.OK]):
             return Result.OK
 
-    def close(self):
-        state = self.eval()
+    def cancel(self):
+        self.close(Result.CANCELLED)
+
+    def close(self, state=None):
+        if state is None:
+            state = self.eval()
 
         if state == Result.ONGOING:
             state = Result.CANCELLED
@@ -224,9 +230,9 @@ class Check(Model):
     def execute(self, observer=None):
         """Execute the check"""
         self.open_date = datetime.now()
+        self.state = Result.ONGOING
         self.method()
         self.process_results()
-        if observer:
-            observer.update(self)
         self.close_date = datetime.now()
 
+        self.test.update(self)

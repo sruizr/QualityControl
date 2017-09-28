@@ -115,7 +115,7 @@ class A_Test(TestBase):
         for check in test.checks:
             check.execute.assert_called_with()
 
-
+@mark.current
 class A_Check:
 
     def setup_method(self, method):
