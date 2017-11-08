@@ -1,22 +1,27 @@
 from unittest.mock import Mock, patch
 from quactrl.services.inspection import (
     InspectionManager, Inspector, ControlRunner, SampleController)
+import pytest
+
+current = pytest.mark.current
 
 
 def create_fake_control_struct():
     def get_branch(length):
         branch = [Mock() for _ in range(length)]
         for index, control in enumerate(branch):
-            control.prev = control[index - 1]
+            control.prev = branch[index - 1]
         branch[0].prev = None
+        return branch
 
-    control_branch_1 = get_branc(2)
+    control_branch_1 = get_branch(2)
     control_branch_2 = get_branch(3)
     control_branch_3 = get_branch(4)
 
     # one branch with two branches
     control_branch_2[0].prev = control_branch_3[0].prev = control_branch_1[-1]
-    control_branch_1.extend(control_branch_2).extend(control_branch_3)
+    control_branch_1.extend(control_branch_2)
+    control_branch_1.extend(control_branch_3)
 
     return control_branch_1
 
@@ -30,40 +35,43 @@ class FakeCharacteristic:
 
 
 class An_InspectionManager:
-    def setup(self, method):
+    def setup_method(self, method):
         environment = Mock()
         environment.process = Mock()
         Control = Mock()
         Control.collect.return_value = create_fake_control_struct()
-        self.inspection_manager = InspectionManager(environment)
-        self.inspection_manager
+        self.im = InspectionManager(environment)
 
+
+    @current
     def should_setup_session(self):
         process = Mock()
-        self.inspection_manager.load_devices = Mock()
-        self.inspection_manage.setup_session(process)
 
-        assert self.inspection_manager.process == process
-        self.inspection_manager.load_devices.assert_called_once_with(process)
+        self.im.setup_session(process)
 
+        assert self.im.process == process
+        assert self.im.device_repo
+        self.im.env.session.DeviceRepository.assert_called_once_with(self.im.process)
+
+    @current
     def should_setup_batch(self):
         batch = Mock()
-        self.inspection_manager.load_controls = Mock()
+        batch.partnumber = '12345'
+        im = self.im
 
-        self.inspection_manager.setup_batch(batch)
+        im.process = Mock()
+        im.setup_batch(batch)
+        self.im.setup_batch(batch)
 
-        self.inspection_manager.load_controls.assert_called_once_with(batch)
+        assert self.im.batch
+        assert len(self.im.inspectors) == 3
 
-
-    def should_load_control_structure(self):
-        pass
-    
     def should_create_one_inspector_by_branch(self):
-        self.inspection_manager.controls = create_fake_control_struct()
-        self.inspection_manager.create_inspectors()
+        self.im.controls = create_fake_control_struct()
+        self.im.create_inspectors()
 
-        con
-        assert len(self.inspection_manager.inspectors) == 3
+
+        assert len(self.im.inspectors) == 3
 
     def should_manage_serial_inspectors(self):
         pass
