@@ -30,4 +30,3 @@ class A_Control(TestBase):
         detection_point = Operation('operacion', 'role')
         control = Control(characteristic, Sampling.by_day, method,
                           detection_point)
-

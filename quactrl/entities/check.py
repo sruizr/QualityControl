@@ -14,6 +14,7 @@ class Result(Enum):
     ONGOING = 1
     SUSPICIOUS = 2
     NOK = 2
+    CANCELLED = 8
     OK = 10
 
 
@@ -33,7 +34,6 @@ class Test(Model):
     # open_date = Column(Datetime)
 
     def __init__(self, controls, sample, verifier):
-        session = dal.Session()
         self.verifier = verifier
         self.sample = sample
         self.state = Result.PENDING
@@ -41,28 +41,76 @@ class Test(Model):
             check = Check(self, control)
             self.checks.append(check)
 
-        session.add(self)
-        session.commit()
+        self.session = dal.Session()
+        self.session.add(self)
+        self.session.commit()
 
-    def run_test(self):
+        self.current_check_index = None
+        self.observers = []
+
+    def execute(self):
+        """Run sequence of tests sequentially"""
+
+        if self.current_check_index is None:
+            self.current_check_index = 0
+
         try:
-            for check in self.checks:
-                check.execute()
-        finally:
-            self.result = self.eval()
-            dal.session.commit()
+            check = self.checks[self.current_check_index]
+            check.execute()
+        except Exception as e:
+            self.close()
+            raise e
+
+    def update(self, check, progress=100):
+        self.notify(check, progress)
+
+        if self.state == Result.CANCELLED:
+            return None
+
+        if progress == 100:
+            self.current_check_index += 1
+            if self.current_check_index == len(self.checks):
+                # check sequence  is finished
+                self.current_check_index = None
+                self.close()
+            else:
+                self.execute()
+
+    def notify(self, check, progress):
+        for observer in self.observers:
+            observer.update(chek, progress)
 
     def eval(self):
-        results = set([check.eval() for check in self.checks])
+        results = set([check.state for check in self.checks])
 
-        if 'Pending' in results:
-            return 'Pending'
-        if 'NoOk' in results:
-            return 'NoOk'
-        if 'Suspicious' in results:
-            return 'Suspicious'
+        if results == set([Result.PENDING]):
+            return Result.PENDING
 
-        return 'OK'
+        if Result.NOK in results:
+            return Result.NOK
+
+        if Result.PENDING in results:
+            return Result.ONGOING
+
+        if Result.SUSPICIOUS in results:
+            return Result.SUSPICIOUS
+
+        if results == set([Result.OK]):
+            return Result.OK
+
+    def cancel(self):
+        self.close(Result.CANCELLED)
+
+    def close(self, state=None):
+        if state is None:
+            state = self.eval()
+
+        if state == Result.ONGOING:
+            state = Result.CANCELLED
+
+        self.state = state
+        self.close_date = datetime.now()
+        self.session.commit()
 
 
 class Measurement(Model):
@@ -183,10 +231,9 @@ class Check(Model):
     def execute(self, observer=None):
         """Execute the check"""
         self.open_date = datetime.now()
+        self.state = Result.ONGOING
         self.method()
         self.process_results()
-        if observer:
-            observer.update(self)
         self.close_date = datetime.now()
 
 

@@ -1,4 +1,3 @@
-from pytest import mark
 from tests import TestBase
 from datetime import datetime
 from unittest.mock import Mock, patch, call
@@ -6,19 +5,22 @@ from quactrl.resources import (
     Element, Operation
 )
 from quactrl.plan import (
-    Characteristic, Reaction, Method, FailureMode, Control
+    Characteristic, Sampling, Reaction, Method, FailureMode, Control
 )
+
 from quactrl.check import (
     Sample, Test, Check, Result, Inspector
     )
+
+from pytest import mark
 import pdb
 
 
+@mark.current
 class A_Test(TestBase):
 
     def setup_method(self, method):
-        """Defines procedure for creating and filling a test
-        report(database)"""
+        """Defines procedure for creating and filling a test report(database)"""
         self.test_plan = Mock()
         self.controls = [Mock() for _ in range(3)]
         for control in self.controls:
@@ -34,14 +36,17 @@ class A_Test(TestBase):
 
         self.mock_dal = self.dal_patcher.start()
         self.mock_factories = self.factories_patcher.start()
-        self.mock_check = self.check_patcher.start()
+        self.mock_check= self.check_patcher.start()
+        self.mock_check.side_effect = [Mock() for _ in range(3)]
+
+        Test.checks = []
 
     def teardown_method(self, method):
         self.dal_patcher.stop()
         self.mock_factories.stop()
         self.mock_check.stop()
 
-    @mark.current
+
     def should_init(self):
 
         test = Test(self.controls, self.sample, self.verifier)
@@ -50,8 +55,7 @@ class A_Test(TestBase):
         assert len(self.controls) == len(test.checks)
         assert test.state == Result.PENDING
 
-        for control, arg_call in zip(self.controls,
-                                     self.mock_check.Check.call_args_list):
+        for control, arg_call in zip(self.controls, self.mock_check.Check.call_args_list):
             assert call(test, control) == arg_call
 
         assert test.sample == self.sample
@@ -61,8 +65,12 @@ class A_Test(TestBase):
         session.add.assert_called_with(test)
         session.commit.assert_called_with()
 
+
     def should_eval_test_from_check_states(self):
         test = Test(self.controls, self.sample, self.verifier)
+
+        for check in test.checks:
+            check.state = Result.PENDING
 
         assert test.eval() == Result.PENDING
 
@@ -72,58 +80,42 @@ class A_Test(TestBase):
         test.checks[1].state = Result.NOK
         assert test.eval() == Result.NOK
 
-        test.checks
+        test.checks[1].state = Result.OK
+        test.checks[2].state = Result.SUSPICIOUS
+        assert test.eval() == Result.SUSPICIOUS
 
-        test.checks[1].state = Result.OK  # Correct check
+        test.checks[2].state = Result.OK
+        assert test.eval() == Result.OK
 
     @patch('quactrl.check.datetime')
-    def should_close_with_result_ok(self, mock_datetime):
+    def should_close(self, mock_datetime):
         now = datetime(2017, 1, 2)
         mock_datetime.now.return_value = now
-        test = self.load_simple_test()
+        test = Test(self.controls, self.sample, self.verifier)
 
         test.eval = Mock()
-        test.eval.return_value = 'OK'
+        test.eval.return_value = Result.OK
         test.close()
 
         assert test.close_date == now
-        assert test.result == 'OK'
-        self.mock_dal.session.commit.assert_called_with(test)
+        assert test.state == Result.OK
+        test.session.commit.assert_called_with()
 
-    @patch('quactrl.check.datetime')
-    def should_close_with_result_Nok(self, mock_datetime):
-        now = datetime(2017, 1, 2)
-        mock_datetime.now.return_value = now
-
-        test = self.load_simple_test()
-
-        test.eval = Mock()
-        test.eval.return_value = 'NOK'
+        test.eval.return_value = Result.ONGOING
         test.close()
-
-        assert test.close_date == now
-        assert test.result == 'OK'
-        self.mock_dal.session.commit.assert_called_with(test)
-
-    def _should_persist_results(self):
-        pass
-
-    def _should_stop_parallel_check_when_failure(self):
-        pass
-
-    def _should_store_check_results(self):
-        pass
-
-    def _should_receive_checks_notifications(self):
-        pass
-
-    def _should_notify_to_observers(self):
-        raise NotImplementedError()
-
-    def should_run(self):
-        raise NotImplementedError()
+        assert test.state == Result.CANCELLED
 
 
+    def should_execute_checks_sequentially(self):
+
+        test = Test(self.controls, self.sample, self.verifier)
+
+        test.execute()
+
+        for check in test.checks:
+            check.execute.assert_called_with()
+
+@mark.current
 class A_Check:
 
     def setup_method(self, method):
@@ -185,6 +177,7 @@ class A_Check:
         check.add_measure(value_1, characteristic)
         assert check.measures[characteristic] == value_1
 
+
         value_2 = 4
         check.add_measure(value_2, characteristic)
         assert check.measures[characteristic] == [value_1, value_2]
@@ -192,6 +185,7 @@ class A_Check:
         value_3 = 4
         check.add_measure(value_3, characteristic)
         assert check.measures[characteristic] == [value_1, value_2, value_3]
+
 
     def should_process_results_changing_state(self):
         """From measures and evaluations fixes a check state"""
@@ -209,10 +203,11 @@ class A_Check:
         check = self.check
         raise NotImplementedError()
 
+
     @patch('quactrl.check.datetime')
     def should_execute(self, mock_datetime):
         begin = datetime(2017, 1, 1)
-        end = datetime(2017, 1, 2)
+        end = datetime(2017,1,2)
         mock_datetime.now.side_effect = [begin, end]
 
         check = self.check

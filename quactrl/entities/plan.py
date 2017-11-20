@@ -67,7 +67,6 @@ class Method(Model):
         self.name = name
         self.content = content
 
-
 class Reaction(enum.Enum):
     none_level = 0
     low_level = 1
@@ -102,7 +101,6 @@ class Control(Model):
 
     sampling_qty = Column(Integer, default=1)
     sampling_class = Column(Enum(Sampling))
-
     detection_point_id = Column(Integer, ForeignKey('operations.id'))
     detection_point = relationship(Operation)
 
