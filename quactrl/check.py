@@ -1,4 +1,5 @@
 from enum import Enum
+from threading import Thread, Event
 from quactrl import (
     Column, ForeignKey, relationship, Model,
     dal, Integer, String, DATETIME, DECIMAL, method_directory
@@ -188,3 +189,22 @@ class Check(Model):
             observer.update(self)
         self.close_date = datetime.now()
 
+
+class Inspector:
+    def __init__(self, inspector_manager):
+        """
+
+        """
+        self.env = inspector_manager.env
+        self.device_fry = self.inspector_manager.env.device_fry
+        self.part = None
+        self.part_input = Event()
+        self.end_batch = False
+
+    def run(self):
+        """Waits to have a part"""
+        while not self.end_batch:
+            self.part_input.wait()
+            for control in self.controls:
+                if control.part_needs_check(part):
+                    failures = control.check()

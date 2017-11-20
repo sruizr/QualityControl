@@ -9,7 +9,7 @@ from quactrl.plan import (
     Characteristic, Reaction, Method, FailureMode, Control
 )
 from quactrl.check import (
-    Sample, Test, Check, Result
+    Sample, Test, Check, Result, Inspector
     )
 import pdb
 
@@ -226,3 +226,39 @@ class A_Check:
         assert check.close_date == end
         observer.update.assert_called_with(check)
 
+
+@mark.current
+class An_Inspector:
+    def setup_method(self, method):
+        controls = [ Mock() for _ in range(2)]
+        inspector_manager = Mock()
+        self.inspector = Inspector(inspector_manager)
+        batch = Mock()
+        self.inspector.setup_batch(batch)
+        self.inspector.controls = controls
+
+    def should_wait_till_part_signal(self):
+        self.inspector.start()
+        assert self.inspector.test is None
+
+        self.inspector.take_unit(part)
+        assert self.inspector.test is not None
+        assert len(self.inspector.test.checks) == 2
+
+    def should_run_test_sequence(self):
+        inspector_manager = Mock()
+        part = Mock()
+        inspector = Inspector(inspector_manager)
+        inspector.start()
+        inspector.take_unit(part)
+        assert inspector.test
+        assert len(inspector.test.checks) == 2
+
+    def should_eval_measure(self):
+        pass
+
+    def should_setup_batch(self):
+        pass
+
+    def should_persist_results(self):
+        pass
