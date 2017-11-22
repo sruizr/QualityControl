@@ -6,6 +6,10 @@ import pytest
 current = pytest.mark.current
 
 
+class FakeEnvironment:
+    def __init__(self):
+        self.env = Mock()
+
 def create_fake_control_struct():
     def get_branch(length):
         branch = [Mock() for _ in range(length)]
@@ -40,58 +44,13 @@ class An_InspectionManager:
         environment.process = Mock()
         Control = Mock()
         Control.collect.return_value = create_fake_control_struct()
-        self.im = InspectionManager(environment)
-
-
-    @current
-    def should_setup_session(self):
-        process = Mock()
-
-        self.im.setup_session(process)
-
-        assert self.im.process == process
-        assert self.im.device_repo
-        self.im.env.session.DeviceRepository.assert_called_once_with(self.im.process)
-
-    @current
-    def should_setup_batch(self):
-        batch = Mock()
-        batch.partnumber = '12345'
-        im = self.im
-
-        im.process = Mock()
-        im.setup_batch(batch)
-        self.im.setup_batch(batch)
-
-        assert self.im.batch
-        assert len(self.im.inspectors) == 3
-
-    def should_create_one_inspector_by_branch(self):
-        self.im.controls = create_fake_control_struct()
-        self.im.create_inspectors()
-
-
-        assert len(self.im.inspectors) == 3
-
-    def should_manage_serial_inspectors(self):
-        pass
-
-    def should_manage_paralel_inspectors(self):
-        pass
-
-    def should_start_inspectors(self):
-        pass
-
-    def should_stop_inspectors(self):
-        pass
-
-    def should_react_when_failures(self):
-        pass
 
 
 class An_Inspector:
-    def setup(self, method):
-        pass
+    def setup_method(self, method):
+        self.service = Mock()
+        self.env = self.service.env
+        self.inspector = Inspector(self.service)
 
     def should_create_control_runners(self):
         pass
@@ -116,6 +75,59 @@ class An_Inspector:
 
     def should_notify_ending_to_mng(self):
         pass
+
+    @pytest.mark.ahora
+    def should_run_check(self):
+        check = Mock()
+        check.control = Mock()
+        check.control.method_name = 'method_name'
+
+        method = self.env.method_repo.get.return_value
+        session = self.env.session
+        view = self.env.view
+        service = self.service
+
+        # Return failures
+        self.inspector.run_check(check)
+
+        method.assert_called_once_with(self.inspector, check)
+        view.starting.assert_called_once_with(check)
+        assert not view.finished.called
+        check.add_failures.assert_called_with(method.return_value)
+        session.add.assert_called_with(check)
+
+        # No failures
+        method.return_value = []
+        self.inspector.run_check(check)
+        view.finished.assert_called_with(check)
+
+    @pytest.mark.ahora
+    def should_eval_value(self):
+        characteristic = Mock()
+        characteristic.limits = [-1, 1]
+        modes = ['very low', 'very high', 'a bit suspicious']
+        uncertainty = 0.2
+
+        value = 0
+        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
+        assert failure_mode is None
+
+        value = 0.81
+        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
+        self.env.repo_fry.get.return_value.get.assert_called_with('a bit suspicious very high', characteristic)
+
+        value = 1.1
+        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
+        self.env.repo_fry.get.return_value.get.assert_called_with('very high', characteristic)
+
+        value = -0.81
+        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
+        self.env.repo_fry.get.return_value.get.assert_called_with('a bit suspicious very low', characteristic)
+
+        value = -1.1
+        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
+        self.env.repo_fry.get.return_value.get.assert_called_with('very low', characteristic)
+
 
 class A_ControlRunner:
 

@@ -33,12 +33,61 @@ class InspectionManager:
 class Inspector(threading.Thread):
     """Run a complete sequence of controls within a thread"""
     def __init__(self, service):
-        super().__init_(self)
+        super().__init__()
         self.env = service.env
+        self.service = service
 
     def run(self):
         pass
 
+    def eval_value(self, value, characteristic, uncertainty, modes=['low', 'high', 'suspcious']):
+
+        limits = characteristic.limits
+        repo_fry = self.env.repo_fry
+        failure_mode_repo = repo_fry.get('FailureMode')
+
+        mode = None
+
+        low_limit = limits[0]
+        if low_limit is not None:
+            sure_low = low_limit + uncertainty
+            if value < sure_low:
+                mode = '{} {}'.format(modes[2], modes[0])
+            if value < low_limit:
+                mode = modes[0]
+
+        top_limit = limits[1]
+        if top_limit is not None:
+            sure_top = top_limit - uncertainty
+            if value > sure_top:
+                mode = '{} {}'.format(modes[2], modes[1])
+            if value > top_limit:
+                mode = modes[1]
+
+        failure_mode = None
+        if mode:
+            failure_mode = failure_mode_repo.get(mode, characteristic)
+
+        return failure_mode
+
+    def run_check(self, check):
+        self.service.starting(check)
+
+        self.env.session.add(check)
+        method = self.env.method_repo.get(check.control.method_name)
+        method_pars = check.control.pars
+        check.state = 'Ongoing'
+        method(self, check)
+        is_async = method_pars.get('is_async', False)
+        if is_async:
+            while check.state == 'Ongoing':
+                refresh_time = method_pars.get('refresh_time', 5)
+                time.sleep(refresh_time)
+
+        if check.failures:
+            self.service.check_has_failled(check)
+        else:
+            self.service.finished(check)
 
 class ControlRunner:
     pass
