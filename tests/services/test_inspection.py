@@ -10,6 +10,7 @@ class FakeEnvironment:
     def __init__(self):
         self.env = Mock()
 
+
 def create_fake_control_struct():
     def get_branch(length):
         branch = [Mock() for _ in range(length)]
@@ -76,8 +77,54 @@ class An_Inspector:
     def should_notify_ending_to_mng(self):
         pass
 
+
     @pytest.mark.ahora
-    def should_run_check(self):
+    def should_eval_value(self):
+        characteristic = Mock()
+        characteristic.limits = [-1, 1]
+        modes = ['very low', 'very high', 'a bit suspicious']
+        uncertainty = 0.2
+
+        value = 0
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        assert failure_mode is None
+
+        value = 0.81
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        self.env.repo_fry.get.return_value.get.assert_called_with(
+            'a bit suspicious very high', characteristic)
+
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        self.env.repo_fry.get.return_value.get.assert_called_with('very high',
+                                                                  characteristic)
+
+        value = -0.81
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        self.env.repo_fry.get.return_value.get.assert_called_with(
+            'a bit suspicious very low', characteristic)
+
+        value = -1.1
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        self.env.repo_fry.get.return_value.get.assert_called_with('very low',
+                                                                  characteristic)
+
+
+class A_ControlRunner:
+
+    def setup(self, method):
+        pass
+
+    def should_create_suitable_sample_controller(self):
+        pass
+
+    @pytest.mark.ahora
+    def should_run_control(self):
+
         check = Mock()
         check.control = Mock()
         check.control.method_name = 'method_name'
@@ -101,43 +148,7 @@ class An_Inspector:
         self.inspector.run_check(check)
         view.finished.assert_called_with(check)
 
-    @pytest.mark.ahora
-    def should_eval_value(self):
-        characteristic = Mock()
-        characteristic.limits = [-1, 1]
-        modes = ['very low', 'very high', 'a bit suspicious']
-        uncertainty = 0.2
-
-        value = 0
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        assert failure_mode is None
-
-        value = 0.81
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        self.env.repo_fry.get.return_value.get.assert_called_with('a bit suspicious very high', characteristic)
-
-        value = 1.1
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        self.env.repo_fry.get.return_value.get.assert_called_with('very high', characteristic)
-
-        value = -0.81
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        self.env.repo_fry.get.return_value.get.assert_called_with('a bit suspicious very low', characteristic)
-
-        value = -1.1
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        self.env.repo_fry.get.return_value.get.assert_called_with('very low', characteristic)
-
-
-class A_ControlRunner:
-
-    def setup(self, method):
-        pass
-
-    def should_create_suitable_sample_controller(self):
-        pass
-
-    def should_execute_methods(self):
+        def should_execute_methods(self):
         pass
 
     def should_report_check_to_inspector(self):
