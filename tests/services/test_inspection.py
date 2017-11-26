@@ -77,7 +77,7 @@ class An_Inspector:
         pass
 
     @pytest.mark.ahora
-    def should_run_check(self):
+    def should_execute_methods(self):
         check = Mock()
         check.control = Mock()
         check.control.method_name = 'method_name'

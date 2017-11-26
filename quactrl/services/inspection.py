@@ -36,9 +36,16 @@ class Inspector(threading.Thread):
         super().__init__()
         self.env = service.env
         self.service = service
+        self.part_arrives = Event()
+        self.part_arrives.clear()
 
     def run(self):
-        pass
+        """Run the full sequence of checks every time a part arrives or """
+        while not self.stop_signal.is_set:
+            self.part_arrives.wait()
+            test = Test()
+            for control_runner in self.control_runners:
+
 
     def eval_value(self, value, characteristic, uncertainty, modes=['low', 'high', 'suspcious']):
 
@@ -70,7 +77,7 @@ class Inspector(threading.Thread):
 
         return failure_mode
 
-    def run_check(self, check):
+    def execute_method(self, check):
         self.service.starting(check)
 
         self.env.session.add(check)
@@ -80,8 +87,8 @@ class Inspector(threading.Thread):
         method(self, check)
         is_async = method_pars.get('is_async', False)
         if is_async:
+            refresh_time = method_pars.get('refresh_time', 5)
             while check.state == 'Ongoing':
-                refresh_time = method_pars.get('refresh_time', 5)
                 time.sleep(refresh_time)
 
         if check.failures:
