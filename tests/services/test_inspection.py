@@ -1,14 +1,31 @@
 from unittest.mock import Mock, patch
-from quactrl.services.inspection import (
-    InspectionManager, Inspector, ControlRunner, SampleController)
+from quactrl.services.inspection import Inspector, ControlRunner, PartInspector
+
 import pytest
 
+
 current = pytest.mark.current
+
+
+class BaseTest:
+    def create_patches(self, definitions):
+        self.patch = {}
+        self._patchers = []
+        for definition in definitions:
+            patcher = patch(definition)
+            name = definition.split('.')[-1]
+            self.patch[name] = patcher.start()
+            self._patchers.append(patcher)
+
+    def teardown_method(self, method):
+        for patcher in self._patchers:
+            patcher.stop()
 
 
 class FakeEnvironment:
     def __init__(self):
         self.env = Mock()
+
 
 def create_fake_control_struct():
     def get_branch(length):
@@ -45,63 +62,34 @@ class An_InspectionManager:
         Control = Mock()
         Control.collect.return_value = create_fake_control_struct()
 
+    # def should_persist_results(self):
+    #     pass
 
-class An_Inspector:
+@pytest.mark.ahora
+class An_Inspector(BaseTest):
+
     def setup_method(self, method):
+        patches = [
+            'quactrl.services.inspection.time',
+            'quactrl.services.inspection.Queue',
+            'quactrl.services.inspection.Test',
+            'quactrl.services.inspection.Check',
+            'quactrl.services.inspection.ControlRunner'
+            ]
+        self.create_patches(patches)
+
         self.service = Mock()
-        self.env = self.service.env
         self.inspector = Inspector(self.service)
 
     def should_create_control_runners(self):
-        pass
+        controls = [Mock() for _ in range(3)]
+        assert len(self.inspector.control_runners) == 0
 
-    def should_run_controls(self):
-        pass
+        self.inspector.load_controls(controls)
 
-    def should_stop_controls(self):
-        pass
+        assert self.patch['ControlRunner'].call_count == 3
+        assert len(self.inspector.control_runners) == 3
 
-    def should_report_checking_status_to_observers(self):
-        pass
-
-    def should_persist_results(self):
-        pass
-
-    def should_create_inspection_record(self):
-        pass
-
-    def should_update_check_records(self):
-        pass
-
-    def should_notify_ending_to_mng(self):
-        pass
-
-    @pytest.mark.ahora
-    def should_execute_methods(self):
-        check = Mock()
-        check.control = Mock()
-        check.control.method_name = 'method_name'
-
-        method = self.env.method_repo.get.return_value
-        session = self.env.session
-        view = self.env.view
-        service = self.service
-
-        # Return failures
-        self.inspector.run_check(check)
-
-        method.assert_called_once_with(self.inspector, check)
-        view.starting.assert_called_once_with(check)
-        assert not view.finished.called
-        check.add_failures.assert_called_with(method.return_value)
-        session.add.assert_called_with(check)
-
-        # No failures
-        method.return_value = []
-        self.inspector.run_check(check)
-        view.finished.assert_called_with(check)
-
-    @pytest.mark.ahora
     def should_eval_value(self):
         characteristic = Mock()
         characteristic.limits = [-1, 1]
@@ -109,54 +97,94 @@ class An_Inspector:
         uncertainty = 0.2
 
         value = 0
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
         assert failure_mode is None
 
         value = 0.81
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        self.env.repo_fry.get.return_value.get.assert_called_with('a bit suspicious very high', characteristic)
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        self.service.env.repo_fry.get.return_value.get.assert_called_with(
+            'a bit suspicious very high', characteristic)
 
         value = 1.1
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        self.env.repo_fry.get.return_value.get.assert_called_with('very high', characteristic)
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        self.service.env.repo_fry.get.return_value.get.assert_called_with('very high',
+                                                                  characteristic)
 
         value = -0.81
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        self.env.repo_fry.get.return_value.get.assert_called_with('a bit suspicious very low', characteristic)
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        self.service.env.repo_fry.get.return_value.get.assert_called_with(
+            'a bit suspicious very low', characteristic)
 
         value = -1.1
-        failure_mode = self.inspector.eval_value(value, characteristic, uncertainty, modes)
-        self.env.repo_fry.get.return_value.get.assert_called_with('very low', characteristic)
+        failure_mode = self.inspector.eval_value(value, characteristic,
+                                                 uncertainty, modes)
+        self.service.env.repo_fry.get.return_value.get.assert_called_with('very low',
+                                                                  characteristic)
 
 
-class A_ControlRunner:
+@pytest.mark.ahora
+class A_ControlRunner(BaseTest):
 
-    def setup(self, method):
-        pass
+    def setup_method(self, method):
+        patches = [
+            'quactrl.services.inspection.Check'
+            ]
+        self.create_patches(patches)
+        self.control = Mock()
+        self.inspector = Mock()
+        self.control_runner = ControlRunner(self.inspector, self.control)
 
-    def should_create_suitable_sample_controller(self):
-        pass
+    def should_init_loading_method(self):
+        method_repo = self.inspector.service.env.method_repo
 
-    def should_execute_methods(self):
-        pass
+        assert self.control_runner.method == method_repo.get.return_value
+        method_repo.get.assert_called_with(self.control.method_name)
 
-    def should_report_check_to_inspector(self):
-        pass
+    def should_count(self):
+        self.control.sampling.check_is_needed.return_value = False
+        assert self.control_runner.count() == None
+
+        self.control.sampling.check_is_needed.return_value = True
+        assert self.patch['Check'].return_value == self.control_runner.count()
+        part = self.inspector.current_part
+        self.patch['Check'].assert_called_once_with(self.inspector.test, self.control, part)
+
+    def should_run_method(self):
+        check = Mock()
+        method = self.inspector.service.env.method_repo.get.return_value
+
+        self.control_runner.run_method(check)
+        method.assert_called_once_with(self.inspector, check)
 
 
-class A_SampleController:
+@pytest.mark.ahora
+class A_PartInspector(BaseTest):
+    def setup_method(self, method):
+        self.service = Mock()
+        self.period = 1
 
-    def setup(self, method):
-        pass
+        patches = [
+            'quactrl.services.inspection.Test'
+            ]
+        self.create_patches(patches)
+        self.inspector = PartInspector(self.service, self.period)
 
-    def should_persist_control_counters(self):
-        pass
+    def should_init_part_status(self):
+        assert self.inspector._parts.empty()
+        assert self.inspector.current_part is None
 
-    def should_notify_control_runner(self):
-        pass
+    def should_run_till_stop(self):
+        control_runners = [Mock() for _ in range(3)]
+        self.inspector.control_runners = control_runners
 
-    def should_count_time(self):
-        pass
+        self.inspector.start()
+        self.inspector.stop()
 
-    def should_count_units(self):
+        assert not self.inspector.isAlive()
+
+    def should_wait_till_receive_a_part(self):
         pass
