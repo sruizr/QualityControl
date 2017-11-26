@@ -1,4 +1,7 @@
+import time
 import threading
+from asyncio.queues import Queue
+from quactrl.entities import Test, Check
 
 
 class InspectionManager:
@@ -14,7 +17,7 @@ class InspectionManager:
     def setup_batch(self, batch):
         """Load inspectors and their controls into the service"""
         self.batch = batch
-        controls = self.env.session.ControlRepository(self.process, batch)
+        self.controls = self.env.session.ControlRepository(self.process, batch)
         self.inspectors = []
 
     def _load_control_struct(self, controls):
@@ -31,16 +34,22 @@ class InspectionManager:
 
 
 class Inspector(threading.Thread):
-    """Run a complete sequence of controls within a thread"""
-    def __init__(self, service):
+
+    def __init__(self, service, period):
         super().__init__()
-        self.env = service.env
         self.service = service
+        self.stop_inspection = False
+        self.control_runners = []
+        self.period = period
 
-    def run(self):
-        pass
+    def load_controls(self, controls):
+        for control in controls:
+            self.control_runners.append(
+                ControlRunner(control)
+                )
 
-    def eval_value(self, value, characteristic, uncertainty, modes=['low', 'high', 'suspcious']):
+    def eval_value(self, value, characteristic, uncertainty,
+                   modes=['low', 'high', 'suspcious']):
 
         limits = characteristic.limits
         repo_fry = self.env.repo_fry
@@ -70,28 +79,66 @@ class Inspector(threading.Thread):
 
         return failure_mode
 
-    def run_check(self, check):
-        self.service.starting(check)
+    def run(self):
+        pass
 
-        self.env.session.add(check)
-        method = self.env.method_repo.get(check.control.method_name)
-        method_pars = check.control.pars
-        check.state = 'Ongoing'
-        method(self, check)
-        is_async = method_pars.get('is_async', False)
-        if is_async:
-            while check.state == 'Ongoing':
-                refresh_time = method_pars.get('refresh_time', 5)
-                time.sleep(refresh_time)
 
-        if check.failures:
-            self.service.check_has_failled(check)
-        else:
-            self.service.finished(check)
+class PartInspector(Inspector):
+    """Inspector of parts"""
+    def __init__(self, service, period):
+        super().__init_(service, period)
+        self._parts = Queue()
+        self.current_part = None
+
+    def run(self):
+        while not self.stop_inspection:
+            self.current_part = self._parts.get()
+            self.test = Test()
+            for control_runner in self.control_runners:
+                if not self.stop_inspection:
+                    check = control_runner.count()
+                    if check:
+                        self.service.check_initialized(self, check)
+                        control_runner.run(check)
+                        while check.state == 'ongoing' and not self.stop:
+                            time.sleep(self.period)
+                        self.service.check_finished(self, check)
+            self.service.return_part(self, self.current_part)
+
+    def receive(self, part):
+        self._parts.put(part)
+
+
+class ProcessInspector(Inspector):
+    """Inspector of process characteristics, continuous inspection"""
+    def __init__(self, service, period):
+        super().__init__(service, period)
+
+    def run(self):
+        self.test = Test()
+        while not self.stop_inspection:
+            for control_runner in self.control_runners:
+                if not self.stop_inspection:
+                    check = control_runner.count()
+                    if check:
+                        self.service.check_initialized(self, check)
+                        control_runner.run(check)
+                        self.service.check_finished(self, check)
+            time.sleep(self.period)
+
 
 class ControlRunner:
-    pass
+    """Execute the method of the control only if satisfy sampling criteria"""
+    def __init__(self, inspector, control):
+        self.inspector = inspector
+        self.control = control
+        self.method = self.inspector.service.env.method_repo.get(
+            control.method)
 
+    def count(self):
+        if self.control.sampling.check_is_needed():
+            part = getattr(self.inspector, 'current_part', None)
+            return Check(self.inspector.test, self.control, part)
 
-class SampleController:
-    pass
+    def run(self, check):
+        self.method(self.inspector, check)
