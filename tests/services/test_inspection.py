@@ -65,6 +65,7 @@ class An_InspectionManager:
     # def should_persist_results(self):
     #     pass
 
+
 @pytest.mark.ahora
 class An_Inspector(BaseTest):
 
@@ -110,8 +111,9 @@ class An_Inspector(BaseTest):
         value = 1.1
         failure_mode = self.inspector.eval_value(value, characteristic,
                                                  uncertainty, modes)
-        self.service.env.repo_fry.get.return_value.get.assert_called_with('very high',
-                                                                  characteristic)
+        self.service.env.repo_fry.get.return_value.get.assert_called_with(
+            'very high',
+            characteristic)
 
         value = -0.81
         failure_mode = self.inspector.eval_value(value, characteristic,
@@ -122,8 +124,8 @@ class An_Inspector(BaseTest):
         value = -1.1
         failure_mode = self.inspector.eval_value(value, characteristic,
                                                  uncertainty, modes)
-        self.service.env.repo_fry.get.return_value.get.assert_called_with('very low',
-                                                                  characteristic)
+        self.service.env.repo_fry.get.return_value.get.assert_called_with(
+            'very low', characteristic)
 
 
 @pytest.mark.ahora
@@ -146,12 +148,13 @@ class A_ControlRunner(BaseTest):
 
     def should_count(self):
         self.control.sampling.check_is_needed.return_value = False
-        assert self.control_runner.count() == None
+        assert self.control_runner.count() is None
 
         self.control.sampling.check_is_needed.return_value = True
         assert self.patch['Check'].return_value == self.control_runner.count()
         part = self.inspector.current_part
-        self.patch['Check'].assert_called_once_with(self.inspector.test, self.control, part)
+        self.patch['Check'].assert_called_once_with(self.inspector.test,
+                                                    self.control, part)
 
     def should_run_method(self):
         check = Mock()
