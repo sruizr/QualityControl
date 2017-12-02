@@ -33,7 +33,7 @@ class Test(Model):
     checks = []
     # open_date = Column(Datetime)
 
-    def __init__(self, controls, sample, verifier):
+    def __init__(self):
         self.verifier = verifier
         self.sample = sample
         self.state = Result.PENDING

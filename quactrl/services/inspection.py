@@ -2,37 +2,80 @@ import time
 import threading
 from queue import Queue
 from quactrl.entities.check import Test, Check
+import pdb
 
 
 class InspectionManager:
     """Manage one tree of controls"""
     def __init__(self, environment):
         self.env = environment
+        self.batch = None
+        self.partnumber = None
+        self.inspectors = []
+        self.process = None
 
-    def setup_session(self, process):
+    def set_process(self, process):
         """Load device repository for the current process"""
         self.process = process
-        self.device_repo = self.env.session.DeviceRepository(process)
+        self.device_repo = self.env.device_repo
+        self.device_repo = self.device_repo.set_process(process)
 
     def setup_batch(self, batch):
         """Load inspectors and their controls into the service"""
-        self.batch = batch
-        self.controls = self.env.session.ControlRepository(self.process, batch)
-        self.inspectors = []
+        for inspector in self.inspectors:
+            inspector.session.stop()
 
-    def _load_control_struct(self, controls):
-        control_plan = {}
-        for control in controls:
-            key = control.prev
-            if key in control_plan.keys():
-                control_plan[key].add(control)
-            else:
-                control_plan[key] = {control}
+        load_controls = self.batch is None
+        if not load_controls:
+            load_controls = (self.batch.partnumber == batch.partnumber)
+        self.batch = batch
+        if not load_controls:
+            return None
+
+        control_plans = self.env.control_repo.get(self.process,
+                                                  batch.partnumber)
+        self.inspectors = []
+        for control_plan in control_plans:
+            n_inspectors = getattr(control_plan, 'inspectors', 1)
+            resolution = getattr(control_plan, 'resolution', 0)
+            for _ in range(n_inspectors):
+                inspector = Inspector(self)
+                inspector.setup_batch(control_plan.controls, resolution)
+                self.inspectors.append(inspector)
+
+        for inspector in self.inspectors:
+            inspector.session.start()
+
+    def receive_part(self, part, inspector_number=0):
+        if part.batch != self.batch:
+            self.setup_batch(part.batch)
+        self.inspectors[inspector_number].receive_part(part)
+
+    def check_finished(self, inspector, check):
+        if inspector.session.resolution != 0:
+            self.env.session.add(check)
+            self.env.session.commit()
+
+        self.env.view.show_check_finished(inspector, check)
+
+    def check_initialized(self, inspector, check):
+        self.env.view.show_check_finished(inspector, check)
+
+    def test_initalized(self, inspector, test):
+        pass
+
+    def test_finished(self, inspector, test):
+        self.env.view.show_test_finished(inspector, test)
+        if inspector.session.resolution == 0:
+            self.env.session.add(test)
+
 
 class InspectionSession(threading.Thread):
-    """Base class for inspection sessions, manages a secuence of control_runners"""
+    """Base class for inspection sessions, manages a secuence of
+control_runners"""
     def __init__(self, inspector, resolution=0):
-        """"Inits with inspector inspection,  resolution = 0 means it waits till even init cycle is set"""
+        """"Inits with inspector inspection,  resolution = 0 means
+it waits till even init cycle is set"""
         super().__init__()
         self.inspector = inspector
         self.cycle_stopped = False
@@ -41,17 +84,18 @@ class InspectionSession(threading.Thread):
 
     def _process_cycle(self):
         for control_runner in self.inspector.control_runners:
-            if self.cycle_stopped: # Interrupts just before the check begins
+            if self.cycle_stopped:  # Interrupts just before the test begins
                 self.inspector.test.state = 'cancelled'
                 return None
             else:
                 check = control_runner.count()
                 if check:
-                    self.inspector.service.check_initialized(self, check)
+                    self.inspector.service.check_initialized(self.inspector,
+                                                             check)
                     control_runner.run(check)
                     # Asyncronous method
                     wait_time = check.control.pars.get('wait_time', 1)
-                    while check.state == 'ongoing': # Asyncronous (long time) method
+                    while check.state == 'ongoing':  # Asyncronous (long time) method
                         if self.cycle_stopped:
                             check.cancel()
                             check.state = 'cancelled'
@@ -59,14 +103,21 @@ class InspectionSession(threading.Thread):
                             return None
                         time.sleep(wait_time)
                     check.eval()
-                    self.inspector.service.check_finished(self, check)
+                    self.inspector.service.check_finished(self.inspector,
+                                                          check)
 
     def run(self):
         while True:
             self.inspector.current_part = self.inspector.parts_queue.get()
             if self.session_stopped:
                 break
+            self.inspector.test = Test()
+            self.inspector.service.test_initalized(self.inspector)
             self._process_cycle()
+            if self.inspector.test.checks:
+                self.inspector.service.test_finished(self.inspector)
+            else:
+                del(self.inspector.test)
             self.cycle_stopped = False
             if self.resolution != 0:
                 self.inspector.parts_queue.set(None)
@@ -86,7 +137,6 @@ class InspectionSession(threading.Thread):
     def interrupt(self):
         self.stop_cycle()
         self.stop_session()
-
 
 
 class Inspector:
