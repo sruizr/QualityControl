@@ -1,4 +1,5 @@
 import time
+from queue import Queue
 from unittest.mock import Mock, patch
 from quactrl.services.inspection import Inspector, ControlRunner, InspectionSession
 import pytest
@@ -71,69 +72,73 @@ class An_InspectionSession:
 
     def setup_method(self, method):
         self.inspector = Mock()
+        self.inspector.parts_queue = Queue()
         self.inspector.control_runners = [Mock() for _ in range(30)]
 
-
     def should_work_on_continuous(self):
-        inspection_session = InspectionSession(self.inspector, resolution=0)
-        inspection_session.start()
-        assert inspection_session.is_alive()
-
-        inspection_session.stop_session()
-        assert not inspection_session.is_alive()
+        try:
+            inspection_session = InspectionSession(self.inspector, resolution=1)
+            inspection_session.start()
+            assert inspection_session.is_alive()
+        finally:
+            inspection_session.stop()
+            assert not inspection_session.is_alive()
 
     def should_work_on_cycles(self):
-        inspection_session = InspectionSession(self.inspector)
+        try:
+            inspection_session = InspectionSession(self.inspector)
 
-        inspection_session.start()
-        assert  not inspection_session.init_cycle_event.is_set()
-        inspection_session.init_cycle()
-        time.sleep(0.25)
-        assert self.inspector.service.check_initialized.called
-        assert self.inspector.service.check_finished.called
+            inspection_session.start()
+            assert not self.inspector.control_runners[0].run.called
 
-        inspection_session.stop_session()
-        assert not inspection_session.is_alive()
+            self.inspector.parts_queue.put(None)
+            time.sleep(0.1)
+            assert self.inspector.service.check_initialized.called
+            assert self.inspector.service.check_finished.called
+        finally:
+            inspection_session.stop()
+            assert not inspection_session.is_alive()
 
     def should_stop_cycle_when_async_method(self):
+        try:
+            # control_runners[5] has an async method
+            check = Mock(name='check')
+            check.state = 'ongoing'
+            self.inspector.control_runners[5].count.return_value = check
+            self.inspector.control_runners[5].run = lambda s: time.sleep(0.5)
 
-        # control_runners[5] has an async method
-        check = Mock(name='check')
-        check.state = 'ongoing'
-        self.inspector.control_runners[5].count.return_value = check
-        self.inspector.control_runners[5].run = lambda s: time.sleep(0.5)
+            inspection_session = InspectionSession(self.inspector)
+            inspection_session.start()
+            self.inspector.parts_queue.put(None)
+            time.sleep(0.25)
+            assert not self.inspector.control_runners[6].run.called
 
-        inspection_session = InspectionSession(self.inspector)
-        inspection_session.start()
-        inspection_session.init_cycle()
-        time.sleep(0.25)
-        assert not self.inspector.control_runners[6].run.called
+            inspection_session.stop_cycle()
+            time.sleep(1)
+            assert check.cancel.called
+            assert self.inspector.test.state == 'cancelled'
+            assert check.state == 'cancelled'
 
-        inspection_session.stop_cycle()
-        time.sleep(1)
-        assert check.cancel.called
-        assert self.inspector.test.state == 'cancelled'
-        assert check.state == 'cancelled'
-
-        assert not self.inspector.control_runners[6].run.called
-
-        inspection_session.stop_session()
-        assert not inspection_session.is_alive()
+            assert not self.inspector.control_runners[6].run.called
+        finally:
+            inspection_session.stop()
+            assert not inspection_session.is_alive()
 
     def should_stop_cycle_on_mid_sequence(self):
-        self.inspector.control_runners[5].run = lambda: time.sleep(0.5)
+        try:
+            self.inspector.control_runners[5].run = lambda: time.sleep(0.5)
 
-        inspection_session = InspectionSession(self.inspector)
-        inspection_session.start()
-        inspection_session.init_cycle()
-        time.sleep(0.25)
-        assert not self.inspector.control_runners[6].run.called
+            inspection_session = InspectionSession(self.inspector)
+            inspection_session.start()
+            self.inspector.parts_queue.put(None)
+            time.sleep(0.25)
+            assert not self.inspector.control_runners[6].run.called
 
-        inspection_session.stop_cycle()
-        assert not self.inspector.control_runners[6].run.called
-
-        inspection_session.stop_session()
-        assert not inspection_session.is_alive()
+            inspection_session.stop_cycle()
+            assert not self.inspector.control_runners[6].run.called
+        finally:
+            inspection_session.stop()
+            assert not inspection_session.is_alive()
 
 @pytest.mark.ahora
 class An_Inspector(TestWithPatches):
@@ -143,7 +148,8 @@ class An_Inspector(TestWithPatches):
             'quactrl.services.inspection.time',
             'quactrl.services.inspection.Test',
             'quactrl.services.inspection.Check',
-            'quactrl.services.inspection.InspectionSession'
+            'quactrl.services.inspection.InspectionSession',
+            'quactrl.services.inspection.ControlRunner'
             ]
         self.create_patches(patches)
         self.service = Mock()
@@ -152,48 +158,51 @@ class An_Inspector(TestWithPatches):
         inspector = Inspector(self.service)
 
     def should_setup_batch(self):
+        inspector = Inspector(self.service)
         controls = [Mock() for _ in range(3)]
-        assert len(self.inspector.control_runners) == 0
+        assert len(inspector.control_runners) == 0
 
-        self.inspector.setup_batch(controls)
+        inspector.setup_batch(controls)
 
         assert self.patch['ControlRunner'].call_count == 3
-        assert len(self.inspector.control_runners) == 3
+        assert len(inspector.control_runners) == 3
 
     def should_eval_value(self):
+        inspector = Inspector(self.service)
         characteristic = Mock()
         characteristic.limits = [-1, 1]
         modes = ['very low', 'very high', 'a bit suspicious']
         uncertainty = 0.2
         # TODO: Check if one of the limits is ommited
         value = 0
-        failure_mode = self.inspector.eval_value(value, characteristic,
+        failure_mode = inspector.eval_value(value, characteristic,
                                                  uncertainty, modes)
         assert failure_mode is None
 
         value = 0.81
-        failure_mode = self.inspector.eval_value(value, characteristic,
+        failure_mode = inspector.eval_value(value, characteristic,
                                                  uncertainty, modes)
         self.service.env.repo_fry.get.return_value.get.assert_called_with(
             'a bit suspicious very high', characteristic)
 
         value = 1.1
-        failure_mode = self.inspector.eval_value(value, characteristic,
+        failure_mode = inspector.eval_value(value, characteristic,
                                                  uncertainty, modes)
-        self.service.env.repo_fry.get.return_value.get.assert_called_with('very high',
-                                                                  characteristic)
+        self.service.env.repo_fry.get.return_value.get.assert_called_with(
+            'very high',
+            characteristic)
 
         value = -0.81
-        failure_mode = self.inspector.eval_value(value, characteristic,
+        failure_mode = inspector.eval_value(value, characteristic,
                                                  uncertainty, modes)
         self.service.env.repo_fry.get.return_value.get.assert_called_with(
             'a bit suspicious very low', characteristic)
 
         value = -1.1
-        failure_mode = self.inspector.eval_value(value, characteristic,
+        failure_mode = inspector.eval_value(value, characteristic,
                                                  uncertainty, modes)
-        self.service.env.repo_fry.get.return_value.get.assert_called_with('very low',
-                                                                  characteristic)
+        self.service.env.repo_fry.get.return_value.get.assert_called_with(
+            'very low', characteristic)
 
 
 @pytest.mark.ahora
@@ -216,12 +225,13 @@ class A_ControlRunner(TestWithPatches):
 
     def should_count(self):
         self.control.sampling.check_is_needed.return_value = False
-        assert self.control_runner.count() == None
+        assert self.control_runner.count() is None
 
         self.control.sampling.check_is_needed.return_value = True
         assert self.patch['Check'].return_value == self.control_runner.count()
         part = self.inspector.current_part
-        self.patch['Check'].assert_called_once_with(self.inspector.test, self.control, part)
+        self.patch['Check'].assert_called_once_with(self.inspector.test,
+                                                    self.control, part)
 
     def should_run_method(self):
         check = Mock()

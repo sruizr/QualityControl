@@ -32,7 +32,7 @@ class InspectionManager:
 class InspectionSession(threading.Thread):
     """Base class for inspection sessions, manages a secuence of control_runners"""
     def __init__(self, inspector, resolution=0):
-        """"Inits with inspector an resolution = 0 means it waits till even init cycle is set"""
+        """"Inits with inspector inspection,  resolution = 0 means it waits till even init cycle is set"""
         super().__init__()
         self.inspector = inspector
         self.cycle_stopped = False
@@ -40,7 +40,7 @@ class InspectionSession(threading.Thread):
         self.resolution = resolution
 
     def _process_cycle(self):
-        for nt, control_runner in enumerate(self.inspector.control_runners):
+        for control_runner in self.inspector.control_runners:
             if self.cycle_stopped: # Interrupts just before the check begins
                 self.inspector.test.state = 'cancelled'
                 return None
@@ -70,21 +70,20 @@ class InspectionSession(threading.Thread):
             self.cycle_stopped = False
             if self.resolution != 0:
                 self.inspector.parts_queue.set(None)
-
-    def init_cycle(self):
-        self.init_cycle_event.set()
+            time.sleep(self.resolution)
 
     def stop_cycle(self):
         """Stops a cycle as soon as possible"""
         self.cycle_stopped = True
 
-    def stop_session(self):
+    def stop(self):
         """Stop session but waits till cycle ends"""
         self.session_stopped = True
-        self.init_cycle_event.set()
+        if self.inspector.parts_queue.empty():
+            self.inspector.parts_queue.put(None)
         self.join()
 
-    def interrupt_session(self):
+    def interrupt(self):
         self.stop_cycle()
         self.stop_session()
 
@@ -98,7 +97,6 @@ class Inspector:
         self.control_runners = []
         self.current_part = None
         self.parts_queue = Queue()
-        self.lock = threading.Lock()
 
     def setup_batch(self, controls):
         self._load_controls(controls)
@@ -106,7 +104,7 @@ class Inspector:
         self.session.start()
 
     def receive_part(self, part):
-        self.part_queue.set(part)
+        self.parts_queue.set(part)
 
     def start_ongoing(self, controls, resolution):
         """Begins a continous session no dependent of parts"""
@@ -117,14 +115,8 @@ class Inspector:
     def _load_controls(self, controls):
         for control in controls:
             self.control_runners.append(
-                ControlRunner(control)
+                ControlRunner(self, control)
                 )
-
-    def stop(self):
-        self.session.stop()
-
-    def interrupt(self):
-        self.session.interrupt()
 
     def eval_value(self, value, characteristic, uncertainty,
                    modes=['low', 'high', 'suspcious']):
