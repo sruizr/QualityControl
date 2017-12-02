@@ -1,6 +1,6 @@
 import time
 import threading
-from asyncio.queues import Queue
+from queue import Queue
 from quactrl.entities.check import Test, Check
 
 
@@ -29,24 +29,102 @@ class InspectionManager:
             else:
                 control_plan[key] = {control}
 
-    def _run(self):
-        pass
+class InspectionSession(threading.Thread):
+    """Base class for inspection sessions, manages a secuence of control_runners"""
+    def __init__(self, inspector, resolution=0):
+        """"Inits with inspector an resolution = 0 means it waits till even init cycle is set"""
+        super().__init__()
+        self.inspector = inspector
+        self.cycle_stopped = False
+        self.session_stopped = False
+        self.resolution = resolution
+
+    def _process_cycle(self):
+        for nt, control_runner in enumerate(self.inspector.control_runners):
+            if self.cycle_stopped: # Interrupts just before the check begins
+                self.inspector.test.state = 'cancelled'
+                return None
+            else:
+                check = control_runner.count()
+                if check:
+                    self.inspector.service.check_initialized(self, check)
+                    control_runner.run(check)
+                    # Asyncronous method
+                    wait_time = check.control.pars.get('wait_time', 1)
+                    while check.state == 'ongoing': # Asyncronous (long time) method
+                        if self.cycle_stopped:
+                            check.cancel()
+                            check.state = 'cancelled'
+                            self.inspector.test.state = 'cancelled'
+                            return None
+                        time.sleep(wait_time)
+                    check.eval()
+                    self.inspector.service.check_finished(self, check)
+
+    def run(self):
+        while True:
+            self.inspector.current_part = self.inspector.parts_queue.get()
+            if self.session_stopped:
+                break
+            self._process_cycle()
+            self.cycle_stopped = False
+            if self.resolution != 0:
+                self.inspector.parts_queue.set(None)
+
+    def init_cycle(self):
+        self.init_cycle_event.set()
+
+    def stop_cycle(self):
+        """Stops a cycle as soon as possible"""
+        self.cycle_stopped = True
+
+    def stop_session(self):
+        """Stop session but waits till cycle ends"""
+        self.session_stopped = True
+        self.init_cycle_event.set()
+        self.join()
+
+    def interrupt_session(self):
+        self.stop_cycle()
+        self.stop_session()
 
 
-class Inspector(threading.Thread):
 
-    def __init__(self, service, period=1):
+class Inspector:
+
+    def __init__(self, service):
         super().__init__()
         self.service = service
-        self.period = period
         self.control_runners = []
-        self.stop_inspection = False
+        self.current_part = None
+        self.parts_queue = Queue()
+        self.lock = threading.Lock()
 
-    def load_controls(self, controls):
+    def setup_batch(self, controls):
+        self._load_controls(controls)
+        self.session = InspectionSession(self)
+        self.session.start()
+
+    def receive_part(self, part):
+        self.part_queue.set(part)
+
+    def start_ongoing(self, controls, resolution):
+        """Begins a continous session no dependent of parts"""
+        self._load_controls(controls)
+        self.session = InspectionSession(self, resolution)
+        self.session.start()
+
+    def _load_controls(self, controls):
         for control in controls:
             self.control_runners.append(
                 ControlRunner(control)
                 )
+
+    def stop(self):
+        self.session.stop()
+
+    def interrupt(self):
+        self.session.interrupt()
 
     def eval_value(self, value, characteristic, uncertainty,
                    modes=['low', 'high', 'suspcious']):
@@ -78,57 +156,6 @@ class Inspector(threading.Thread):
             failure_mode = failure_mode_repo.get(mode, characteristic)
 
         return failure_mode
-
-    def run(self):
-        pass
-
-
-class PartInspector(Inspector):
-    """Inspector of parts"""
-    def __init__(self, service, period):
-        super().__init__(service, period)
-        self._parts = Queue()
-        self.current_part = None
-
-    def run(self):
-        while not self.stop_inspection:
-            self.current_part = self._parts.get()
-            self.test = Test()
-            for control_runner in self.control_runners:
-                if not self.stop_inspection:
-                    check = control_runner.count()
-                    if check:
-                        self.service.check_initialized(self, check)
-                        control_runner.run(check)
-                        while check.state == 'ongoing' and not self.stop_inspection:
-                            time.sleep(self.period)
-                        self.service.check_finished(self, check)
-            self.service.return_part(self, self.current_part)
-
-    def stop(self):
-        self._stop = True
-        #
-        self._parts.put
-    def receive(self, part):
-        self._parts.put(part)
-
-
-class ProcessInspector(Inspector):
-    """Inspector of process characteristics, continuous inspection"""
-    def __init__(self, service, period):
-        super().__init__(service, period)
-
-    def run(self):
-        self.test = Test()
-        while not self.stop_inspection:
-            for control_runner in self.control_runners:
-                if not self.stop_inspection:
-                    check = control_runner.count()
-                    if check:
-                        self.service.check_initialized(self, check)
-                        control_runner.run(check)
-                        self.service.check_finished(self, check)
-            time.sleep(self.period)
 
 
 class ControlRunner:

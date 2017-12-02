@@ -1,13 +1,13 @@
+import time
 from unittest.mock import Mock, patch
-from quactrl.services.inspection import Inspector, ControlRunner, PartInspector
-
+from quactrl.services.inspection import Inspector, ControlRunner, InspectionSession
 import pytest
 
 
 current = pytest.mark.current
 
 
-class BaseTest:
+class TestWithPatches:
     def create_patches(self, definitions):
         self.patch = {}
         self._patchers = []
@@ -65,27 +65,97 @@ class An_InspectionManager:
     # def should_persist_results(self):
     #     pass
 
+
 @pytest.mark.ahora
-class An_Inspector(BaseTest):
+class An_InspectionSession:
+
+    def setup_method(self, method):
+        self.inspector = Mock()
+        self.inspector.control_runners = [Mock() for _ in range(30)]
+
+
+    def should_work_on_continuous(self):
+        inspection_session = InspectionSession(self.inspector, resolution=0)
+        inspection_session.start()
+        assert inspection_session.is_alive()
+
+        inspection_session.stop_session()
+        assert not inspection_session.is_alive()
+
+    def should_work_on_cycles(self):
+        inspection_session = InspectionSession(self.inspector)
+
+        inspection_session.start()
+        assert  not inspection_session.init_cycle_event.is_set()
+        inspection_session.init_cycle()
+        time.sleep(0.25)
+        assert self.inspector.service.check_initialized.called
+        assert self.inspector.service.check_finished.called
+
+        inspection_session.stop_session()
+        assert not inspection_session.is_alive()
+
+    def should_stop_cycle_when_async_method(self):
+
+        # control_runners[5] has an async method
+        check = Mock(name='check')
+        check.state = 'ongoing'
+        self.inspector.control_runners[5].count.return_value = check
+        self.inspector.control_runners[5].run = lambda s: time.sleep(0.5)
+
+        inspection_session = InspectionSession(self.inspector)
+        inspection_session.start()
+        inspection_session.init_cycle()
+        time.sleep(0.25)
+        assert not self.inspector.control_runners[6].run.called
+
+        inspection_session.stop_cycle()
+        time.sleep(1)
+        assert check.cancel.called
+        assert self.inspector.test.state == 'cancelled'
+        assert check.state == 'cancelled'
+
+        assert not self.inspector.control_runners[6].run.called
+
+        inspection_session.stop_session()
+        assert not inspection_session.is_alive()
+
+    def should_stop_cycle_on_mid_sequence(self):
+        self.inspector.control_runners[5].run = lambda: time.sleep(0.5)
+
+        inspection_session = InspectionSession(self.inspector)
+        inspection_session.start()
+        inspection_session.init_cycle()
+        time.sleep(0.25)
+        assert not self.inspector.control_runners[6].run.called
+
+        inspection_session.stop_cycle()
+        assert not self.inspector.control_runners[6].run.called
+
+        inspection_session.stop_session()
+        assert not inspection_session.is_alive()
+
+@pytest.mark.ahora
+class An_Inspector(TestWithPatches):
 
     def setup_method(self, method):
         patches = [
             'quactrl.services.inspection.time',
-            'quactrl.services.inspection.Queue',
             'quactrl.services.inspection.Test',
             'quactrl.services.inspection.Check',
-            'quactrl.services.inspection.ControlRunner'
+            'quactrl.services.inspection.InspectionSession'
             ]
         self.create_patches(patches)
-
         self.service = Mock()
-        self.inspector = Inspector(self.service)
 
-    def should_create_control_runners(self):
+    def should_init_properly(self):
+        inspector = Inspector(self.service)
+
+    def should_setup_batch(self):
         controls = [Mock() for _ in range(3)]
         assert len(self.inspector.control_runners) == 0
 
-        self.inspector.load_controls(controls)
+        self.inspector.setup_batch(controls)
 
         assert self.patch['ControlRunner'].call_count == 3
         assert len(self.inspector.control_runners) == 3
@@ -95,7 +165,7 @@ class An_Inspector(BaseTest):
         characteristic.limits = [-1, 1]
         modes = ['very low', 'very high', 'a bit suspicious']
         uncertainty = 0.2
-
+        # TODO: Check if one of the limits is ommited
         value = 0
         failure_mode = self.inspector.eval_value(value, characteristic,
                                                  uncertainty, modes)
@@ -127,7 +197,7 @@ class An_Inspector(BaseTest):
 
 
 @pytest.mark.ahora
-class A_ControlRunner(BaseTest):
+class A_ControlRunner(TestWithPatches):
 
     def setup_method(self, method):
         patches = [
@@ -159,32 +229,3 @@ class A_ControlRunner(BaseTest):
 
         self.control_runner.run_method(check)
         method.assert_called_once_with(self.inspector, check)
-
-
-@pytest.mark.ahora
-class A_PartInspector(BaseTest):
-    def setup_method(self, method):
-        self.service = Mock()
-        self.period = 1
-
-        patches = [
-            'quactrl.services.inspection.Test'
-            ]
-        self.create_patches(patches)
-        self.inspector = PartInspector(self.service, self.period)
-
-    def should_init_part_status(self):
-        assert self.inspector._parts.empty()
-        assert self.inspector.current_part is None
-
-    def should_run_till_stop(self):
-        control_runners = [Mock() for _ in range(3)]
-        self.inspector.control_runners = control_runners
-
-        self.inspector.start()
-        self.inspector.stop()
-
-        assert not self.inspector.isAlive()
-
-    def should_wait_till_receive_a_part(self):
-        pass
