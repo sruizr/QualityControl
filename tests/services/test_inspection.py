@@ -23,39 +23,6 @@ class TestWithPatches:
             patcher.stop()
 
 
-class FakeEnvironment:
-    def __init__(self):
-        self.env = Mock()
-
-
-def create_fake_control_struct():
-    def get_branch(length):
-        branch = [Mock() for _ in range(length)]
-        for index, control in enumerate(branch):
-            control.prev = branch[index - 1]
-        branch[0].prev = None
-        return branch
-
-    control_branch_1 = get_branch(2)
-    control_branch_2 = get_branch(3)
-    control_branch_3 = get_branch(4)
-
-    # one branch with two branches
-    control_branch_2[0].prev = control_branch_3[0].prev = control_branch_1[-1]
-    control_branch_1.extend(control_branch_2)
-    control_branch_1.extend(control_branch_3)
-
-    return control_branch_1
-
-
-class FakeControl:
-    pass
-
-
-class FakeCharacteristic:
-    pass
-
-
 class An_InspectionManager:
     def setup_method(self, method):
         environment = Mock()
