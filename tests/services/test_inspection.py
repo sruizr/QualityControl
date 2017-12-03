@@ -1,11 +1,13 @@
 import time
 from queue import Queue
-from unittest.mock import Mock, patch
-from quactrl.services.inspection import Inspector, ControlRunner, InspectionSession
+from unittest.mock import Mock, patch, call
+from quactrl.services.inspection import (
+    Inspector, ControlRunner, InspectionSession, InspectionManager
+    )
 import pytest
 
 
-current = pytest.mark.current
+pytestmark = pytest.mark.current
 
 
 class TestWithPatches:
@@ -22,31 +24,72 @@ class TestWithPatches:
         for patcher in self._patchers:
             patcher.stop()
 
-
-class An_InspectionManager:
+class An_InspectionManager(TestWithPatches):
     def setup_method(self, method):
-        environment = Mock()
-        environment.process = Mock()
-        Control = Mock()
-        Control.collect.return_value = create_fake_control_struct()
+        self.env = Mock()
+        self.im = InspectionManager(self.env)
+        self.create_patches([
+            'quactrl.services.inspection.Inspector'
+            ])
 
-    # def should_persist_results(self):
-    #     pass
+    def should_set_process(self):
+        process = 'process name'
+        self.im.set_process(process)
+        assert self.im.process == process
+        assert self.env.device_repo.set_process.called
+
+    def should_setup_batch(self):
+        batch = Mock()
+        control_repo = self.env.control_repo
+        plans = [Mock() for _ in range(3)]
+        control_repo.get.return_value = plans
+        for plan in plans:
+            plan.resolution = 0
+            plan.inspectors = 1
+        plans[2].inspectors = 2
+
+        assert self.im.batch is None
+        self.im.setup_batch(batch)
+
+        assert len(self.im.inspectors) == 4
+        assert self.im.batch == batch
+        control_repo.get.assert_called_with(self.im.process, batch.partnumber)
+
+        inspector_calls = self.patch['Inspector'].return_value.setup_batch.mock_calls
+        expected_plans = [plans[0], plans[1], plans[2], plans[2]]
+        for inspector, plan in zip(self.im.inspectors, expected_plans):
+            assert call(plan.controls, 0) in inspector_calls
+            inspector.session.start.assert_called_with()
+
+    @pytest.mark.ahora
+    def should_receive_part(self):
+        self.im.inspectors = [Mock() for _ in range(3)]
+        self.im.setup_batch = Mock()
+
+        part = Mock()
+        self.im.receive_part(part, 1)
+
+        self.im.setup_batch.assert_called_once_with(part.batch)
+        self.im.inspectors[1].receive_part.assert_called_once_with(part)
 
 
-@pytest.mark.ahora
-class An_InspectionSession:
+class An_InspectionSession(TestWithPatches):
 
     def setup_method(self, method):
         self.inspector = Mock()
         self.inspector.parts_queue = Queue()
         self.inspector.control_runners = [Mock() for _ in range(30)]
+        self.create_patches([
+            'quactrl.services.inspection.Test'
+            ])
 
     def should_work_on_continuous(self):
         try:
             inspection_session = InspectionSession(self.inspector, resolution=1)
             inspection_session.start()
             assert inspection_session.is_alive()
+        except Exception as e:
+            raise e
         finally:
             inspection_session.stop()
             assert not inspection_session.is_alive()
@@ -59,9 +102,11 @@ class An_InspectionSession:
             assert not self.inspector.control_runners[0].run.called
 
             self.inspector.parts_queue.put(None)
-            time.sleep(0.1)
+            time.sleep(0.25)
             assert self.inspector.service.check_initialized.called
             assert self.inspector.service.check_finished.called
+        except Exception as e:
+            raise e
         finally:
             inspection_session.stop()
             assert not inspection_session.is_alive()
@@ -87,6 +132,8 @@ class An_InspectionSession:
             assert check.state == 'cancelled'
 
             assert not self.inspector.control_runners[6].run.called
+        except Exception as e:
+            raise e
         finally:
             inspection_session.stop()
             assert not inspection_session.is_alive()
@@ -103,11 +150,12 @@ class An_InspectionSession:
 
             inspection_session.stop_cycle()
             assert not self.inspector.control_runners[6].run.called
+        except Exception as e:
+            raise e
         finally:
             inspection_session.stop()
             assert not inspection_session.is_alive()
 
-@pytest.mark.ahora
 class An_Inspector(TestWithPatches):
 
     def setup_method(self, method):
@@ -123,6 +171,7 @@ class An_Inspector(TestWithPatches):
 
     def should_init_properly(self):
         inspector = Inspector(self.service)
+        assert inspector.service == self.service
 
     def should_setup_batch(self):
         inspector = Inspector(self.service)
@@ -167,12 +216,11 @@ class An_Inspector(TestWithPatches):
 
         value = -1.1
         failure_mode = inspector.eval_value(value, characteristic,
-                                                 uncertainty, modes)
+                                            uncertainty, modes)
         self.service.env.repo_fry.get.return_value.get.assert_called_with(
             'very low', characteristic)
 
 
-@pytest.mark.ahora
 class A_ControlRunner(TestWithPatches):
 
     def setup_method(self, method):
