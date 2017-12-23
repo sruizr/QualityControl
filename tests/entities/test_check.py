@@ -5,11 +5,11 @@ from quactrl.resources import (
     Element, Operation
 )
 from quactrl.plan import (
-    Characteristic, Sampling, Reaction, Method, FailureMode, Control
+    Characteristic, Sampling, FailureMode, Control, ControlPlan
 )
 
-from quactrl.check import (
-    Sample, Test, Check, Result, Inspector
+from quactrl.entities.check import (
+    Test, Check, Result, Inspector
     )
 
 from pytest import mark
@@ -45,7 +45,6 @@ class A_Test(TestBase):
         self.dal_patcher.stop()
         self.mock_factories.stop()
         self.mock_check.stop()
-
 
     def should_init(self):
 
@@ -115,6 +114,7 @@ class A_Test(TestBase):
         for check in test.checks:
             check.execute.assert_called_with()
 
+
 @mark.current
 class A_Check:
 
@@ -177,7 +177,6 @@ class A_Check:
         check.add_measure(value_1, characteristic)
         assert check.measures[characteristic] == value_1
 
-
         value_2 = 4
         check.add_measure(value_2, characteristic)
         assert check.measures[characteristic] == [value_1, value_2]
@@ -185,7 +184,6 @@ class A_Check:
         value_3 = 4
         check.add_measure(value_3, characteristic)
         assert check.measures[characteristic] == [value_1, value_2, value_3]
-
 
     def should_process_results_changing_state(self):
         """From measures and evaluations fixes a check state"""

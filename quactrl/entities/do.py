@@ -1,4 +1,4 @@
-from quactrl import (
+from quactrl.entities import (
     Column, ForeignKey, relationship, Model,
     dal, Integer, String, DATETIME, DECIMAL
 )
@@ -15,8 +15,9 @@ class Batch:
 
 
 class Item:
-    def __init__(self, serial_number, batch):
+    def __init__(self, serial_number, batch, part):
         self.batch = batch
+        self.part = part
         self.sn = serial_number
         self.status = None
         self.tests = []
@@ -29,12 +30,9 @@ class Item:
         return False
 
 
-
 class DoDAO:
     """Class to operate with Do Objects"""
     pass
-
-
 
 
 class ElementComposition(Base):
@@ -95,8 +93,7 @@ class Operation(Model):
         self.name = name
 
 
-class Device(Model):
+class Device(Resource):
     __tablename__ = 'devices'
     key = Column(String(10))
     name = Column(String(50))
-
