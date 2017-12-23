@@ -24,7 +24,6 @@ class TestWithPatches:
         for patcher in self._patchers:
             patcher.stop()
 
-
 class An_InspectionManager(TestWithPatches):
     def setup_method(self, method):
         self.env = Mock()
@@ -39,7 +38,6 @@ class An_InspectionManager(TestWithPatches):
         assert self.im.process == process
         assert self.env.device_repo.set_process.called
 
-    @pytest.mark.ahora
     def should_setup_batch(self):
         batch = Mock()
         control_repo = self.env.control_repo
@@ -62,6 +60,17 @@ class An_InspectionManager(TestWithPatches):
         for inspector, plan in zip(self.im.inspectors, expected_plans):
             assert call(plan.controls, 0) in inspector_calls
             inspector.session.start.assert_called_with()
+
+    @pytest.mark.ahora
+    def should_receive_part(self):
+        self.im.inspectors = [Mock() for _ in range(3)]
+        self.im.setup_batch = Mock()
+
+        part = Mock()
+        self.im.receive_part(part, 1)
+
+        self.im.setup_batch.assert_called_once_with(part.batch)
+        self.im.inspectors[1].receive_part.assert_called_once_with(part)
 
 
 class An_InspectionSession(TestWithPatches):
