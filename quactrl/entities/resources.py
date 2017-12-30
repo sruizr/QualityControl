@@ -2,7 +2,6 @@ from quactrl import (
     Column, ForeignKey, relationship, Model,
     dal, Integer, String, DATETIME, DECIMAL, Base
 )
-
 import pdb
 
 
@@ -34,8 +33,6 @@ class Item:
 class DoDAO:
     """Class to operate with Do Objects"""
     pass
-
-
 
 
 class ElementComposition(Base):
@@ -100,4 +97,3 @@ class Device(Model):
     __tablename__ = 'devices'
     key = Column(String(10))
     name = Column(String(50))
-
