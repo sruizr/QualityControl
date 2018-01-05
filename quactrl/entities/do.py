@@ -1,7 +1,9 @@
-from quactrl.entities import (
-    Column, ForeignKey, relationship, Model,
-    dal, Integer, String, DATETIME, DECIMAL
+from quactrl.entities.base import (
+    Column, ForeignKey, relationship,
+    Integer, String, DateTime
 )
+from quactrl.entities import dal, Base
+from quactrl.entities.base import Resource, Model
 import pdb
 
 
@@ -94,6 +96,11 @@ class Operation(Model):
 
 
 class Device(Resource):
-    __tablename__ = 'devices'
-    key = Column(String(10))
-    name = Column(String(50))
+    __mapper_args__ = {
+        'polymorphic_identity': 'resource'
+        }
+
+
+class DeviceBase:
+    def __init__(self, model):
+        self.model = model

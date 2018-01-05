@@ -22,3 +22,5 @@ class DataAccessLayer:
     def prepare_db(self):
         self.metadata.create_all(self.engine)
         self.Session.configure(bind=self.engine)
+
+dal = DataAccessLayer()
