@@ -3,3 +3,9 @@ sqlalchemy >= 1.1.
 pytest-cov
 faker
 behave
+
+# elpy environment
+jedi
+autopep8
+flake8
+yapf

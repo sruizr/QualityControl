@@ -1,44 +1,10 @@
 from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
-from sqlalchemy.types import String, Integer, DATETIME, DECIMAL
 from sqlalchemy.orm import sessionmaker, backref, relationship
 from sqlalchemy.ext.declarative import declarative_base
 
-method_directory = None
 
 Base = declarative_base()
 
-
-class Model(Base):
-    __abstract__ = True
-    id = Column(Integer, primary_key=True)
-
-    def __repr__(self):
-        identification = '#{} - '.format(self.id)
-        return identification + str(self)
-
-
-class Resource(Model):
-    __tablename__ = 'resources'
-    key = Column(String)
-    name = Column(String)
-    role = Column(String)
-    description = Column(String)
-    parameters = Column(String)
-    __mapper_args__ = {
-        'polymorphic_identity': 'resource',
-        'polymorphic_on': type
-    }
-
-
-class Nodes(Model):
-    pass
-
-
-class Item(Model):
-    __tablename__ = 'items'
-    resource_id = Column()
-    qty = Column()
-    sn = Column()
 
 class DataAccessLayer:
 
@@ -54,8 +20,5 @@ class DataAccessLayer:
         self.Session = sessionmaker()
 
     def prepare_db(self):
-        self.metadata.create_all(self.engine,  )
+        self.metadata.create_all(self.engine)
         self.Session.configure(bind=self.engine)
-
-
-dal = DataAccessLayer()
