@@ -1,11 +1,13 @@
 from datetime import datetime
+import json
 from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
 from sqlalchemy.types import (
     String, Integer, DateTime
     )
 from sqlalchemy.orm import sessionmaker, backref, relationship
-from quactrl.entities import Base, dal
+from quactrl.entities import Base
 import importlib
+import pdb
 
 
 class Model(Base):
@@ -70,7 +72,8 @@ def _get_class(full_class_name):
 
 
 class DeviceRepository:
-    def __init__(self):
+
+    def __init__(self, dal):
         self.dal = dal
         self._devices = {}
 
@@ -90,7 +93,7 @@ class DeviceRepository:
         self._devices[key] = device
 
         if 'components' in device_model.pars.keys():
-            for key, value in device_model.pars['components']:
+            for key, value in device_model.pars['components'].items():
                 if type(value) is list:
                     device_value = []
                     for v in value:
