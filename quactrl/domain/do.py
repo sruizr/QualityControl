@@ -1,9 +1,9 @@
-from quactrl.entities.base import (
+from quactrl.domain.base import (
     Column, ForeignKey, relationship,
     Integer, String, DateTime
 )
-from quactrl.entities import dal, Base
-from quactrl.entities.base import Resource, Model
+from quactrl.domain import dal, Base
+from quactrl.domain.base import Resource, Model
 import pdb
 
 
@@ -17,6 +17,7 @@ class Batch:
 
 
 class Item:
+
     def __init__(self, serial_number, batch, part):
         self.batch = batch
         self.part = part
@@ -30,11 +31,6 @@ class Item:
     @classmethod
     def has_passed_test(self, serial_number):
         return False
-
-
-class DoDAO:
-    """Class to operate with Do Objects"""
-    pass
 
 
 class ElementComposition(Base):

@@ -119,9 +119,14 @@ class Measurement(Model):
 class Failure(Model):
     __tablename__ = 'failure'
     check_id = Column(Integer, ForeignKey('check.id'))
-    mode = Column(String)
+    mode = Column(String(15))
     characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
     characteristic = relationship('Characteristic')
+    part_id = Column(Integer, ForeignKey('resource.id'))
+    part = relationship('resource')
+
+    device_id = Column(Integer, ForeignKey('node.id'))
+    device = relationship('node')
 
     def __init__(self, mode, characterisc, index=None):
         self.mode = mode
@@ -132,9 +137,10 @@ class Failure(Model):
 class Check(Model):
     __tablename__ = 'check'
     control = Column(Integer)
-    test = Column(Integer, ForeignKey('test.id'))
+    test_id = Column(Integer, ForeignKey('test.id'))
     result = Column(Integer)
     state = Column(Integer)
+
 
     failures = relationship('Failure', backref='check')
     measures = relationship('Measurement', backref='check')
@@ -178,3 +184,10 @@ class Check(Model):
         self.method()
         self.process_results()
         self.close_date = datetime.now()
+
+class Measure(Model):
+    characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
+    value = Column(Decimal)
+    part_id = Column(Integer, ForeingKey('resource.id'))
+    device_id = Column(Integer, ForeingKey('node.id'))
+    measured_on = Column(datetime, default=datetime.now)
