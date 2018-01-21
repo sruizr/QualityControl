@@ -9,18 +9,24 @@ class InspectionManager:
     """Manage one tree of controls"""
     def __init__(self, environment):
         self.env = environment
-        self.batch = None
-        self.partnumber = None
-        self.inspectors = []
+        self._partnumber = None
+        self.process_inspector = None
         self.process = None
+        self.inspectors = {}
+        self.batches = {}
 
-    def set_process(self, process):
+    def set_process(self, value):
         """Load device repository for the current process"""
-        self.process = process
-        self.device_repo = self.env.device_repo
-        self.device_repo = self.device_repo.set_process(process)
+        self.process = value
 
-    def setup_batch(self, batch):
+        test_plan = self.env.domain.get_process_test_plan(self.process)
+        if test_plan:
+            self.process_inspector = Inspector(test_plan)
+
+    def set_operator(self, operator):
+        self.operator = operator
+
+    def setup_batch(self, batch, cavity=0):
         """Load inspectors and their controls into the service"""
         for inspector in self.inspectors:
             inspector.session.stop()
@@ -56,10 +62,10 @@ class InspectionManager:
             self.env.session.add(check)
             self.env.session.commit()
 
-        self.env.view.show_check_finished(inspector, check)
+        self.env.view.update_check(check)
 
-    def check_initialized(self, inspector, check):
-        self.env.view.show_check_finished(inspector, check)
+    def check_initialized(self, check, cavity):
+        self.env.view.update_check(inspector, check)
 
     def test_initalized(self, inspector, test):
         pass

@@ -1,0 +1,37 @@
+* Asegurarse que check.eval_measure da siempre None si no hay limits
+* View.request_event(message, event) -> Esta orden debe esperar hasta que el usuario decida arrancar
+* Children de caracteristicas debe tner un key tal que sea accesible. La estructura será un diccionario, no un listado
+* inspector.get_part() da enlace a la pieza en test
+* Los valores de las características serán de tipo Float en sqlalchemy
+* Check.add_measure(value, characteristic, part, device)
+* Check.add_failure(f_mode, characteristic, part, device)
+* Check
+- status
+- failures -> tipo dict donde characteristic-key es el key
+- measures -> tipo dict donde characteristic-key es el key
+-
+* El inspector tendrá un listado de devices llamado device_repo cuyas key serán los nombre de device(no keys!!!)
+* Environment:
+- Fields
+  - dal
+    - get_all_devices_by_process(value)
+    - create_new_part(partnumber, node, batch_number)
+    - get_part(serial_number)
+    - get_test_plans(partnumber, process)
+    - Session
+    - prepare_db()
+    - fill_db()
+  - service
+    - inspection
+    - certification
+  - controller
+    - BatchFinalController
+    - SyncronizedRHController
+    - TemperatureErrorController
+    - RandomProductionController
+  - view
+    - BatchProductionView
+    - SyncronizedRHView
+    - TemperatureErrorView
+* Domain
+- get_process_test_plan

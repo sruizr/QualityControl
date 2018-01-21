@@ -14,7 +14,8 @@ class DataAccessLayer:
     Session = None
 
     def db_init(self, conn_string, echo=False):
-        self.engine = create_engine(conn_string or self.conn_string, echo=echo)
+        self.conn_string = conn_string
+        self.engine = create_engine(self.conn_string, echo=echo)
         self.metadata = Base.metadata
         self.connection = self.engine.connect()
         self.Session = sessionmaker()
@@ -23,4 +24,5 @@ class DataAccessLayer:
         self.metadata.create_all(self.engine)
         self.Session.configure(bind=self.engine)
 
-dal = DataAccessLayer()
+    def fill_db(self, filler):
+        filler.execute()
