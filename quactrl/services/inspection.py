@@ -23,8 +23,8 @@ class InspectionManager:
         if test_plan:
             self.process_inspector = Inspector(test_plan)
 
-    def set_operator(self, operator):
-        self.operator = operator
+    def set_operator(self, value):
+        self.operator = value
 
     def setup_batch(self, batch, cavity=0):
         """Load inspectors and their controls into the service"""

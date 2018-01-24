@@ -26,3 +26,14 @@ class DataAccessLayer:
 
     def fill_db(self, filler):
         filler.execute()
+
+    def get_batch(key, partnumber):
+        """Get or create batch """
+        pass
+
+    def get_item(item_data):
+        """Get or create item, return None if not possible"""
+        pass
+
+    def get_operator(data):
+        """Get operator from data layer"""
