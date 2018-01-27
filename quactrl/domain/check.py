@@ -4,7 +4,7 @@ from quactrl import (
     Column, ForeignKey, relationship, Model,
     dal, Integer, String, DATETIME, DECIMAL, method_directory
 )
-from quactrl.factories import ms_factory, method_factory
+from quactrl.domain.erp import (Item, Resource)
 from datetime import datetime
 import pdb
 
@@ -18,9 +18,28 @@ class Result(Enum):
     OK = 10
 
 
-class Test(Model):
+class Sampling(enum.Enum):
+    ongoing = 0
+    every_unit = 1
 
-    __tablename__ = 'test'
+    each_10 = 21
+    each_100 = 22
+    each_1000 = 23
+    each_10000 = 24
+    each_100000 = 25
+
+    by_second = 30
+    by_minute = 31
+    by_hour = 32
+    by_day = 33
+    by_week = 34
+    by_month = 35
+    by_year = 36
+
+
+
+class Test(Item):
+    __mapped_args__ = {'polimorphic__tablename__ = 'test'
     sample = Column(Integer)
 
     verifier = Column(String)
@@ -32,7 +51,7 @@ class Test(Model):
         self.verifier = verifier
         self.process = process
         self.state = Result.PENDING
-        for control in controls:
+        for control in self.controls:
             check = Check(self, control)
             self.checks.append(check)
 
@@ -108,30 +127,21 @@ class Test(Model):
         self.session.commit()
 
 
+class Check(Item):
+    __mapper_args__ = {'polymorphic_identity': 'check'}
+
+
 class Measurement(Model):
-    __tablename__ = 'measurement'
+    __mapper_args__ = {'polymorphic_identity': 'measurement'}
+
     check_id = Column(Integer, ForeignKey('check.id'))
     characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
     value = Column(DECIMAL)
     index = Column(Integer)
 
 
-class Failure(Model):
-    __tablename__ = 'failure'
-    check_id = Column(Integer, ForeignKey('check.id'))
-    mode = Column(String(15))
-    characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
-    characteristic = relationship('Characteristic')
-    part_id = Column(Integer, ForeignKey('resource.id'))
-    part = relationship('resource')
-
-    device_id = Column(Integer, ForeignKey('node.id'))
-    device = relationship('node')
-
-    def __init__(self, mode, characterisc, index=None):
-        self.mode = mode
-        self.characteristic = characterisc
-        self.index = index
+class Failure(Item):
+    __mapper_args__ = {'polymorphic_identity': 'failure'}
 
 
 class Check(Model):
