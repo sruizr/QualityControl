@@ -3,7 +3,6 @@ from sqlalchemy.orm import sessionmaker, backref, relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 
-Base = declarative_base()
 
 
 # from .erp import DataAccessModule as Erp
@@ -15,7 +14,7 @@ Base = declarative_base()
 
 class DataAccessLayer:
     """Prepare objects for data persistence and return persistence classes of domain"""
-
+    Base = declarative_base()
     connection = None
     engine = None
     conn_string = None
@@ -37,7 +36,7 @@ class DataAccessLayer:
     def db_init(self, conn_string, echo=False):
         self.conn_string = conn_string
         self.engine = create_engine(self.conn_string, echo=echo)
-        self.metadata = Base.metadata
+        self.metadata = self.Base.metadata
         self.connection = self.engine.connect()
         self.Session = sessionmaker()
 
@@ -45,3 +44,6 @@ class DataAccessLayer:
         """Create tables (if no exist) and bind database to class"""
         self.metadata.create_all(self.engine)
         self.Session.configure(bind=self.engine)
+
+    def load_db(self, filler):
+        self.filer.load()
