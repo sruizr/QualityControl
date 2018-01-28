@@ -39,7 +39,10 @@ class Sampling(enum.Enum):
 
 
 class Test(Item):
-    __mapped_args__ = {'polimorphic__tablename__ = 'test'
+    __mapped_args__ = {'polimorphic__identity': 'test'}
+
+
+
     sample = Column(Integer)
 
     verifier = Column(String)
@@ -47,7 +50,7 @@ class Test(Item):
     checks = []
     # open_date = Column(Datetime)
 
-    def __init__(self, verifier, process, control_plan):
+    def __init__(self, part, verifier, process, control_plan):
         self.verifier = verifier
         self.process = process
         self.state = Result.PENDING

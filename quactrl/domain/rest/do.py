@@ -2,6 +2,7 @@ from quactrl.domain.base import (
     Column, ForeignKey, relationship,
     Integer, String, DateTime
 )
+from sqlalchemy.orm import synonym
 from quactrl.domain.erp import Item, Resource, Node
 from quactrl.domain.plan import PartModel, Process,
 from quactrl.domain import dal, Base
@@ -15,6 +16,9 @@ class Material(Item):
 
 class Defect(Item):
     __mapper_args__ = {'polymorphic_identity': 'defect'}
+    def __init__(self, part, check, failure_mode):
+        self.resource = failure_mode
+        part.add_defect(self)
 
 
 class Device:
@@ -27,6 +31,7 @@ class Dut(Device):
 
 class Person(Node):
     __mapper_args__ = {'polymorphic_identity': 'person'}
+
 
 
 class Location(Node):
@@ -63,7 +68,6 @@ class ElementComposition(Base):
 
 
 class Element(Model):
-    __tablename__ = 'elements'
     name = Column(String(50))
     key = Column(String(15))
     composed_by = relationship('ElementComposition',back_populates='parent',

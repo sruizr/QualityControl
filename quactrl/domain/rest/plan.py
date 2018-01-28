@@ -1,5 +1,6 @@
 import enum
 from sqlalchemy.types import Enum
+from sqlalchemy.orm import synonym
 from quactrl.data import (
     Model, ForeignKey, relationship, backref, Column, String, Integer
 )
@@ -28,6 +29,7 @@ class Characteristic(Resource):
 class FailureMode(Resource):
     __mapper_args__ = {'polymorphic_identity': 'failure_mode'}
 
+    def __init__(self, **kwargs):
 
 class PartModel(Resource):
     __mapper_args__ = {'polymorphic_identity': 'part_model'}
