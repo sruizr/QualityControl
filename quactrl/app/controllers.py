@@ -1,5 +1,6 @@
 import datetime
 from types import MethodType
+import pdb
 
 
 class InspectionController:
@@ -10,7 +11,8 @@ class InspectionController:
         self.dal = environment.dal
 
         self.service = environment.service
-        self.service.set_process(self.env.pars['process'])
+        process = self.dal.get_process(self.env.pars['process'])
+        self.service.set_process(process)
         self.view = environment.view
 
         self.operator = None
@@ -33,10 +35,10 @@ class InspectionController:
                 )
             self.open_session()
 
-        self.operator = self.dal.get_operator(operator_key)
+        self.operator = self.dal.get_operator(operator_data)
         if self.operator is None:
             self.view.show_error('operator_not_found',
-                                 operator_key=operator_key)
+                                 operator_key=operator_data['key'])
             self.open_session()
 
         self.service.set_operator(self.operator)
@@ -53,7 +55,7 @@ class InspectionController:
             return None
 
         self._batches[cavity] = self.dal.get_batch(batch_data['key'],
-                                                      batch_data['partnumber'])
+                                                   batch_data['partnumber'])
         if self.batch[cavity] is None:
             self.show_error(
                 'Batch {} for partnumber {} is not valid'.format(
@@ -123,11 +125,22 @@ class InspectionController:
 
     def close(self):
         """Close application using the controller"""
+        print('Closing')
         self.service.stop()
         self.env.app.stop()
 
     def set_validations(self, **kwargs):
         """Sets validation methods, to be loaded externally"""
+
         self.validate_batch_label = MethodType(kwargs['batch_label'], self)
         self.validate_item_label = MethodType(kwargs['item_label'], self)
         self.validate_operator_label = MethodType(kwargs['operator_label'], self)
+
+    def validate_batch_label(self, label):
+        return {'label': label}
+
+    def validate_item_label(self, label):
+        return {'label': label}
+
+    def validate_operator_label(self, label):
+        return {'label': label}

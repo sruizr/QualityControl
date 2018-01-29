@@ -1,7 +1,8 @@
 import time
 import threading
 from queue import Queue
-from quactrl.entities.check import Test, Check
+from quactrl.domain.check import Test, Check
+
 import pdb
 
 
@@ -9,24 +10,27 @@ class InspectionManager:
     """Manage one tree of controls"""
     def __init__(self, environment):
         self.env = environment
+        self.dal = self.env.dal
         self._partnumber = None
         self.process_inspector = None
         self.process = None
-        self.inspectors = {}
         self.batches = {}
 
     def set_process(self, value):
         """Load device repository for the current process"""
         self.process = value
+        cavities = self.process.main_device.pars.get('cavities', 1)
 
-        test_plan = self.env.domain.get_process_test_plan(self.process)
+        self.inspectors = [None] * cavities
+
+        test_plan = self.dal.check.get_test_plan(self.process)
         if test_plan:
-            self.process_inspector = Inspector(test_plan)
+            self.process_inspector = Inspector(test_plan, responsible=self.operator)
 
     def set_operator(self, value):
         self.operator = value
 
-    def setup_batch(self, batch, cavity=0):
+    def setup_batch(self, batch, cavity=None):
         """Load inspectors and their controls into the service"""
         for inspector in self.inspectors:
             inspector.session.stop()
@@ -38,8 +42,8 @@ class InspectionManager:
         if not load_controls:
             return None
 
-        control_plans = self.env.control_repo.get(self.process,
-                                                  batch.partnumber)
+        control_plans = self.dal.get_test_plan(self.process,
+                                               batch.partnumber)
         self.inspectors = []
         for control_plan in control_plans:
             n_inspectors = getattr(control_plan, 'inspectors', 1)
@@ -52,10 +56,10 @@ class InspectionManager:
         for inspector in self.inspectors:
             inspector.session.start()
 
-    def receive_part(self, part, inspector_number=0):
+    def receive_part(self, part, cavity=0):
         if part.batch != self.batch:
             self.setup_batch(part.batch)
-        self.inspectors[inspector_number].receive_part(part)
+        self.inspectors[cavity].receive_part(part)
 
     def check_finished(self, inspector, check):
         if inspector.session.resolution != 0:
@@ -79,6 +83,7 @@ class InspectionManager:
 class InspectionSession(threading.Thread):
     """Base class for inspection sessions, manages a secuence of
 control_runners"""
+
     def __init__(self, inspector, resolution=0):
         """"Inits with inspector inspection,  resolution = 0 means
 it waits till even init cycle is set"""
@@ -147,12 +152,13 @@ it waits till even init cycle is set"""
 
 class Inspector:
 
-    def __init__(self, service):
+    def __init__(self, service, responsible):
         super().__init__()
         self.service = service
         self.control_runners = []
         self.current_part = None
         self.parts_queue = Queue()
+        self.responsible = responsible
 
     def setup_batch(self, controls):
         self._load_controls(controls)
@@ -175,7 +181,7 @@ class Inspector:
                 )
 
     def eval_value(self, value, characteristic, uncertainty,
-                   modes=['low', 'high', 'suspcious']):
+                   modes=['low', 'high', 'suspicious']):
 
         limits = characteristic.limits
         repo_fry = self.service.env.repo_fry

@@ -4,8 +4,9 @@ from abc import ABC, abstractmethod
 class InspectionView(ABC):
     """View layer of Inspection app, it must be inherited"""
     def __init__(self, environment):
-        self.controller = environment.controller
-        self.environment.view = self
+        self.env = environment
+        self.controller = self.env.controller
+        self.env.view = self
 
     @abstractmethod
     def read_operator(self):
@@ -38,7 +39,7 @@ class InspectionView(ABC):
         return None
 
     @abstractmethod
-    def user_confirmation(self, message_key):
+    def user_confirmation(self, key, **kwargs):
         """Sync call by inspection confirmation to get confirmation by user
         returns False if confirmation is cancelled
         """

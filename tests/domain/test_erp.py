@@ -1,52 +1,29 @@
 from quactrl.domain.erp import (
-    Resource, ResourceRelation, Node, NodeRelation, Item, ItemRelation
+    Resource, ResourceRelation, Node, NodeRelation, Item, ItemRelation,
+    Path, PathResource, Movement
     )
 from quactrl.domain.data import DataAccessLayer
-from tests import DataTest
+from tests.domain.test_data import OnMemoryTest
 
 
-def setup_module(module):
-    global dal
-    dal = DataAccessLayer()
-    dal.db_init('sqlite:///:memory:', False)
-    dal.prepare_db()
-
-
-class A_Node(DataTest):
-    def setup_method(self, method):
-        self._transaction = dal.connection.begin_nested()
-        self.session = dal.Session()
-
-    def teardown_method(self, method):
-        # self.session.rollback()
-        self.session.close()
-        self._transaction.rollback()
-
+class A_Node(OnMemoryTest):
     def should_be_created_node(self):
 
-        session = dal.Session()
+        session = self.dal.Session()
         node = Node('key', 'description')
         session.add(node)
 
         assert node.id is None
         session.commit()
 
-        assert node.id == 1
+        assert node.id is not None
         assert node.is_a is None
 
 
-class A_RelationNode:
-    def setup_method(self, method):
-        self._transaction = dal.connection.begin_nested()
-        self.session = dal.Session()
-
-    def teardown_method(self, method):
-        # self.session.rollback()
-        self.session.close()
-        self._transaction.rollback()
+class A_RelationNode(OnMemoryTest):
 
     def should_keep_destinations_on_node(self):
-        session = dal.Session()
+        session = self.dal.Session()
 
         from_node = Node(key='from_node')
         to_node = Node(key='to_node')
@@ -66,15 +43,14 @@ class A_RelationNode:
         assert from_node.id is not None
         assert to_node.id is not None
 
-class A_Item:
+
+class A_Item(OnMemoryTest):
     def should_be_created(self):
         resource = Resource()
-
-        session = dal.Session()
-
         item = Item(resource)
-        session.add(item)
 
+        session = self.dal.Session()
+        session.add(item)
         session.commit()
 
         assert item.id is not None
@@ -83,6 +59,76 @@ class A_Item:
         assert item.state == 'active'
 
 
-class A_ItemRelation:
+class A_ItemRelation(OnMemoryTest):
     def should_keep_destinations_on_items(self):
-        pass
+        resource = Resource()
+        item = Item(resource)
+        sub_item = Item(resource)
+
+        rel = ItemRelation()
+        rel.from_item = item
+        rel.to_item = sub_item
+
+        session = self.dal.Session()
+        session.add(item)
+        session.add(sub_item)
+        session.commit()
+
+        assert item.destinations[0].to_item == sub_item
+        assert item.destinations[0].relation_class == 'has'
+        assert item.destinations[0].qty == 1.0
+        assert rel.id is not None
+
+
+class A_Path(OnMemoryTest):
+    def should_be_created(self):
+        from_node = Node('from_key')
+        to_node = Node('to_key')
+
+        parent = Path()
+        path = Path()
+        path.from_node = from_node
+        path.to_node = to_node
+        path.parent = parent
+
+        session = self.dal.Session()
+        session.add_all(
+            [from_node, to_node, parent, path]
+            )
+        session.commit()
+
+        assert parent.children[0] == path
+        assert parent.sequence == 0
+        assert parent.method_name == 'move'
+
+
+class A_PathResource(OnMemoryTest):
+    def should_keep_resources_on_path(self):
+        path = Path()
+        resource = Resource()
+        path.resource_links.append(PathResource(resource=resource))
+
+        session = self.dal.Session()
+        session.add(path)
+
+        session.commit()
+
+        assert resource.id is not None
+        assert path.resource_links[0].resource == resource
+
+
+class A_Movement(OnMemoryTest):
+
+    def should_record_movement_of_items(self):
+        resource = Resource()
+        item = Item(resource)
+        from_node = Node('origin')
+
+        movement = Movement(from_node=from_node, item=item)
+
+        session = self.dal.Session()
+        session.add(movement)
+        session.commit()
+
+        assert movement.qty == 1.0
+        assert movement.user is None

@@ -3,7 +3,7 @@ from sqlalchemy import ForeignKey, Column
 from sqlalchemy.types import (
     String, Integer, DateTime, Float
     )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from quactrl.domain.data import DataAccessLayer as Dal
 import pdb
 
@@ -84,11 +84,13 @@ class Item(Dal.Base):
     tracking = Column(String, index=True)
     state = Column(String, index=True, default='active')
 
-    def __init__(self, resource, tracking='', state='active'):
+    def __init__(self, resource, tracking='', state='active', path=None):
         self.resource = resource
         self.tracking = tracking
         self.state = state
 
+        if path:
+            path.create_on_node(self)
 
 class ItemRelation(Dal.Base):
     __tablename__ = 'item_relation'
@@ -98,7 +100,7 @@ class ItemRelation(Dal.Base):
     to_item_id = Column(Integer, ForeignKey('item.id'))
     qty = Column(Float, default=1.0)
 
-    from_item = relationship('Item', foreign_keys=[from_item_id])
+    from_item = relationship('Item', foreign_keys=[from_item_id], backref='destinations')
     to_item = relationship('Item', foreign_keys=[to_item_id])
 
 
@@ -112,15 +114,22 @@ class Path(Dal.Base):
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey('path.id'))
     sequence = Column(Integer, default=0)
-    key = Column(String)
-    description = Column(String)
+    method_name = Column(String(30), default='move')
+    pars = Column(String)
     from_node_id = Column(Integer, ForeignKey('node.id'), index=True)
     to_node_id = Column(Integer, ForeignKey('node.id'), index=True)
 
     from_node = relationship('Node', foreign_keys=[from_node_id])
     to_node = relationship('Node', foreign_keys=[to_node_id])
+    children = relationship('Path',
+                            backref=backref('parent', remote_side=[id])
+                            )
 
-    resources = relationship('PathResource')
+    def create_item(self, item, qty=1.0, user=None):
+        Movement(item=item, from_node=self.from_node, qty=qty, path=self, user=user)
+
+    def close_item(self, item):
+        pass
 
 
 class PathResource(Dal.Base):
@@ -128,9 +137,12 @@ class PathResource(Dal.Base):
 
     id = Column(Integer, primary_key=True)
     resource_id = Column(Integer, ForeignKey('resource.id'))
+    path_id = Column(Integer, ForeignKey('path.id'), index=True)
     flow_class = Column(String(10), default='input')
     qty = Column(Float, default=1.0)
-    path_id = Column(Integer, ForeignKey('path.id'), index=True)
+
+    path = relationship('Path', backref='resource_links')
+    resource = relationship('Resource')
 
 
 class Movement(Dal.Base):
@@ -139,6 +151,8 @@ class Movement(Dal.Base):
     item_id = Column(ForeignKey('item.id'), nullable=False)
     from_node_id = Column(Integer, ForeignKey('node.id'), index=True)
     to_node_id = Column(Integer, ForeignKey('node.id'), index=True)
+    user_id = Column(Integer, ForeignKey('node.id'))
+
     path_id = Column(Integer, ForeignKey('path.id'))
     input_on = Column(DateTime, default=datetime.now)
     output_on = Column(DateTime)
@@ -146,7 +160,8 @@ class Movement(Dal.Base):
 
     from_node = relationship('Node', foreign_keys=[from_node_id])
     to_node = relationship('Node', foreign_keys=[to_node_id])
-    item = relationship('Item')
+    user = relationship('Node', foreign_keys=[user_id])
+    item = relationship('Item', backref='movements')
     path = relationship('Path')
 
 
