@@ -90,7 +90,7 @@ class Item(Dal.Base):
         self.state = state
 
         if path:
-            path.create_on_node(self)
+            path.insert_item(self)
 
 class ItemRelation(Dal.Base):
     __tablename__ = 'item_relation'
@@ -125,7 +125,7 @@ class Path(Dal.Base):
                             backref=backref('parent', remote_side=[id])
                             )
 
-    def create_item(self, item, qty=1.0, user=None):
+    def insert_item(self, item, qty=1.0, user=None):
         Movement(item=item, from_node=self.from_node, qty=qty, path=self, user=user)
 
     def close_item(self, item):

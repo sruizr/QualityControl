@@ -86,7 +86,7 @@ class Check(Item):
             relation_class='for'
             )
         self.control = control
-        self.control.create_on_node(self)
+        self.control.insert_item(self)
 
         self.item = item_to_check
 
@@ -147,8 +147,7 @@ class Test(Item):
 
     def __init__(self, control_plan, user):
         self.control_plan = control_plan
-        self.control_plan.create_on_node(self, user=user)
-
+        self.control_plan.insert_item(self, user=user)
 
 
 class Defect(Item):
@@ -195,7 +194,7 @@ class Measure(Item):
             )
 
         self.value = value
-        check.control.create_on_node(self, qty=value)
+        check.control.insert_item(self, qty=value)
 
     @reconstructor
     def after_load(self):
