@@ -34,6 +34,7 @@ class WithPars:
     def pars(cls):
         return relationship('Pars')
 
+
 class Resource(Dal.Base, WithPars):
     __tablename__ = 'resource'
     is_a = Column(String)
@@ -63,7 +64,6 @@ class ResourceRelation(Dal.Base):
     from_resource = relationship('Resource', foreign_keys=[from_resource_id],
                                  backref='destinations')
     to_resource = relationship('Resource', foreign_keys=[to_resource_id])
-
 
 
 class Node(Dal.Base):
@@ -175,12 +175,6 @@ class Path(Dal.Base, WithPars):
         )
         path_resource.flow = flow
         path_resource.qty = qty
-
-    def get_parameters(self):
-        return json.loads(self.parameters)
-
-    def set_parameters(self, value):
-        self.parameters = json.dumps(value)
 
 
 class PathResource(Dal.Base, WithPars):

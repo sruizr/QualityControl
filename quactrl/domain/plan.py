@@ -48,7 +48,6 @@ class PartModel(Resource):
     __mapper_args__ = {'polymorphic_identity': 'part_model'}
 
 
-
 class DeviceModel(Resource):
     __mapper_args__ = {'polymorphic_identity': 'device_model'}
 
