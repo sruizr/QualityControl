@@ -1,9 +1,10 @@
 from enum import Enum
 from sqlalchemy.orm import synonym, reconstructor
 from threading import Thread, Event
-from quactrl.domain.erp import (Item, Resource, Movement,
+from quactrl.domain.erp import (Item, Resource, Movement, PathResource,
                                 ItemRelation, Path, Node)
 from datetime import datetime
+
 import pdb
 
 
@@ -52,27 +53,10 @@ class Control(Path):
     def after_load(self):
         pass
 
-    # method_id = Column(Integer, ForeignKey('methods.id'))
-    # method = relationship(Method)
-    # method_details = Column(String(200))
+    def add_characteristic(self, characteristic, **pars):
+        path_resource = PathResource(self, characteristic, pars)
+        self.resource_list.append(path_resource)
 
-    # measure_system_id = Column(Integer, ForeignKey('devices.id'))
-    # measure_system = relationship(Device)
-
-    # reaction = Column(Enum(Reaction))
-
-    # def __init__(self, characteristic, sampling_class,
-    #              method, detection_point, sampling_qty=1, method_details=None,
-    #              reaction=Reaction.low_level):
-
-    #     self.characteristic = characteristic
-    #     self.sampling_class = sampling_class
-    #     self.method = method
-    #     self.detection_point = detection_point
-
-    #     self.sampling_qty = sampling_qty
-    #     self.method_details = method_details
-    #     self.reaction = reaction
 
 class Check(Item):
     """Result a control after execution """

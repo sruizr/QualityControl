@@ -3,23 +3,21 @@ from quactrl.domain.erp import Resource, Path, Item, Node, PathResource
 from tests.domain.test_data import OnMemoryTest
 
 
+
 class A_Check(OnMemoryTest):
     def setup_method(self, method):
         super().setup_method(method)
-        part_model = Resource()
+        part_model = Resource('part_model')
         control_plan = ControlPlan()
-        control_plan.resource_links.append(PathResource(
-            resource=part_model
-            )
-        )
+        control_plan.add_resource(part_model)
 
         user = Node('123')
         test = Test(control_plan, user)
-        checked_item = Item(Resource())
+        checked_item = Item(Resource('item'))
 
         control = Control()
         control.from_node = Node('origin2')
-        control.characteristic = Resource()
+        control.characteristic = Resource('char')
 
         self.check = Check(test, control, checked_item)
         self.checked_item = checked_item
@@ -55,7 +53,7 @@ class A_Check(OnMemoryTest):
         self.check.state == 'cancelled'
 
     def should_add_measures(self):
-        characteristic = Resource()
+        characteristic = Resource('')
         value = 5.0
 
         self.check.add_measure(characteristic, value)
@@ -69,7 +67,7 @@ class A_Check(OnMemoryTest):
 
 
     def should_add_defects(self):
-        failure_mode = Resource()
+        failure_mode = Resource('')
 
         self.check.add_defect(failure_mode)
 
@@ -80,8 +78,8 @@ class A_Check(OnMemoryTest):
         assert self.check.destinations[-1].to_item == defect
 
     def should_load_fields(self):
-        failure_mode = Resource()
-        characteristic = Resource()
+        failure_mode = Resource('mode-char')
+        characteristic = Resource('char1')
         self.check.add_defect(failure_mode)
         self.check.add_measure(characteristic, 0.2)
 

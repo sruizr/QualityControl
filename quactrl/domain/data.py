@@ -2,9 +2,6 @@ from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, backref, relationship
 from sqlalchemy.ext.declarative import declarative_base
 
-
-
-
 # from .erp import DataAccessModule as Erp
 # from .plan import DataAccessModule as Plan
 # from .do import DateAccessModule as Do
@@ -46,4 +43,4 @@ class DataAccessLayer:
         self.Session.configure(bind=self.engine)
 
     def load_db(self, filler):
-        self.filer.load()
+        filler.load()

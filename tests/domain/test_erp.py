@@ -1,20 +1,19 @@
 from quactrl.domain.erp import (
     Resource, ResourceRelation, Node, NodeRelation, Item, ItemRelation,
-    Path, PathResource, Movement
+    Path, PathResource, Movement, Pars
     )
 from quactrl.domain.data import DataAccessLayer
 from tests.domain.test_data import OnMemoryTest
+import pdb
 
 
 class A_Node(OnMemoryTest):
     def should_be_created_node(self):
-
-        session = self.dal.Session()
         node = Node('key', 'description')
-        session.add(node)
+        self.session.add(node)
 
         assert node.id is None
-        session.commit()
+        self.session.commit()
 
         assert node.id is not None
         assert node.is_a is None
@@ -23,19 +22,15 @@ class A_Node(OnMemoryTest):
 class A_RelationNode(OnMemoryTest):
 
     def should_keep_destinations_on_node(self):
-        session = self.dal.Session()
 
         from_node = Node(key='from_node')
         to_node = Node(key='to_node')
         relation = NodeRelation(from_node, to_node)
 
-        session.add(from_node)
-        session.add(to_node)
-        session.add(relation)
-        # bulk_save_objects(
-        #     [from_node, to_node]
-        #     )
-        session.commit()
+        self.session.add(from_node)
+        self.session.add(to_node)
+        self.session.add(relation)
+        self.session.commit()
 
         assert from_node.destinations[0].to_node == to_node
         assert relation.qty == 1.0
@@ -46,22 +41,31 @@ class A_RelationNode(OnMemoryTest):
 
 class A_Item(OnMemoryTest):
     def should_be_created(self):
-        resource = Resource()
+        resource = Resource('r_key')
         item = Item(resource)
 
-        session = self.dal.Session()
-        session.add(item)
-        session.commit()
+        self.session.add(item)
+        self.session.commit()
 
         assert item.id is not None
         assert item.is_a is None
         assert item.tracking == ''
         assert item.state == 'active'
 
+    def should_have_optional_pars(self):
+        resource = Resource('r_key')
+        item = Item(resource)
+        item.pars = Pars({'1': 2})
+
+        self.session.add(item)
+        self.session.commit()
+
+        assert item.pars.get() == {'1': 2}
+
 
 class A_ItemRelation(OnMemoryTest):
     def should_keep_destinations_on_items(self):
-        resource = Resource()
+        resource = Resource('r_key')
         item = Item(resource)
         sub_item = Item(resource)
 
@@ -69,10 +73,9 @@ class A_ItemRelation(OnMemoryTest):
         rel.from_item = item
         rel.to_item = sub_item
 
-        session = self.dal.Session()
-        session.add(item)
-        session.add(sub_item)
-        session.commit()
+        self.session.add(item)
+        self.session.add(sub_item)
+        self.session.commit()
 
         assert item.destinations[0].to_item == sub_item
         assert item.destinations[0].relation_class == 'has'
@@ -91,44 +94,72 @@ class A_Path(OnMemoryTest):
         path.to_node = to_node
         path.parent = parent
 
-        session = self.dal.Session()
-        session.add_all(
+        self.session.add_all(
             [from_node, to_node, parent, path]
             )
-        session.commit()
+        self.session.commit()
 
         assert parent.children[0] == path
         assert parent.sequence == 0
-        assert parent.method_name == 'move'
+        assert parent.method_name == ''
+
+    def _should_insert_items(self):
+        pass
+
+    def _should_close(self):
+        pass
+
+    def _should_add_resource(self):
+        pass
+
+    def _should_add_step(self):
+        pass
+
+
+class A_Resource(OnMemoryTest):
+    def should_be_created(self):
+        resource = Resource('key', 'description')
+        self.session.add(resource)
+        self.session.commit()
+
+        assert resource.id is not None
+        assert resource.pars is None
+
+    def should_have_optional_pars(self):
+        resource = Resource('key', 'description')
+        resource.pars = Pars({'1': 1})
+        self.session.add(resource)
+        self.session.commit()
+
+        assert resource.id is not None
+        assert resource.pars.get() == {'1': 1}
 
 
 class A_PathResource(OnMemoryTest):
-    def should_keep_resources_on_path(self):
+    def should_add_resources_on_path(self):
         path = Path()
-        resource = Resource()
-        path.resource_links.append(PathResource(resource=resource))
+        resource = Resource('r_key')
 
-        session = self.dal.Session()
-        session.add(path)
-
-        session.commit()
+        path.add_resource(resource=resource)
+        pdb.set_trace()
+        self.session.add(path)
+        self.session.commit()
 
         assert resource.id is not None
-        assert path.resource_links[0].resource == resource
+        assert path.resource_list[0].resource == resource
 
 
 class A_Movement(OnMemoryTest):
 
     def should_record_movement_of_items(self):
-        resource = Resource()
+        resource = Resource('r_key')
         item = Item(resource)
         from_node = Node('origin')
 
         movement = Movement(from_node=from_node, item=item)
 
-        session = self.dal.Session()
-        session.add(movement)
-        session.commit()
+        self.session.add(movement)
+        self.session.commit()
 
         assert movement.qty == 1.0
         assert movement.user is None

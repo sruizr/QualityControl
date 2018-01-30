@@ -1,14 +1,40 @@
 from datetime import datetime
+import json
+import importlib
+from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import ForeignKey, Column
 from sqlalchemy.types import (
     String, Integer, DateTime, Float
     )
 from sqlalchemy.orm import relationship, backref
 from quactrl.domain.data import DataAccessLayer as Dal
-import pdb
 
 
-class Resource(Dal.Base):
+class Pars(Dal.Base):
+    __tablename__ = 'pars'
+    id = Column(Integer, primary_key=True)
+    _pars = Column(String)
+
+    def __init__(self, pars):
+        self.set(pars)
+
+    def get(self):
+        return json.loads(self._pars)
+
+    def set(self, value):
+        self._pars = json.dumps(value)
+
+
+class WithPars:
+    @declared_attr
+    def pars_id(cls):
+        return Column(Integer, ForeignKey('pars.id'))
+
+    @declared_attr
+    def pars(cls):
+        return relationship('Pars')
+
+class Resource(Dal.Base, WithPars):
     __tablename__ = 'resource'
     is_a = Column(String)
     __mapper_args__ = {
@@ -19,6 +45,10 @@ class Resource(Dal.Base):
     key = Column(String, unique=True)
     name = Column(String)
     description = Column(String)
+
+    def __init__(self, key, description=''):
+        self.key = key
+        self.description = description
 
 
 class ResourceRelation(Dal.Base):
@@ -35,6 +65,7 @@ class ResourceRelation(Dal.Base):
     to_resource = relationship('Resource', foreign_keys=[to_resource_id])
 
 
+
 class Node(Dal.Base):
     __tablename__ = 'node'
     is_a = Column(String)
@@ -46,9 +77,8 @@ class Node(Dal.Base):
     key = Column(String, unique=True)
     name = Column(String)
 
-    def __init__(self, key, description=None, name=None):
+    def __init__(self, key, name=None):
         self.key = key
-        self.description = description
         self.name = name
 
 
@@ -62,7 +92,7 @@ class NodeRelation(Dal.Base):
 
     from_node = relationship('Node', foreign_keys=[from_node_id],
                              backref='destinations')
-    to_node = relationship('Node', foreign_keys=[to_node_id])
+    to_node = relationship('Node', foreign_keys=[to_node_id], backref='sources')
 
     def __init__(self, from_node, to_node, relation='contains', qty=1.0):
         self.from_node = from_node
@@ -71,7 +101,7 @@ class NodeRelation(Dal.Base):
         self.qty = qty
 
 
-class Item(Dal.Base):
+class Item(Dal.Base, WithPars):
     __tablename__ = 'item'
     is_a = Column(String)
     __mapper_args__ = {
@@ -104,7 +134,7 @@ class ItemRelation(Dal.Base):
     to_item = relationship('Item', foreign_keys=[to_item_id])
 
 
-class Path(Dal.Base):
+class Path(Dal.Base, WithPars):
     __tablename__ = 'path'
     is_a = Column(String(15))
     __mapper_args__ = {
@@ -114,35 +144,62 @@ class Path(Dal.Base):
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey('path.id'))
     sequence = Column(Integer, default=0)
-    method_name = Column(String(30), default='move')
-    pars = Column(String)
+    method_name = Column(String(30), default='')
+    parameters = Column(String, default='{}')
     from_node_id = Column(Integer, ForeignKey('node.id'), index=True)
     to_node_id = Column(Integer, ForeignKey('node.id'), index=True)
 
     from_node = relationship('Node', foreign_keys=[from_node_id])
     to_node = relationship('Node', foreign_keys=[to_node_id])
     children = relationship('Path',
-                            backref=backref('parent', remote_side=[id])
+                            backref=backref('parent', remote_side=[id]),
+                            order_by= 'Path.sequence'
                             )
+
 
     def insert_item(self, item, qty=1.0, user=None):
         Movement(item=item, from_node=self.from_node, qty=qty, path=self, user=user)
 
-    def close_item(self, item):
+    def move_item(self, item):
         pass
 
+    def add_step(self, step):
+        new_seq = self.children[-1].sequence + 5 if self.children else 0
+        step.sequence = new_seq
+        self.children.append(step)
 
-class PathResource(Dal.Base):
+    def add_resource(self, resource, flow='inout', qty=1.0):
+        path_resource = PathResource(
+            path=self,
+            resource=resource
+        )
+        path_resource.flow = flow
+        path_resource.qty = qty
+
+    def get_parameters(self):
+        return json.loads(self.parameters)
+
+    def set_parameters(self, value):
+        self.parameters = json.dumps(value)
+
+
+class PathResource(Dal.Base, WithPars):
     __tablename__ = 'path_resource'
 
     id = Column(Integer, primary_key=True)
     resource_id = Column(Integer, ForeignKey('resource.id'))
     path_id = Column(Integer, ForeignKey('path.id'), index=True)
-    flow_class = Column(String(10), default='input')
+    flow = Column(String(10), default='inout')
     qty = Column(Float, default=1.0)
 
-    path = relationship('Path', backref='resource_links')
+    path = relationship('Path', backref='resource_list')
     resource = relationship('Resource')
+
+    def __init__(self, path, resource, pars=None):
+        self.resource = resource
+        self.path = path
+        if pars:
+            self.pars = Pars(pars)
 
 
 class Movement(Dal.Base):
@@ -166,8 +223,20 @@ class Movement(Dal.Base):
 
 
 class DataAccessModule:
+    _methods = {}
+
     def __init__(self, dal):
         self.dal = dal
 
-    def move_item(self, item, to_node=Node, path=None):
-        pass
+    def get_method(self, path):
+        method_name = path.method_name
+        if method_name:
+            if method_name in self._methods:
+                return self._methods[method_name]
+            else:
+                modules = method_name.split('.')
+                module = importlib.import_module('.'.join(modules[:-1]))
+                method = getattr(module, modules[-1], None)
+                if method:
+                    self._methods[method_name] = method
+                    return method
