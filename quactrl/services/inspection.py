@@ -29,16 +29,16 @@ class OnePieceFlowService:
                                       self.controller
                                       )
 
-        self.stop_event = Event()
+        self.interrupt_event = Event()
         self.generator = Generator(dal,
                                    destination=self.location,
-                                   stop_event=self.stop_event
+                                   interrupt_event=self.interrupt_event
                                    )
         self.operation = PullRunner(dal,
                                     method_name=environment.operation_name,
                                     origin=self.location,
                                     controller=self.controller,
-                                    stop_event=self.stop_event
+                                    interrupt_event=self.interrupt_event
                                     )
         self.dal = dal
 
@@ -62,7 +62,9 @@ class OnePieceFlowService:
 
     def stop(self):
         self.location.put(None)
-        self.stop_event.set()
+
+    def interrup(self):
+        self.interrup_event.set()
 
 
 class MethodRepo:
@@ -81,10 +83,10 @@ class MethodRepo:
 
 class ProcessRunner(Thread):
 
-    def __init__(self, dal, stop_event=None, controller=None):
+    def __init__(self, dal, interrupt_event=None, controller=None):
         super().__init__()
         self.dal = dal
-        self.stop_event = stop_event
+        self.interrupt_event = interrupt_event
         self.controller = controller
 
         self.devices = None
@@ -103,24 +105,26 @@ class ProcessRunner(Thread):
         self.process = None
 
     def load_process(self, in_resources):
-        self.process = self.get_process(in_resources)
+        self.set_process(in_resources)
         self.steps = []
         if self.process:
             self.method = MethodRepo.get(self.process.method_name)
-            if self.origin is None or self.origin.location != self.process.from_node:
+            if (self.origin is None or
+                    self.origin.location != self.process.from_node):
                 self.origin = LocationQueue(self.process.from_node)
-            if self.destination is None or self.destination.location != self.process.to_node:
+            if (self.destination is None or
+                    self.destination.location != self.process.to_node):
                 self.destination = LocationQueue(self.process.to_node)
-            if self.process.children:
-                self.steps.append(StepRunner())
+            for sub_process in self.process.children:
+                self.steps.append(StepRunner(sub_process))
 
     def run(self):
         self.dal.open_session()
         while True:
             _input = self.origin.get()
-            print(_input)
             if _input is None or (
-                    self.stop_event is not None and self.stop_event.is_set()
+                    self.interrupt_event is not None and
+                    self.interrupt_event.is_set()
                     ):  # thread is finished
                 break
             in_items, responsible = _input
@@ -135,8 +139,8 @@ class ProcessRunner(Thread):
                 if self.process.children:
                     for step in self.steps:
                         step.execute(in_items)
-                        if (self.stop_event is not None and
-                                self.stop_event.is_set()):
+                        if (self.interrupt_event is not None and
+                                self.interrupt_event.is_set()):
                             self.dal.commit_session()
                             break
                 self.execute(in_items)
@@ -154,8 +158,8 @@ class ProcessRunner(Thread):
 class PullRunner(ProcessRunner):
 
     def __init__(self, dal, origin, name, destination=None,
-                 controller=None, stop_event=None):
-        super().__init__(dal, stop_event=stop_event, controller=controller)
+                 controller=None, interrupt_event=None):
+        super().__init__(dal, interrupt_event=interrupt_event, controller=controller)
 
         self.origin = origin
         self.destination = destination
@@ -170,15 +174,12 @@ class PullRunner(ProcessRunner):
     def set_process(self, resources):
         self.process = self.dal.plan.get_path(self.name,
                                               self.origin.location,
-                                              in_resources
+                                              resources
                                               )
 
 
-class PushRunner(ProcessRunner):
-    pass
-
 class Generator(ProcessRunner):
-    def set_process(self):
+    def set_process(self, resources):
         pass
 
 
@@ -193,101 +194,16 @@ class StepRunner:
             self.method(self.process, in_resources, devices, controller)
 
 
-  #       self.location = self.dal.get_location(self.env.pars['location'])
-#         self.main_process_name = self.env.pars['main_process_name']
-
-#         self.save_after_time = self.env.pars.get('save_after_time', 0)
-
-#         generator = self.dal.plan.get_generator_by_location(self.location)
-#         self.generator_runner = OperationRunner(generator)
-
-#         self.resource = None
-#         self.main_process = None
-
-#         self.item_queue = Queue()
-#         self.stop_service = Event()
-#         self.responsible = None
-
-#     def set_responsible(self, key):
-#         self.responsible = self.dal.do.get_operator(key)
-
-#     def enter_item(self, item_data, unique=True):
-#         tracking = item_data['tracking']
-#         resource_key = item_data['resource_key']
-#         item = self.dal.do.get_item(tracking, resource_key)
-
-#         # If item exist out of location and unique, raise Error
-#         if unique and (item is not None):
-#             if self.location.key != dut.get_stocks().keys():
-#                 raise InsertItemError(
-#                     'Item {} is not available'.format(tracking)
-#                 )
-
-#         if item is None and self.generator_runner is not None:
-#             self.generator.execute(item_data)
-
-#         self.item_queue.put(item)
-
-#     def setup_process(self, resource):
-#         change_process = False
-#         if self.main_process is None:
-#             change_process = True
-#         else:
-#             change_process = (resource in
-#                               self.main_process.get_possible_outputs())
-#         if change_process:
-#             self.main_process = self.dal.plan.get_process(self.main_process_name,
-#                                                      resource)
-#         self.resource = resource
-
-#     def stop(self):
-#         self.stop_service.set()
-
-#     def run(self):
-#         self.dal.open_session()
-#         self.main_porcess
-#         while True:
-#             # There is a responsible and an out resource fixed
-#             if self.resource and self.responsible:
-#                 self.current_item = self.item_queue.get()
-#                 if current_item is None:
-#                     break  # Service should finish
-#                 if current_item.resource != self.resource:
-#                     self.setup_process(current_item.resource)
-#                 try:
-#                     process_runner = OperationRunner(
-#                         self.main_process,
-#                         self.current_item,
-#                         view=self.view,
-#                         stop_event=self.stop.service
-#                         )
-#                     process_runner.start()
-#                     if self.save_after_time:
-#                         Timer(self.save_after_time, self.dal.save_session)
-#                     process_runner.join()
-#                 except e:
-#                     raise e
-
-
-
-#                 finally:
-#                     self.dal.save_session()
-
-
-# class LocationQueue(Queue):
-#     def __init__(self, location, max_items=1):
-#         self.location = location
-#         stocks = location.stocks()
-#         if len(stocks) > max_items():
-#             pass
-#         for movement in location.stocks():
-#             pass
-
-#     def load_item(self, item_data):
-#         if
 
 class LocationQueue(Queue):
-    pass
+    def __init__(self, location, max_items=1):
+        Queue.__init__()
+        self.location = location
+        stocks = location.stocks()
+        if len(stocks) > max_items():
+            pass
+        for movement in location.stocks():
+            pass
 
 
 class InspectionManager:

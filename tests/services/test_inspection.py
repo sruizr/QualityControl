@@ -1,8 +1,7 @@
 import time
-from queue import Queue
 from unittest.mock import Mock, patch, call
 from quactrl.services.inspection import (
-    OnePieceFlowService, PullRunner, PushRunner, ProcessRunner,
+    OnePieceFlowService, PullRunner, ProcessRunner,
     Inspector, ControlRunner, InspectionSession, InspectionManager, MethodRepo
     )
 import pytest
@@ -81,7 +80,9 @@ class A_OnePieceFlowService(TestWithPatches):
         opf.generator.is_loaded.return_value = True
         opf.enter_part(item_data, responsible)
 
-        opf.generator.origin.put.assert_called_with((item_data, opf.responsible))
+        opf.generator.origin.put.assert_called_with(
+            (item_data, opf.responsible)
+            )
 
     def should_start(self):
         opf = self.opf
@@ -100,8 +101,9 @@ class A_OnePieceFlowService(TestWithPatches):
         assert opf.generator.start.called
 
     def should_stop(self):
+        self.opf.location = Mock()
         self.opf.stop()
-        assert self.opf.stop_event.is_set()
+        self.opf.location.put.assert_called_once_with(None)
 
 class Stuff:
     pass
@@ -114,43 +116,88 @@ def test_method_repo():
 class A_ProcessRunner(TestWithPatches):
     def setup_method(self, method):
         self.create_patches([
-            'quactrl.services.inspection.LocationQueue'
+            'quactrl.services.inspection.LocationQueue',
+            'quactrl.services.inspection.MethodRepo',
+            'quactrl.services.inspection.StepRunner'
         ])
         self.dal = Mock()
-        self.stop_event = Mock()
+        self.interrupt_event = Mock()
         self.controller = Mock()
-        self.runner = ProcessRunner(self.dal, self.stop_event,
+        self.runner = ProcessRunner(self.dal, self.interrupt_event,
                                     self.controller)
 
     def should_init_properly(self):
         runner = self.runner
         assert runner.dal == self.dal
-        assert runner.stop_event == self.stop_event
+        assert runner.interrupt_event == self.interrupt_event
         assert runner.controller == self.controller
 
         runner = ProcessRunner(self.dal)
 
-        assert runner.stop_event is None
+        assert runner.interrupt_event is None
         assert runner.controller is None
 
-    def should_run(self):
+    def prepare_thread(self):
         runner = self.runner
 
         runner.origin = Mock()
-        runner.origin.get.side_efect = [(Mock(), 'r'), None]
+        runner.origin.get.side_effect = [( [], 'r'), None]
         runner.destination = Mock()
         runner.load_process = Mock()
         runner.process = Mock()
+        runner.steps = [Mock()]
 
-        self.stop_event.is_set.return_value = False
+    def should_run_till_stop(self):
+        self.prepare_thread()
+        runner = self.runner
+
+        runner.interrupt_event.is_set.return_value = False
+
         runner.start()
-        time.sleep(1)
-        self.stop_event.is_set.return_value = True
-        assert runner.process.close.called
+        while runner.is_alive():
+            pass
+
+        assert runner.process.close.call_count == 1
         assert self.controller.notify_process_finished.called
 
+    def should_run_till_interrupt(self):
+        self.prepare_thread()
+        runner = self.runner
+        runner.origin.get.return_value = ([], None)
 
-        # class An_InspectionManager(TestWithPatches):
+        runner.start()
+        self.interrupt_event.is_set.return_value = True
+        while runner.is_alive():
+            pass
+
+    def should_load_process(self):
+
+        runner = self.runner
+        runner.origin = None
+        runner.destination = None
+        #Mocking setting the process
+        runner.set_process = Mock()
+        process = Mock()
+        process.children = [Mock(name='process_child')]
+        runner.process = process
+
+        resources = [Mock()]
+        runner.load_process(resources)
+
+        assert self.MethodRepo.get.called
+        assert self.LocationQueue.call_count == 2
+        assert self.StepRunner.call_count == 1
+
+    def should_execute(self):
+        resources = [Mock() for _ in range(2)]
+        method = Mock()
+
+        self.runner.method = method
+        self.runner.execute(resources)
+
+        assert method.called
+
+# An_InspectionManager(TestWithPatches):
 #     def setup_method(self, method):
 #         self.env = Mock()
 #         self.im = InspectionManager(self.env)
