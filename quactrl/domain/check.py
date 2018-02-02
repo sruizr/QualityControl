@@ -2,10 +2,9 @@ from enum import Enum
 from sqlalchemy.orm import synonym, reconstructor
 from threading import Thread, Event
 from quactrl.domain.erp import (Item, Resource, Movement, PathResource,
-                                ItemRelation, Path, Node)
+                                ItemRelation, Path, Node, Pars)
 from datetime import datetime
 
-import pdb
 
 
 class Result(Enum):
@@ -48,6 +47,11 @@ class Control(Path):
     __mapper_args__ = {'polymorphic_identity': 'control'}
 
     characteristic = None
+
+    def __init__(self, method_name, pars=None):
+        self.method_name = method_name
+        if pars:
+            self.pars = Pars(pars)
 
     @reconstructor
     def after_load(self):
@@ -299,3 +303,8 @@ class Measure(Item):
 #         self.method()
 #         self.process_results()
 #         self.close_date = datetime.now()
+
+
+class DataAccessModule:
+    def __init__(self, dal):
+        pass

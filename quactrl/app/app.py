@@ -1,4 +1,4 @@
-from quactrl import get_class
+from quactrl.domain import get_component
 
 
 class Environment:
@@ -33,6 +33,9 @@ class Environment:
 
         App = get_class(config['app'])
         self.app = App(self)
+        # TODO
+        self.operation_name = config['operation_name']
+        self.location_key = config['location_key']
 
     def run(self):
         self.service.start()

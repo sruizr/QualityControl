@@ -1,29 +1,32 @@
-from sqlalchemy.orm import synonym
 import importlib
+from threading import Queue
 import json
 import os
-from quactrl.domain.erp import Item, Resource, Node, NodeRelation, Movement
+from sqlalchemy.orm import synonym, reconstructor
+from quactrl.domain.erp import Item, Resource, Node, NodeRelation, Movement, Pars
 from quactrl.domain.plan import PartModel, Operation, DeviceModel
-import pdb
+from quactrl.domain import get_component
 
 
 class Material(Item):
     __mapper_args__ = {'polymorphic_identity': 'material'}
 
+
 class Person(Node):
     __mapper_args__ = {'polymorphic_identity': 'person'}
 
-    def __init__(self, key, description=''):
+    def __init__(self, key, name=''):
         self.key = key
-        self.description = description
+        self.name = name
+
+
+class Dut(Item):
+    __mapper_args__ = {'polymorphic_identity': 'dut'}
 
 
 class Group(Node):
     __mapper_args__ = {'polymorphic_identity': 'group'}
 
-    def __init__(self, key, description=''):
-        self.key = key
-        self.description = description
 
     def add_person(self, *persons):
         for person in persons:
@@ -32,18 +35,18 @@ class Group(Node):
     def get_persons(self):
         persons = []
         for destination in self.destinations:
-            node = self.destination.to_node
-            # TODO
-
+            if (destination.relation_class == 'contains' and
+                    type(destination.to_node) is Person):
+                persons.append(self.destinations.to_node)
         return persons
 
 
 class Location(Node):
     __mapper_args__ = {'polymorphic_identity': 'location'}
 
-    def __init__(self, key, description=''):
+    def __init__(self, key, name=''):
         self.key = key
-        self.description = description
+        self.name = name
 
     def add_devices(self, *devices):
         for device in devices:
@@ -57,6 +60,41 @@ class Location(Node):
 class Device(Item):
     __mapper_args__ = {'polymorphic_identity': 'device'}
 
+    def __init__(self, device_model, tracking, path=None, pars=None):
+        Item.__init__(self, device_model, tracking, path)
+
+        if pars:
+            self.pars = Pars(pars)
+
+        self.behaviour = None
+
+    def setup(self):
+        if not self.resource.pars:
+            return None # No class to load
+
+        resource_pars = self.resource.pars.get()
+        if 'class_name' not in resource_pars:
+            return None # No class to load
+
+        class_name = resource_pars['class_name']
+        FunctionalDevice = get_component(class_name)
+        if not FunctionalDevice:
+            raise Exception('class path {} can not be loaded'.format(class_name))
+
+        pars = {}
+        if self.pars:
+            pars = self.pars.get()
+            self.behaviour = FunctionalDevice(**pars)
+        else:
+            self.behaviour = FunctionalDevice()
+
+    def assembly(self, devices):
+        if self.behaviour:
+            self.behaviour.assembly(devices)
+
+    @reconstructor
+    def after_load(self):
+        self.behaviour = None
 
 class DataAccessModule:
     _devices = {}
@@ -64,8 +102,15 @@ class DataAccessModule:
 
     def __init__(self, dal):
         self.dal = dal
-        self._devices = {}
         self._duts = {}
+        self.session = None
+
+    def open_session(self):
+        self.session = self.dal.Session()
+
+    def get_item_by_sn(self, serial_number):
+        if not self.session:
+            self.open_session()
 
 
     def get_or_create_dut(self, **kwargs):
@@ -76,6 +121,7 @@ class DataAccessModule:
         """Get operator from data layer if not exist it return None"""
         session = self.dal.Session()
         return session.query(Person).filter_by(key=key).first()
+
 
     def get_operation(self, part_number):
         """Return process by key, None if not exist"""
@@ -104,33 +150,61 @@ class DataAccessModule:
         Device, pars = self._devices.get(device_name)
         return Device(item, pars)
 
+    def get_location(self, key):
+        session = self.dal.Session()
+        return session.query(Location).filter(Location.key == key).one()
+
     def get_devices_by_location(self, location):
         """Return a dict with all devices of a location"""
         session = self.dal.Session()
-        # TODO: Assert query is correct
-        device_datas = session.query(Device).inner(Movement).filter(
-            Movement.to_node is None, 'Movement.from_node == location'
-            ).order_by(tracking).all()
+
+        query = session.query(Device).join(Movement).filter(
+            Movement.from_node == location,
+            Movement.to_node == None
+            ).order_by(Device.tracking)
 
         devices_by_tracking = {}
         devices_by_key = {}
 
-        for device_data in device_datas:
-            pars = device_data.pars.get()
-            class_name = pars['class_name']
-            modules = class_name.split('.')
-            module = importlib.import_module('.'.join(modules[:-1]))
-            Device = getattr(module, modules[-1], None)
-            device = Device(device_data)
-            devices_by_tracking[device_data.tracking] = device
-            key = device_data.resource.key
+        for device in query.all():
+            device.setup()
+            tracking = device.tracking
+            devices_by_tracking[tracking] = device
+
+            key = device.resource.key
             if key in devices_by_key:
-                if type(devices_by_key[key]) is list:
-                    devices_by_key[key] = [devices_by_key[key]]
-                devices_by_key[key].append(device)
+                if type(devices_by_key[key]) is dict:
+                    devices_by_key[key][tracking] = device
+                else:
+                    first_device = devices_by_key[key]
+                    devices_by_key[key] = {
+                        first_device.tracking: first_device,
+                        device.tracking: device
+                        }
             else:
                 devices_by_key[key] = device
 
-        # TODO: Interconnect_devices
+        for device in devices_by_tracking.values():
+            device.assembly(devices_by_tracking)
 
         return devices_by_key
+
+    def get_item(self, serial_number, resource_key):
+        return self.dal.session.query(Item).join(Resource).filter(
+            Dut.tracking == serial_number,
+            Resource.key == resource_key
+            ).first()
+
+    def create_dut(self, resource_key, serial_number):
+        resource = self.dal.session.query(Resource).filter(
+            Resource.key == resource_key).first()
+
+        return Dut(resource, tracking= serial_number)
+
+    def get_dut_at_location(self, serial_number, location_key):
+        qry = self.dal.session.query(Dut).join(Movement).filter(
+            Dut.tracking == serial_number,
+            Movement.to_node is None,
+            Node.key == location_key
+            )
+        return qry.first()

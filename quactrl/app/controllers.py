@@ -1,6 +1,5 @@
 import datetime
 from types import MethodType
-import pdb
 
 
 class InspectionController:
@@ -11,12 +10,19 @@ class InspectionController:
         self.dal = environment.dal
 
         self.service = environment.service
+
         process = self.dal.get_process(self.env.pars['process'])
         self.service.set_process(process)
         self.view = environment.view
 
         self.operator = None
         self.session_status = None
+
+        self.service.start()
+
+    def notify_error(self, exception, **kwargs):
+        # TODO
+        pass
 
     def open_session(self):
         """Open a session by a user operator"""

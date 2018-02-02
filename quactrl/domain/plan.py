@@ -1,8 +1,8 @@
 import enum
 from sqlalchemy.types import Enum, String
 from sqlalchemy.orm import synonym, reconstructor
-from quactrl.domain.erp import Node, Path, Resource, ResourceRelation
-
+from quactrl.domain.erp import (Node, Path, Resource, ResourceRelation,
+                                PathResource)
 
 
 class Operation(Path):
@@ -15,6 +15,7 @@ class Characteristic(Resource):
     def __init__(self, key, description):
         self.key = key
         self.description = description
+        self._failure_modes = {}
 
     def add_failure_mode(self, mode):
         self.get_failure_mode(mode)
@@ -54,4 +55,33 @@ class DeviceModel(Resource):
 
 class DataAccessModule:
     """Operate with plan Entities"""
-    pass
+    def __init__(self, dal):
+        self.dal = dal
+
+    def get_operation(self, method_name, partnumber):
+        session = self.dal.Session()
+        operation = session.query(Operation).join(PathResource).join(Resource).filter(
+            Operation.method_name == method_name,
+            Resource.key == partnumber
+            ).first()
+
+        return operation
+
+    def get_generator_by_location(self, location):
+        session = self.dal.session
+        query = session.query(Operation).filter(
+            Operation.to_node == location,
+            Operation.method_name.contains('generator')
+            )
+        return query.first()
+
+    def get_operation_by_location(self, location, resource_key, method_name):
+        pass
+
+    def get_process(self, method_name, resource):
+        session = self.dal.Session()
+        process = session.query(Process).join(PathResource).filter(
+            Process.method_name == method_name,
+            PathResource.resource == resource
+            ).first()
+        return process
