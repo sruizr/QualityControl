@@ -20,8 +20,8 @@ class Person(Node):
         self.name = name
 
 
-class Dut(Item):
-    __mapper_args__ = {'polymorphic_identity': 'dut'}
+class Part(Item):
+    __mapper_args__ = {'polymorphic_identity': 'part'}
 
 
 class Group(Node):
@@ -51,17 +51,14 @@ class Location(Node):
     def add_devices(self, *devices):
         for device in devices:
             if device.is_a == 'device':
-                Movement(
-                    from_node=self,
-                    item=device
-                    )
+                pass
 
 
 class Device(Item):
     __mapper_args__ = {'polymorphic_identity': 'device'}
 
-    def __init__(self, device_model, tracking, path=None, pars=None):
-        Item.__init__(self, device_model, tracking, path)
+    def __init__(self, device_model, tracking, pars=None):
+        Item.__init__(self, device_model, tracking, )
 
         if pars:
             self.pars = Pars(pars)

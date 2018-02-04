@@ -79,8 +79,6 @@ class Node(Base):
     key = Column(String, unique=True)
     name = Column(String)
 
-    inventory = None # TODO
-
     def __init__(self, key, name=None):
         self.key = key
         self.name = name
@@ -90,6 +88,7 @@ class Node(Base):
 
     def remove_item(self, item, qty=1.0, path=None, responsible=None):
         pass #TODO
+
 
 class NodeRelation(Base):
     __tablename__ = 'node_relation'
@@ -123,13 +122,10 @@ class Item(Base, WithPars):
     tracking = Column(String, index=True)
     state = Column(String, index=True, default='active')
 
-    def __init__(self, resource, tracking='', state='active', path=None):
+    def __init__(self, resource, tracking='', state='active'):
         self.resource = resource
         self.tracking = tracking
         self.state = state
-
-        if path:
-            path.insert_item(self)
 
     def get_stocks(self):
         stocks = {}
@@ -164,37 +160,21 @@ class Path(Base, WithPars):
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey('path.id'))
     sequence = Column(Integer, default=0)
-    name = Column(String(30), default='')
-    method_name = Column(String(30), default='')
+    name = Column(String, default='')
+    method_name = Column(String, default='')
     from_node_id = Column(Integer, ForeignKey('node.id'), index=True)
     to_node_id = Column(Integer, ForeignKey('node.id'), index=True)
-    responsible_id = Column(Integer, ForeignKey('node.id'))
 
     from_node = relationship('Node', foreign_keys=[from_node_id])
     to_node = relationship('Node', foreign_keys=[to_node_id])
-    responsible_id = relationship('Node', foreign_keys=[responsible_id])
-
     children = relationship('Path',
                             backref=backref('parent', remote_side=[id]),
                             order_by='Path.sequence'
                             )
 
+
     def __init__(self, **kwargs):
-        Base.__init__(**kwargs)
-        self._load_method()
-
-    def _load_method(self):
-        self.method = None
-        self.state = 'pasive'
-        try:
-            self.method = get_component(self.method_name)
-            self.state = 'pasive'
-        except Exception as e:
-            pass
-
-    @reconstructor
-    def after_load(self):
-        self._load_method()
+        Base.__init__(self, **kwargs)
 
     def get_possible_outputs(self):
         outputs = []
@@ -216,7 +196,6 @@ class Path(Base, WithPars):
 
     def start(self):
         pass
-
 
     def append_step(self, step_path):
         new_seq = self.children[-1].sequence + 5 if self.children else 0
@@ -270,23 +249,68 @@ class Token(Base):
     state = Column(String(15), default='in_process')
     flow_id = Column(Integer, ForeignKey('flow.id'))
 
-    node = relationship('Node', back_populates='stocks')
+    node = relationship('Node')
     flow = relationship('Flow', backref='out_tokens')
     item = relationship('Item')
 
 
 class Flow(Base):
     __tablename__ = 'flow'
-
     id = Column(Integer, primary_key=True)
+    is_a = Column(String(15))
+    __mapper_args__ = {
+        'polymorphic_on': is_a
+    }
 
     started_on = Column(DateTime, default=datetime.now)
     path_id = Column(Integer, ForeignKey('path.id'))
+    parent_id = Column(Integer, ForeignKey('flow.id'))
     responsible_id = Column(Integer, ForeignKey('node.id'))
     finished_on = Column(DateTime)
+    state = Column(String(15), default='ongoing')
 
     responsible = relationship('Node')
     path = relationship('Path')
+    children = relationship('Flow',
+                            backref=backref('parent', remote_side=[id])
+                           )
+
+    def __init__(self, path, responsible, **kwargs):
+        super().__init__(**kwargs)
+        self.path = path
+        self.responsible = responsible
+        self._load_method()
+
+    def _load_method(self):
+        self.method = None
+        try:
+            self.method = get_component(self.method_name)
+        except Exception as e:
+            pass
+
+    @reconstructor
+    def after_load(self):
+        self._load_method()
+
+    def prepare(self):
+        # TODO
+        pass
+
+    def execute(self):
+        if self.method:
+            self.method(self, self.controller)
+
+    def close(self):
+        #TODO
+        pass
+
+    def terminate(self):
+        #TODO
+        pass
+
+    def cancel(self):
+        #TODO
+        pass
 
 
 class DataAccessModule:
@@ -295,15 +319,27 @@ class DataAccessModule:
     def __init__(self, dal):
         self.dal = dal
 
-    def get_method(self, path):
-        method_name = path.method_name
-        if method_name:
-            if method_name in self._methods:
-                return self._methods[method_name]
-            else:
-                modules = method_name.split('.')
-                module = importlib.import_module('.'.join(modules[:-1]))
-                method = getattr(module, modules[-1], None)
-                if method:
-                    self._methods[method_name] = method
-                    return method
+    def get_stocks_by_node(self, node, session=None):
+        session = self.dal.Session() if session is NOne else session
+
+        qry = session.query(Token).filter(
+            Token.node == node,
+            Token.state == 'avalaible'
+            )
+
+        return qry.all()
+
+
+
+    # def get_method(self, path):
+    #     method_name = path.method_name
+    #     if method_name:
+    #         if method_name in self._methods:
+    #             return self._methods[method_name]
+    #         else:
+    #             modules = method_name.split('.')
+    #             module = importlib.import_module('.'.join(modules[:-1]))
+    #             method = getattr(module, modules[-1], None)
+    #             if method:
+    #                 self._methods[method_name] = method
+    #                 return method

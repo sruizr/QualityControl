@@ -6,7 +6,6 @@ from quactrl.domain.erp import (Item, Resource, PathResource,
 from datetime import datetime
 
 
-
 class Result(Enum):
     PENDING = 0
     ONGOING = 1
@@ -38,6 +37,13 @@ class Sampling(Enum):
 class ControlPlan(Path):
     __mapper_args__ = {'polymorphic_identity': 'control_plan'}
 
+    def __init__(self, name, method_name=None, pars=None, **kwargs):
+        super().__init__(**kwargs)
+        self.method_name = method_name
+        self.name = name
+        if pars:
+            self.pars = Pars(pars)
+
     @reconstructor
     def after_load(self):
         pass
@@ -48,8 +54,10 @@ class Control(Path):
 
     characteristic = None
 
-    def __init__(self, method_name, pars=None):
+    def __init__(self, method_name, name='', pars=None, **kwargs):
+        super().__init__(**kwargs)
         self.method_name = method_name
+        self.name = name
         if pars:
             self.pars = Pars(pars)
 

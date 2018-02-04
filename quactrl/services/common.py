@@ -1,6 +1,5 @@
 from threading import Thread, Event
 from queue import Queue
-from quactrl.domain import get_component
 
 
 class InsertItemError(Exception):
@@ -128,7 +127,8 @@ class PullRunner(Thread):
                 self.adapter.set_path(in_tokens)
                 self.load_process()
 
-            if self.responsible is None or responsible_key != self.responsible.key:
+            if (self.responsible is None or
+                    responsible_key != self.responsible.key):
                 self.responsible = self.adapter.get_person(responsible_key)
 
             if self.path is None:
@@ -186,6 +186,9 @@ class ProcessAdapter:
 
     def get_person(self, key):
         return self.dal.do.get_person(key, self.session)
+
+    def add(self, obj):
+        self._session.add(obj)
 
     def commit(self):
         self._session.commit()

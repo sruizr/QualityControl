@@ -4,7 +4,6 @@ from quactrl.domain.erp import (
     )
 from quactrl.domain.data import DataAccessLayer
 from tests.domain.test_data import OnMemoryTest
-import pdb
 
 
 class A_Node(OnMemoryTest):
@@ -141,7 +140,6 @@ class A_PathResource(OnMemoryTest):
         resource = Resource('r_key')
 
         path.add_resource(resource=resource)
-        pdb.set_trace()
         self.session.add(path)
         self.session.commit()
 
@@ -149,17 +147,34 @@ class A_PathResource(OnMemoryTest):
         assert path.resource_list[0].resource == resource
 
 
-class A_Movement(OnMemoryTest):
+class A_Token(OnMemoryTest):
 
-    def should_record_movement_of_items(self):
+    def should_should_init(self):
         resource = Resource('r_key')
         item = Item(resource)
-        from_node = Node('origin')
+        node = Node('n_key')
 
-        movement = Movement(from_node=from_node, item=item)
+        token = Token(node=node, item=item)
 
-        self.session.add(movement)
+        self.session.add(token)
         self.session.commit()
 
-        assert movement.qty == 1.0
-        assert movement.user is None
+        assert token.qty == 1.0
+        assert token.flow is None
+        assert token.item == item
+        assert token.node == node
+
+
+class A_Flow(OnMemoryTest):
+    def should_init_from_path(self):
+        path = Path()
+        responsible = Node('person')
+
+        flow = Flow(path, responsible)
+
+        self.session.add(flow)
+        self.session.commit()
+
+        assert flow.id is not None
+        assert flow.path == path
+        assert flow.responsible == responsible
