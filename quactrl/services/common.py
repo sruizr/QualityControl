@@ -67,6 +67,9 @@ class OneItemFlowService:
     def interrupt(self):
         self.interrupt_event.set()
 
+    def stop_cycle(self):
+        self.operation.stop_cycle()
+
 
 class MethodRepo:
     _methods = {}
@@ -98,6 +101,9 @@ class PullRunner(Thread):
         self.adapter = None
         self.path = None
 
+        self.stop_cycle = False
+        self.responsible = None
+
     def path_is_loaded(self):
         return self.path is not None
 
@@ -116,34 +122,45 @@ class PullRunner(Thread):
                     self.interrupt_event.is_set()
                     ):  # thread is finished
                 break
-            in_tokens, responsible = _input
+            in_tokens, responsible_key = _input
             if (self.path is None or
                     not self.path.accept_tokens(in_tokens)):
                 self.adapter.set_path(in_tokens)
-                self.adapter.set_devices()
                 self.load_process()
+
+            if self.responsible is None or responsible_key != self.responsible.key:
+                self.responsible = self.adapter.get_person(responsible_key)
 
             if self.path is None:
                 self.notify_error(IncorrectOperationInputs(), tokens=in_tokens)
             else:
+                self.path.prepare()
                 if self.path.children:
                     for step in self.steps:
-                        step.execute(in_tokens)
+                        step.execute(in_tokens, self.responsible, controller=self.controller)
                         if (self.interrupt_event is not None and
                                 self.interrupt_event.is_set()):
+                            self.path.cancel(self.responsible)
                             self.adapter.commit()
                             break
+                        if self.stop_cycle:
+                           self.path.cancel(self.responsible)
+                           self.stop_cycle = False
+                           self.adapter.commit()
+
                 self.execute(in_tokens)
-                self.path.process_tokens(responsible)
-                self.destination.put(self.process.out_tokens)
-                self.controller.notify('process_finished', self.path)
+                self.destination.put(self.path.out_tokens)
+                self.path.terminate(self.responsible)
+                self.controller.notify('cycle_finished', self.path)
             self.adapter.commit()
         self.adapter.close()
 
     def execute(self, in_tokens):
         if self.method:
-            self.method(self.path, in_tokens, self.devices,
-                        self.controller)
+            self.method(self.path, in_tokens, self.controller)
+
+    def cancel_cycle(self):
+        self.stop_cycle = True
 
 
 class ProcessAdapter:
@@ -157,16 +174,18 @@ class ProcessAdapter:
 
     def set_path(self, in_items):
         """Load a path compatible with the in_items, return None otherwise"""
-        self.process_runner.path = self.dal.get_path(self.path_args, self.session)
-
-    def set_devices(self):
-        if self.process_runner.path:
-            self.process_runner.devices = self.dal.do.get_devices_by_location(
-                self.process_runner.path.from_node
+        self.process_runner.path = self.dal.plan.get_path(self.path_args, self.session)
+        self.process_runner.path.devices = self.dal.do.get_devices_by_location(
+            self.process_runner.path.from_node
             )
+
     def find_inputs(self, **item_args):
-        inputs = self.dal.do.get_inputs(self.path, item_args, self.session)
+        inputs = self.dal.plan.get_avalaible_tokens(self.path.from_node.key,
+                                                    item_args, self.session)
         return inputs
+
+    def get_person(self, key):
+        return self.dal.do.get_person(key, self.session)
 
     def commit(self):
         self._session.commit()
@@ -177,10 +196,12 @@ class ProcessAdapter:
 
 class StepRunner:
     """Sync version of path"""
-    def __init__(self, process):
-        self.process = process
+    def __init__(self, path):
+        self.path = path
         self.method = MethodRepo.get(self.method_name)
 
-    def execute(self, in_resources, devices, controller=None):
+    def execute(self, in_resources, responsible, devices, controller=None):
         if self.method:
-            self.method(self.process, in_resources, devices, controller)
+            self.path.prepare()
+            self.method(self.path, in_resources, devices, controller)
+            self.path.terminate(responsible)

@@ -189,7 +189,7 @@ class Path(Base, WithPars):
         try:
             self.method = get_component(self.method_name)
             self.state = 'pasive'
-        except e:
+        except Exception as e:
             pass
 
     @reconstructor
@@ -206,7 +206,7 @@ class Path(Base, WithPars):
 
     def generate_item(self, item, qty=1.0):
         if item.resource:
-            Movement(item=item, from_node=self.from_node, qty=qty, path=self, user=user)
+            Movement(item=item, from_node=self.from_node, qty=qty, path=self)
 
     def move_item(self, item):
         pass
@@ -259,33 +259,34 @@ class PathResource(Base, WithPars):
             self.pars = Pars(pars)
 
 
-class Movement(Base):
-    __tablename__ = 'movement'
+class Token(Base):
+    __tablename__ = 'token'
     id = Column(Integer, primary_key=True)
 
-    input_on = Column(DateTime, default=datetime.now)
-    generator_id = Column(Integer, ForeignKey('path.id'))
-    from_node_id = Column(Integer, ForeignKey('node.id'), index=True)
-
-    output_on = Column(DateTime)
-    destructor_id = Column(Integer, ForeignKey('path.id'))
-    to_node_id = Column(Integer, ForeignKey('node.id'), index=True)
-
-    item_id = Column(ForeignKey('item.id'), nullable=False)
+    item_id = Column(Integer, ForeignKey('item.id'), nullable=False,
+                     index=True)
     qty = Column(Float, default=1.0)
-    user_id = Column(Integer, ForeignKey('node.id'))
+    node_id = Column(Integer, ForeignKey('node.id'), index=True)
+    state = Column(String(15), default='in_process')
+    flow_id = Column(Integer, ForeignKey('flow.id'))
 
-    from_node = relationship('Node', foreign_keys=[from_node_id])
-    generator = relationship('Path', foreign_keys=[generator_id])
+    node = relationship('Node', back_populates='stocks')
+    flow = relationship('Flow', backref='out_tokens')
+    item = relationship('Item')
 
-    to_node = relationship('Node', foreign_keys=[to_node_id])
-    destructor = relationship('Path', foreign_keys=[destructor_id])
 
-    user = relationship('Node', foreign_keys=[user_id])
-    item = relationship('Item', backref=backref('movements',
-                                                order_by='Movement.input_on'
-                                                )
-                        )
+class Flow(Base):
+    __tablename__ = 'flow'
+
+    id = Column(Integer, primary_key=True)
+
+    started_on = Column(DateTime, default=datetime.now)
+    path_id = Column(Integer, ForeignKey('path.id'))
+    responsible_id = Column(Integer, ForeignKey('node.id'))
+    finished_on = Column(DateTime)
+
+    responsible = relationship('Node')
+    path = relationship('Path')
 
 
 class DataAccessModule:

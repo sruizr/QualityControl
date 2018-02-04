@@ -120,6 +120,7 @@ class A_PullRunner(TestWithPatches):
         runner. load_process = Mock()
         runner.path = Mock()
         runner.steps = [Mock()]
+        runner.adapter = Mock()
 
     def should_run_till_stop(self):
         self.prepare_thread()
@@ -132,19 +133,37 @@ class A_PullRunner(TestWithPatches):
         while runner.is_alive():
             pass
 
-        assert runner.path.process_tokens.call_count == 1
-        print(self.controller.notify.mock_calls)
-        self.controller.notify.assert_called_with('process_finished', runner.path)
+        assert runner.path.terminate.call_count == 1
+        assert self.controller.notify.call_count == 1
 
     def should_run_till_interrupt(self):
         self.prepare_thread()
         runner = self.runner
-        runner.origin.get.return_value = ([], None)
 
         runner.start()
         self.interrupt_event.is_set.return_value = True
+        runner.origin.put('stuff')
+
         while runner.is_alive():
             pass
+
+        runner.path.prepare.assert_not_called()
+
+    def should_run_till_cancel_cycle(self):
+        self.prepare_thread()
+        runner = self.runner
+
+        runner.start()
+        runner.cancel_cycle()
+        runner.origin.put(('stuff', 'john'))
+
+        runner.origin.put(None)
+
+        while runner.is_alive():
+            pass
+
+        assert runner.adapter.commit.called
+        assert runner.path.cancel.called
 
     def should_load_process(self):
         runner = self.runner

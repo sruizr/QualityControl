@@ -1,8 +1,8 @@
 import enum
 from sqlalchemy.types import Enum, String
-from sqlalchemy.orm import synonym, reconstructor
+from sqlalchemy.orm import synonym, reconstructor, aliased
 from quactrl.domain.erp import (Node, Path, Resource, ResourceRelation,
-                                PathResource)
+                                PathResource, Token, Item)
 
 
 class Operation(Path):
@@ -58,30 +58,64 @@ class DataAccessModule:
     def __init__(self, dal):
         self.dal = dal
 
-    def get_operation(self, method_name, partnumber):
-        session = self.dal.Session()
-        operation = session.query(Operation).join(PathResource).join(Resource).filter(
-            Operation.method_name == method_name,
-            Resource.key == partnumber
-            ).first()
+    def get_avalaible_tokens(self, node_key, item_args, session=None):
+        session = self.dal.Session() if session is None else session
+        qry = session.query(Token).join(Node).join(Item)
 
-        return operation
+        filters = [Node.key == node_key]
+        if 'resource_key' in item_args:
+            qry = qry.join(Resource)
+            filters.append(Resource.key == item_args['item_resource_key'])
 
-    def get_generator_by_location(self, location):
-        session = self.dal.session
-        query = session.query(Operation).filter(
-            Operation.to_node == location,
-            Operation.method_name.contains('generator')
-            )
-        return query.first()
+        if 'tracking' in item_args:
+            filters.append(Item.tracking == item_args['tracking'])
 
-    def get_operation_by_location(self, location, resource_key, method_name):
-        pass
+        return qry.filter(*filters).all()
 
-    def get_process(self, method_name, resource):
-        session = self.dal.Session()
-        process = session.query(Process).join(PathResource).filter(
-            Process.method_name == method_name,
-            PathResource.resource == resource
-            ).first()
-        return process
+    def get_path(self, args, session=None):
+        """Return process by key, None if not exist"""
+        session = self.dal.Session() if session is None else session
+
+        qry = session.query(Path)
+
+        filters = []
+        if 'name' in args:
+            filters.append(Path.name.contains(args['name']))
+        if 'from_node_key' in args:
+            FromNode = aliased(Node)
+            qry = qry.join(FromNode, Path.from_node)
+            filter.append(FromNode.key == args['from_node_key'])
+        if 'to_node_key' in args:
+            ToNode = aliased(Node)
+            qry = qry.join(ToNode, Path.to_node)
+            filter.append(ToNode.key == args['to_node_key'])
+
+        return qry.filter(*filters).first()
+
+    # def get_operation(self, method_name, partnumber):
+    #     session = self.dal.Session()
+    #     operation = session.query(Operation).join(PathResource).join(Resource).filter(
+    #         Operation.method_name == method_name,
+    #         Resource.key == partnumber
+    #         ).first()
+
+    #     return operation
+
+    # def get_generator_by_location(self, location):
+    #     session = self.dal.session
+    #     query = session.query(Operation).filter(
+    #         Operation.to_node == location,
+    #         Operation.method_name.contains('generator')
+    #         )
+    #     return query.first()
+
+    # def get_operation_by_location(self, location, resource_key, method_name):
+    #     pass
+
+    # def get_process(self, method_name, resource):
+    #     session = self.dal.Session()
+    #     process = session.query(Process).join(PathResource).filter(
+    #         Process.method_name == method_name,
+    #         PathResource.resource == resource
+    #         ).first()
+    #     return process
