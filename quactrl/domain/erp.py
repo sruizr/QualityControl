@@ -175,27 +175,24 @@ class Path(Base, WithPars):
 
     def __init__(self, **kwargs):
         Base.__init__(self, **kwargs)
+        self._load_resources()
 
-    def get_possible_outputs(self):
-        outputs = []
-        for resource_rel in self.resource_list:
-            flow = resource_rel.flow
-            if flow == 'by_pass' or flow == 'output':
-                outputs.append(resource_rel.resource)
-        return outputs
+    def _load_resources(self):
+        self.in_resources = {}
+        self.out_resources = {}
 
-    def generate_item(self, item, qty=1.0):
-        if item.resource:
-            Movement(item=item, from_node=self.from_node, qty=qty, path=self)
-
-    def move_item(self, item):
-        pass
-
-    def destroy_item(self, item, qty=1.0):
-        pass
-
-    def start(self):
-        pass
+        for path_resource in self.resource_list:
+            if path_resource.flow in ('inout', 'in'):
+                self.in_resources[path_resource.resource.key] = (
+                    path_resource.resource, path_resource.qty
+                )
+            if path_resource.flow in ('inout', 'out'):
+                self.out_resources[path_resource.resource.key] = (
+                    path_resource.resource, path_resource.qty
+                )
+    @reconstructor
+    def after_load(self):
+        self._load_resources()
 
     def append_step(self, step_path):
         new_seq = self.children[-1].sequence + 5 if self.children else 0
@@ -204,20 +201,17 @@ class Path(Base, WithPars):
         step_path.from_node = self.from_node
         step_path.to_node = self.from_node
 
-    def add_step(self, step_path):
-        pass
-
     def add_resource(self, resource, flow='inout', qty=1.0):
-        path_resource = PathResource(
+        self.resource_list.append(PathResource(
             path=self,
-            resource=resource
-        )
-        path_resource.flow = flow
-        path_resource.qty = qty
+            resource=resource,
+            flow=flow
+        ))
+        self._load_resources()
 
-    def accept_inputs(self, resources):
-        pass #TODO
-
+    def accept_inputs(self, inputs):
+        #  TODO:
+        return True
 
 class PathResource(Base, WithPars):
     __tablename__ = 'path_resource'
@@ -231,9 +225,11 @@ class PathResource(Base, WithPars):
     path = relationship('Path', backref='resource_list')
     resource = relationship('Resource')
 
-    def __init__(self, path, resource, pars=None):
+    def __init__(self, path, resource, flow, qty=1.0,  pars=None):
         self.resource = resource
         self.path = path
+        self.flow = flow
+        self.qty = qty
         if pars:
             self.pars = Pars(pars)
 
@@ -252,6 +248,19 @@ class Token(Base):
     node = relationship('Node')
     flow = relationship('Flow', backref='out_tokens')
     item = relationship('Item')
+
+    def __init__(self, item, qty, node, flow, **kwargs):
+        super().__init__(item=item, node=node, qty=qty,
+                         flow=flow, **kwargs)
+
+    def encode(self):
+        return {'resource_key': self.item.resource.key,
+                'tracking': self.item.tracking,
+                'qty': self.qty,
+                'state':self.state,
+                'flow_id': self.flow_id,
+                'id': self.id
+        }
 
 
 class Flow(Base):
@@ -275,22 +284,25 @@ class Flow(Base):
                             backref=backref('parent', remote_side=[id])
                            )
 
-    def __init__(self, path, responsible, **kwargs):
+    def __init__(self, path, responsible, controller=None, **kwargs):
         super().__init__(**kwargs)
         self.path = path
         self.responsible = responsible
-        self._load_method()
+        self.controller = controller
+        self._load_fields()
 
-    def _load_method(self):
+    def _load_fields(self):
         self.method = None
         try:
-            self.method = get_component(self.method_name)
+            self.method = get_component(self.path.method_name)
         except Exception as e:
             pass
+        self.inputs = []
+        self.outputs = []
 
     @reconstructor
     def after_load(self):
-        self._load_method()
+        self._load_fields()
 
     def prepare(self):
         # TODO
@@ -300,17 +312,23 @@ class Flow(Base):
         if self.method:
             self.method(self, self.controller)
 
-    def close(self):
-        #TODO
-        pass
-
     def terminate(self):
-        #TODO
-        pass
+        for _input in self.inputs:
+            pass
+
+        for output in self.outputs:
+            Token(
+                output[0], output[1], self.path.to_node,
+                self, state='avalaible'
+            )
+
+        self.finished_on = datetime.now()
+        self.state = 'done'
 
     def cancel(self):
         #TODO
-        pass
+        self.finished_on = datetime.now()
+        self.state = 'cancelled'
 
 
 class DataAccessModule:
@@ -328,18 +346,3 @@ class DataAccessModule:
             )
 
         return qry.all()
-
-
-
-    # def get_method(self, path):
-    #     method_name = path.method_name
-    #     if method_name:
-    #         if method_name in self._methods:
-    #             return self._methods[method_name]
-    #         else:
-    #             modules = method_name.split('.')
-    #             module = importlib.import_module('.'.join(modules[:-1]))
-    #             method = getattr(module, modules[-1], None)
-    #             if method:
-    #                 self._methods[method_name] = method
-    #                 return method

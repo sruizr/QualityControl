@@ -84,11 +84,11 @@ class DataAccessModule:
         if 'from_node_key' in args:
             FromNode = aliased(Node)
             qry = qry.join(FromNode, Path.from_node)
-            filter.append(FromNode.key == args['from_node_key'])
+            filters.append(FromNode.key == args['from_node_key'])
         if 'to_node_key' in args:
             ToNode = aliased(Node)
             qry = qry.join(ToNode, Path.to_node)
-            filter.append(ToNode.key == args['to_node_key'])
+            filters.append(ToNode.key == args['to_node_key'])
 
         return qry.filter(*filters).first()
 

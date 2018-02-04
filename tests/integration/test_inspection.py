@@ -1,5 +1,7 @@
 import os
+from unittest.mock import Mock
 from quactrl.domain.data import DataAccessLayer
+from quactrl.services.common import OneItemFlowService
 from tests.integration.loaders import Filler
 
 
@@ -30,32 +32,52 @@ class OnFileTest:
     dal.db_init(conn_string, False)
     dal.prepare_db()
 
+    # def setup_method(self, method):
+    #     self._transaction = self.dal.connection.begin()
+    #     self.session = self.dal.Session(bind=self.dal.connection)
+
+    # def teardown_method(self, method):
+    #     # self.session.rollback()
+    #     self._transaction.rollback()
+    #     self.session.close()
+
+
+class A_Service(OnFileTest):
+
     def setup_method(self, method):
-        self._transaction = self.dal.connection.begin()
-        self.session = self.dal.Session(bind=self.dal.connection)
 
-    def teardown_method(self, method):
-        # self.session.rollback()
-        self._transaction.rollback()
-        self.session.close()
+        self.env = Mock()
+        self.env.dal = self.dal
+
+        self.env.location_key = 'wip'
+        self.env.operation_name = 'Test'
 
 
-# class A_Service(OnFileTest):
+    def should_init_service(self):
 
-#     def should_load_operation(self):
-#         operation = self.dal.plan.get_operation('final_test', '311574695')
-#         print(self.dal.conn_string)
-#         assert operation.children[0].children[0].method_name == 'en12830.eval_environment'
+        service = OneItemFlowService(self.env)
 
-#     def should_load_operator(self):
-#         person = self.dal.do.get_operator('438')
-#         assert person.name == 'Salvador Ruiz'
+        assert service.operation.adapter
 
-#     def should_load_devices_by_location(self):
-#         key = 'wip_eT'
-#         location = self.dal.do.get_location(key)
-#         devices = self.dal.do.get_devices_by_location(location)
+        service.start()
+        service.stop()
 
-#         assert devices['env_station'].behaviour.get_temperature()
-#         assert devices['env_station'].behaviour.get_humidity()
-#         assert devices['env_station'].behaviour.get_pressure()
+        while service.generator.is_alive():
+            pass
+
+        while service.operation.is_alive():
+            pass
+
+
+    def should_run_process_one_part_from_generator(self):
+        service = OneItemFlowService(self.env)
+
+        service.start()
+        service.enter_item({'resource_key': 'partnumber', 'tracking': 'part_track'}, '007')
+        service.stop()
+
+        while service.generator.is_alive():
+            pass
+
+        while service.operation.is_alive():
+            pass

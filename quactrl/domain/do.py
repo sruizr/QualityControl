@@ -2,7 +2,7 @@ import importlib
 import json
 import os
 from sqlalchemy.orm import synonym, reconstructor, aliased
-from quactrl.domain.erp import Item, Resource, Node, NodeRelation, Pars
+from quactrl.domain.erp import Item, Resource, Node, NodeRelation, Pars, Flow, Token
 from quactrl.domain.plan import PartModel, Operation, DeviceModel
 from quactrl.domain import get_component
 from quactrl.domain.erp import Path
@@ -39,6 +39,12 @@ class Group(Node):
                     type(destination.to_node) is Person):
                 persons.append(self.destinations.to_node)
         return persons
+
+
+class Generator(Path):
+    def __init__(self, to_node, method_name, **kwargs):
+        Path.__init__(self, from_node=None, to_node=to_node,
+                      method_name=method_name, **kwargs)
 
 
 class Location(Node):
@@ -93,6 +99,7 @@ class Device(Item):
     def after_load(self):
         self.behaviour = None
 
+
 class DataAccessModule:
     _devices = {}
     _duts = {}
@@ -119,6 +126,21 @@ class DataAccessModule:
 
         return session.query(Person).filter_by(key=key).first()
 
+    def get_avalaible_inputs(self, location_key, item_args, session=None):
+        session = self.dal.Session() if session is None else session
+
+        filters = [Token.state == 'avalaible', Node.key == location_key]
+        qry = session.query(Token).join(Node).join(Item)
+
+        if 'resource_key' in item_args:
+            qry = qry.join(Resource)
+            filters.append(Resource.key == item_args['resource_key'])
+        if 'tracking' in item_args:
+            filters.append(Item.tracking == item_args['tracking'])
+
+        tokens = qry.filter(*filters).all()
+
+        return [(token.item, token.qty) for token in tokens]
 
     # def create_dut(self, item):
     #     """Returns a fully functional device"""
@@ -146,7 +168,8 @@ class DataAccessModule:
         session = self.dal.Session() if session is None else session
 
         query = session.query(Device).join(Token).join(Node).filter(
-            Node.key == location_key
+            Node.key == location_key,
+            Token.state == 'avalaible'
             ).order_by(Device.tracking)
 
         devices_by_tracking = {}

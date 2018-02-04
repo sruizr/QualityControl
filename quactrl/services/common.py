@@ -1,6 +1,8 @@
 from threading import Thread, Event
 from queue import Queue
-
+from quactrl.domain import get_component
+from quactrl.domain.check import Test
+from quactrl.domain.erp import Flow
 
 class InsertItemError(Exception):
     pass
@@ -30,6 +32,7 @@ class OneItemFlowService:
             to_node_key=environment.location_key,
             from_node=None
             )
+
         self.operation = PullRunner(origin=self.main_queue,
                                     controller=self.controller,
                                     interrupt_event=self.interrupt_event
@@ -40,28 +43,22 @@ class OneItemFlowService:
             name=environment.operation_name
             )
 
-    def enter_item(self, item_data, responsible):
-        tokens = self.operation.adapter.get_tokens(item_data)
-        if tokens is None:
-            if self.generator.is_loaded():
-                self.generator.origin.put(((item_data, 1.0), responsible))
-            else:
-                self.controller.notify_error(
-                    InsertItemError(),
-                    item_data
-                    )
+    def enter_item(self, item_data, responsible_key):
+        inputs = self.operation.adapter.find_inputs(item_data)
+        if not inputs:
+            self.generator.origin.put(item_data, responsible_key)
         else:
-            self.operation.source.put((tokens, responsible))
+            for _input in inputs:
+                self.operation.source.put((_input, responsible))
 
     def start(self):
-        if self.generator.is_loaded():
+        if self.generator.path_is_loaded():
             self.generator.start()
         self.operation.start()
 
     def stop(self):
         self.operation.origin.put(None)
-        if self.generator.has_path():
-            self.generator.origin.put(None)
+        self.generator.origin.put(None)
 
     def interrupt(self):
         self.interrupt_event.set()
@@ -114,17 +111,20 @@ class PullRunner(Thread):
                 self.steps.append(StepRunner(sub_path))
 
     def run(self):
+        self.adapter.open()
         while True:
+            import pdb; pdb.set_trace()
             _input = self.origin.get()
             if _input is None or (
                     self.interrupt_event is not None and
                     self.interrupt_event.is_set()
                     ):  # thread is finished
                 break
-            in_tokens, responsible_key = _input
+            import pdb; pdb.set_trace()
+            inputs, responsible_key = _input
             if (self.path is None or
-                    not self.path.accept_tokens(in_tokens)):
-                self.adapter.set_path(in_tokens)
+                    not self.path.accept_inputs(inputs)):
+                self.adapter.set_path(inputs)
                 self.load_process()
 
             if (self.responsible is None or
@@ -132,32 +132,35 @@ class PullRunner(Thread):
                 self.responsible = self.adapter.get_person(responsible_key)
 
             if self.path is None:
-                self.notify_error(IncorrectOperationInputs(), tokens=in_tokens)
+                self.controller.notify_error(IncorrectOperationInputs(),
+                                             inputs=inputs)
             else:
-                self.path.prepare()
-                if self.path.children:
+                self.flow = Flow(self.path, self.responsible, self.controller)
+                self.flow.inputs = inputs
+                self.adapter.add(self.flow)
+                self.flow.prepare()
+                if self.flow.children:
                     for step in self.steps:
-                        step.execute(in_tokens, self.responsible, controller=self.controller)
+                        step.prepare()
+                        step.execute()
+                        step.terminate()
                         if (self.interrupt_event is not None and
                                 self.interrupt_event.is_set()):
-                            self.path.cancel(self.responsible)
+                            self.flow.cancel()
                             self.adapter.commit()
                             break
                         if self.stop_cycle:
-                           self.path.cancel(self.responsible)
-                           self.stop_cycle = False
-                           self.adapter.commit()
+                            self.flow.cancel()
+                            self.stop_cycle = False
+                            self.adapter.commit()
 
-                self.execute(in_tokens)
-                self.destination.put(self.path.out_tokens)
-                self.path.terminate(self.responsible)
+                self.flow.execute()
+                tokens = self.flow.terminate()
+                self.adapter.commit()
+                for token in tokens:
+                    self.destination.put(token.encode())
                 self.controller.notify('cycle_finished', self.path)
-            self.adapter.commit()
         self.adapter.close()
-
-    def execute(self, in_tokens):
-        if self.method:
-            self.method(self.path, in_tokens, self.controller)
 
     def cancel_cycle(self):
         self.stop_cycle = True
@@ -168,24 +171,29 @@ class ProcessAdapter:
     def __init__(self, process_runner, dal, **path_args):
         self.process_runner = process_runner
         self.dal = dal
-        self.session = self.process_runner.session
         self.path_args = path_args
-        self._session = self.dal.Session()
+        self._session = None
 
-    def set_path(self, in_items):
+    def set_path(self, in_items=None):
         """Load a path compatible with the in_items, return None otherwise"""
-        self.process_runner.path = self.dal.plan.get_path(self.path_args, self.session)
-        self.process_runner.path.devices = self.dal.do.get_devices_by_location(
-            self.process_runner.path.from_node
+
+        self.process_runner.path = self.dal.plan.get_path(self.path_args,
+                                                          self._session)
+        self.process_runner.devices = self.dal.do.get_devices_by_location(
+            self.process_runner.path.from_node, self._session
             )
 
-    def find_inputs(self, **item_args):
-        inputs = self.dal.plan.get_avalaible_tokens(self.path.from_node.key,
-                                                    item_args, self.session)
+    def find_inputs(self, item_args):
+        inputs = self.dal.do.get_avalaible_inputs(
+            self.path_args['from_node_key'], item_args, self._session
+        )
         return inputs
 
     def get_person(self, key):
-        return self.dal.do.get_person(key, self.session)
+        return self.dal.do.get_person(key, self._session)
+
+    def open(self):
+        self._session = self.dal.Session()
 
     def add(self, obj):
         self._session.add(obj)
