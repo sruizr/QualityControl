@@ -23,6 +23,9 @@ class Person(Node):
 class Part(Item):
     __mapper_args__ = {'polymorphic_identity': 'part'}
 
+    def __init__(self, part_model, **kwargs):
+        Item.__init__(self, resource=part_model, **kwargs)
+        self.behaviour = self.resource.get_behaviour()
 
 class Group(Node):
     __mapper_args__ = {'polymorphic_identity': 'group'}
@@ -40,11 +43,6 @@ class Group(Node):
                 persons.append(self.destinations.to_node)
         return persons
 
-
-class Generator(Path):
-    def __init__(self, to_node, method_name, **kwargs):
-        Path.__init__(self, from_node=None, to_node=to_node,
-                      method_name=method_name, **kwargs)
 
 
 class Location(Node):

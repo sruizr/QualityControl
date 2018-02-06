@@ -1,24 +1,6 @@
-from sqlalchemy.ext.declarative import declarative_base
-import importlib
-
-
-Base = declarative_base()
-
-
-def get_component(name):
-    modules = name.split('.')
-    try:
-        module = importlib.import_module('.'.join(modules[:-1]))
-    except ValueError:
-        return None
-
-    return getattr(module, modules[-1], None)
-
-
 class DeviceBase:
     def __init__(self, **pars):
         if pars:
-            self.pars = pars
             for key, value in pars.items():
                 setattr(self, key, value)
 

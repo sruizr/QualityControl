@@ -2,7 +2,7 @@ from enum import Enum
 from sqlalchemy.orm import synonym, reconstructor
 from threading import Thread, Event
 from quactrl.domain.erp import (Item, Resource, PathResource,
-                                ItemRelation, Path, Node, Pars)
+                                ItemRelation, Path, Node, Pars, Flow)
 from datetime import datetime
 
 
@@ -48,13 +48,16 @@ class ControlPlan(Path):
     def after_load(self):
         pass
 
+    def create_flow(self, responsible, controller=None):
+        return Test(self, responsible, controller)
+
 
 class Control(Path):
     __mapper_args__ = {'polymorphic_identity': 'control'}
 
     characteristic = None
 
-    def __init__(self, method_name, name='', pars=None, **kwargs):
+    def __init__(self, method_name, name='', controller=None, pars=None, **kwargs):
         super().__init__(**kwargs)
         self.method_name = method_name
         self.name = name
@@ -69,24 +72,22 @@ class Control(Path):
         path_resource = PathResource(self, characteristic, pars)
         self.resource_list.append(path_resource)
 
+    def create_flow(self, test, responsible):
+        return Check(self, test, responsible, self.controller)
 
-class Check(Item):
+
+class Check(Flow):
     """Result a control after execution """
     __mapper_args__ = {'polymorphic_identity': 'check'}
 
-    def __init__(self, test, control, item_to_check, device=None, view=None):
-        super().__init__(path=control, resource=control.characteristic)
-        ItemRelation(
-            from_item=self,
-            to_item=item_to_check,
-            relation_class='for'
-            )
+    def __init__(self, control, test, responsible, controller=None, **kwargs):
+        super().__init__(path=control, parent=test, responsible=responsible, controller=controller, **kwargs)
+
         self.control = control
         self.control.insert_item(self)
 
         self.item = item_to_check
 
-        self.state = 'ongoing'
         if device:
             device.children.append(ItemRelation(self, rel='with'))
 
@@ -94,6 +95,7 @@ class Check(Item):
         self.update_view()
         self.defects = []
         self.measures = []
+
 
     def add_measure(self, characteristic, value):
         self.measures.append(
@@ -136,14 +138,15 @@ class Check(Item):
                 self.item = item
 
 
-class Test(Item):
+class Test(Flow):
     """Group of checks following a control plan"""
     __mapper_args__ = {'polymorphic_identity': 'test'}
     control_plan = synonym('path')
 
-    def __init__(self, control_plan, user):
+    def __init__(self, control_plan, responsible, controller=None):
         self.control_plan = control_plan
-        self.control_plan.insert_item(self, user=user)
+
+
 
 
 class Defect(Item):

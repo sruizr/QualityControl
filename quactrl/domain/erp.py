@@ -47,8 +47,9 @@ class Resource(Base, WithPars):
     name = Column(String)
     description = Column(String)
 
-    def __init__(self, key, description='', **pars):
+    def __init__(self, key, name='', description='', pars=None):
         self.key = key
+        self.name = name
         self.description = description
         if pars:
             self.pars = Pars(pars)
@@ -213,6 +214,19 @@ class Path(Base, WithPars):
         #  TODO:
         return True
 
+    def create_flow(self, responsible, controller=None):
+        return Flow(self, responsible, controller)
+
+    def notify_start(self):
+        if self.controller:
+            self.controller.notify('flow_started', self)
+
+    def notify_finish(self):
+        if self.controller:
+            self.controller.nofity('flow_finished', self)
+
+
+
 class PathResource(Base, WithPars):
     __tablename__ = 'path_resource'
 
@@ -306,7 +320,7 @@ class Flow(Base):
 
     def prepare(self):
         # TODO
-        pass
+        self.started_on = datetime.now()
 
     def execute(self):
         if self.method:
