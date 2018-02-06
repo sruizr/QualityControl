@@ -126,11 +126,11 @@ class DataAccessModule:
 
         return session.query(Person).filter_by(key=key).first()
 
-    def get_avalaible_inputs(self, location_key, item_args, session=None):
+    def get_avalaible_token_ids(self, location_key, item_args, session=None):
         session = self.dal.Session() if session is None else session
 
         filters = [Token.state == 'avalaible', Node.key == location_key]
-        qry = session.query(Token).join(Node).join(Item)
+        qry = session.query(Token.id).join(Node).join(Item)
 
         if 'resource_key' in item_args:
             qry = qry.join(Resource)
@@ -138,9 +138,9 @@ class DataAccessModule:
         if 'tracking' in item_args:
             filters.append(Item.tracking == item_args['tracking'])
 
-        tokens = qry.filter(*filters).all()
+        qry = qry.filter(*filters)
 
-        return [(token.item, token.qty) for token in tokens]
+        return qry.all()
 
     # def create_dut(self, item):
     #     """Returns a fully functional device"""
@@ -162,6 +162,14 @@ class DataAccessModule:
     # def get_location(self, key):
     #     session = self.dal.Session()
     #     return session.query(Location).filter(Location.key == key).one()
+
+    def get_tokens_by_ids(self, token_ids, session=None):
+        session = self.dal.Session() if session is None else session
+
+        qry = session.qry(Token.id).filter(Token.id in token_ids)
+
+        return list(qry.all())
+
 
     def get_devices_by_location(self, location_key, session=None):
         """Return a dict with all devices of a location"""

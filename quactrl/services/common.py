@@ -4,6 +4,7 @@ from quactrl.domain import get_component
 from quactrl.domain.check import Test
 from quactrl.domain.erp import Flow
 
+
 class InsertItemError(Exception):
     pass
 
@@ -15,56 +16,6 @@ class IncorrectOperationInputs(Exception):
 class MethodError(Exception):
     pass
 
-
-class OneItemFlowService:
-    def __init__(self, environment):
-        super().__init__()
-        dal = environment.dal
-
-        self.interrupt_event = Event()
-        self.controller = environment.controller
-        self.main_queue = Queue()
-        self.generator = PullRunner(destination=self.main_queue,
-                                    interrupt_event=self.interrupt_event
-                                    )
-        self.generator.adapter = ProcessAdapter(
-            self.generator, dal,
-            to_node_key=environment.location_key,
-            from_node=None
-            )
-
-        self.operation = PullRunner(origin=self.main_queue,
-                                    controller=self.controller,
-                                    interrupt_event=self.interrupt_event
-                                    )
-        self.operation.adapter = ProcessAdapter(
-            self.operation, dal,
-            from_node_key=environment.location_key,
-            name=environment.operation_name
-            )
-
-    def enter_item(self, item_data, responsible_key):
-        inputs = self.operation.adapter.find_inputs(item_data)
-        if not inputs:
-            self.generator.origin.put(item_data, responsible_key)
-        else:
-            for _input in inputs:
-                self.operation.source.put((_input, responsible))
-
-    def start(self):
-        if self.generator.path_is_loaded():
-            self.generator.start()
-        self.operation.start()
-
-    def stop(self):
-        self.operation.origin.put(None)
-        self.generator.origin.put(None)
-
-    def interrupt(self):
-        self.interrupt_event.set()
-
-    def stop_cycle(self):
-        self.operation.stop_cycle()
 
 
 class MethodRepo:
@@ -109,57 +60,74 @@ class PullRunner(Thread):
             self.method = MethodRepo.get(self.path.method_name)
             for sub_path in self.path.children:
                 self.steps.append(StepRunner(sub_path))
+    def set_responsible_by_key(self, key):
+        self.responsible = self.adapter.get_person(key)
+
+    def _shall_interrupt(self):
+        return (self.interrupt_event is not None and
+                self.interrupt_event.is_set())
+    def _are_tokens(self, inputs):
+        result = type(inputs) is list
+        if result:
+            for value in inputs:
+                result = result and type(value) is int
+        return result
 
     def run(self):
         self.adapter.open()
+        if self.responsible is None: # Not allowed any flow without responsible
+            self.controller.notify_error('AbsentResponsible')
         while True:
             import pdb; pdb.set_trace()
-            _input = self.origin.get()
-            if _input is None or (
-                    self.interrupt_event is not None and
-                    self.interrupt_event.is_set()
-                    ):  # thread is finished
+            inputs = self.origin.get()
+            # There are external orders to stop thread
+            if inputs is None or self._shall_interrupt():  # thread is finished
                 break
-            import pdb; pdb.set_trace()
-            inputs, responsible_key = _input
-            if (self.path is None or
-                    not self.path.accept_inputs(inputs)):
-                self.adapter.set_path(inputs)
-                self.load_process()
 
-            if (self.responsible is None or
-                    responsible_key != self.responsible.key):
-                self.responsible = self.adapter.get_person(responsible_key)
-
-            if self.path is None:
-                self.controller.notify_error(IncorrectOperationInputs(),
-                                             inputs=inputs)
+            if self.responsible is None: # Not allowed any flow without responsible
+                self.controller.notify_error('AbsentResponsible')
             else:
-                self.flow = Flow(self.path, self.responsible, self.controller)
-                self.flow.inputs = inputs
-                self.adapter.add(self.flow)
-                self.flow.prepare()
-                if self.flow.children:
-                    for step in self.steps:
-                        step.prepare()
-                        step.execute()
-                        step.terminate()
-                        if (self.interrupt_event is not None and
-                                self.interrupt_event.is_set()):
-                            self.flow.cancel()
-                            self.adapter.commit()
-                            break
-                        if self.stop_cycle:
-                            self.flow.cancel()
-                            self.stop_cycle = False
-                            self.adapter.commit()
+                if self._are_tokens(inputs): # list of integers
+                    inputs = self.adapter.get_tokens_by_ids(inputs)
 
-                self.flow.execute()
-                tokens = self.flow.terminate()
-                self.adapter.commit()
-                for token in tokens:
-                    self.destination.put(token.encode())
-                self.controller.notify('cycle_finished', self.path)
+                if (self.path is None or
+                    not self.path.accept_inputs(inputs)):
+                    self.adapter.set_path(inputs)
+                    self.load_process()
+
+                if self.path is None:
+                    self.controller.notify_error('IncorrentOperationInputs',
+                                                 inputs=inputs)
+                else:
+                    self.flow = self.path.create_flow(self.responsible, self.controller)
+                    self.flow.inputs = inputs
+                    self.adapter.add(self.flow)
+                    self.flow.prepare()
+                    self.controller.notify('cycle_started', self.flow)
+                    if self.flow.children:
+                        for step in self.steps:
+                            step.prepare()
+                            self.controller.notify('step_started', step)
+                            step.execute()
+                            step.terminate()
+                            self.controller.notify('step_finished', step)
+                            if self._shall_interrupt():
+                                self.flow.cancel()
+                                self.adapter.commit()
+                                self.controller.notify('cycle_cancelled', self.flow)
+                                break
+                            if self.stop_cycle:
+                                self.flow.cancel()
+                                self.adapter.commit()
+                                self.stop_cycle = False
+                                self.controller.notify('cycle_cancelled', self.flow)
+
+                    self.flow.execute()
+                    self.flow.terminate()
+                    self.adapter.commit()
+                    self.destination.put([token.id for token in self.flow.outputs])
+                    self.controller.notify('cycle_finished', self.path)
+
         self.adapter.close()
 
     def cancel_cycle(self):
@@ -191,6 +159,9 @@ class ProcessAdapter:
 
     def get_person(self, key):
         return self.dal.do.get_person(key, self._session)
+
+    def get_tokens(self, token_ids):
+        return self.dal.do.get_tokens_by_ids(token_ids, self._session)
 
     def open(self):
         self._session = self.dal.Session()
