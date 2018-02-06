@@ -3,6 +3,8 @@ from sqlalchemy.types import Enum, String
 from sqlalchemy.orm import synonym, reconstructor, aliased
 from quactrl.domain.erp import (Node, Path, Resource, ResourceRelation,
                                 PathResource, Token, Item)
+from quactrl.domain import get_component
+from sqlalchemy.orm import reconstructor
 
 
 class Operation(Path):
@@ -48,9 +50,40 @@ class FailureMode(Resource):
 class PartModel(Resource):
     __mapper_args__ = {'polymorphic_identity': 'part_model'}
 
+    _dut_classes = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._load_dut_class()
+
+    def _load_dut_class(self):
+        if self.pars:
+            pars = self.pars.get()
+            if self.key not in self._dut_classes:
+                class_name = pars.pop('class_name')
+                Dut = get_component(class_name)
+                self._dut_classes[self.key] = (Dut, pars)
+
+    @reconstructor
+    def after_load(self):
+        self._load_dut_class()
+
+    def get_behaviour(self):
+        if self.key in self._dut_classes:
+            Dut = self._dut_classes[self.key][0]
+            pars = self._dut_classes[self.key][1]
+
+            return Dut(**pars)
 
 class DeviceModel(Resource):
     __mapper_args__ = {'polymorphic_identity': 'device_model'}
+
+
+
+class Generator(Path):
+    def __init__(self, to_node, method_name, **kwargs):
+        Path.__init__(self, from_node=None, to_node=to_node,
+                      method_name=method_name, **kwargs)
 
 
 class DataAccessModule:
@@ -119,3 +152,8 @@ class DataAccessModule:
     #         PathResource.resource == resource
     #         ).first()
     #     return process
+
+    def get_part_model_by_key(self, key, session=None):
+        session = self.dal.Session() if session is None else session
+
+        return session.query(PartModel).filter(PartModel.key==key).one()

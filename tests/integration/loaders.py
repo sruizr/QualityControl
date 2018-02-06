@@ -23,7 +23,9 @@ class Filler:
         person = Person('007', 'James Bond')
 
         device_model = DeviceModel('ms',
-                                   'Measure system to be used by the check')
+                                   'Measure system to be used by the check',
+                                   pars={}
+        )
         # device = Device(
         #     device_model, '00000',
         #
