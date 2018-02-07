@@ -109,7 +109,7 @@ class Check(Flow):
         self.part = self.parent.part
         self.devices = self.parent.path.devices
 
-    def add_measure(self, characteristic, value, tracking='', parent=None):
+    def add_measure(self, value, characteristic, tracking='', parent=None):
         measurement = Measurement(resource=characteristic, tracking=tracking)
         if parent:
             relation = ItemRelation(relation_class='contains')
