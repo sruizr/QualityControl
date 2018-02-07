@@ -88,19 +88,21 @@ class PullRunner(Thread):
             if inputs is None or self._shall_interrupt():  # thread is finished
                 break
 
-            if responsible is None: # Not allowed any flow without responsible
+            if responsible is None:  # Not allowed any flow without responsible
                 self._notify_error('AbsentResponsible')
             else:
                 if responsible.key != self.responsible_key:
                     responsible = self.adapter.get_person(self.responsible_key)
 
                 if self._are_tokens(inputs): # list of integers
-                    inputs = self.adapter.get_tokens_by_ids(inputs)
+                    in_tokens = self.adapter.get_tokens_by_ids(inputs)
+                    inputs = []
                 else:
+                    in_tokens = []
                     inputs = [inputs]
 
                 if (self.path is None or
-                    not self.path.accept_inputs(inputs)):
+                       not self.path.accept_inputs(inputs)):
                     self.path = self.adapter.get_path(inputs)
                     self.path.devices = self.adapter.get_devices()
                     self.load_process()
@@ -110,16 +112,24 @@ class PullRunner(Thread):
                                                  inputs=inputs)
                 else:
 
-                    self.flow = self.path.create_flow(responsible, self.controller)
-                    self.flow.inputs.extend(inputs)
+                    self.flow = self.path.create_flow(responsible,
+                                                      self.controller)
+                    self.flow.inputs = inputs
+                    self.flow.in_tokens = in_tokens
                     self.adapter.add(self.flow)
                     self.flow.prepare()
                     self._notify('cycle_started', self.flow)
                     if self.flow.children:
+
                         for step in self.flow.children:
                             step.prepare()
                             self._notify('step_started', step)
-                            step.execute()
+                            try:
+                                step.execute()
+                            except Exception as e:
+                                step.cancel()
+                                self._notify_error(e)
+
                             step.terminate()
                             self._notify('step_finished', step)
                             if self._shall_interrupt():
@@ -196,16 +206,3 @@ class ProcessAdapter:
 
     def close(self):
         self._session.close()
-
-
-class StepRunner:
-    """Sync version of path"""
-    def __init__(self, path):
-        self.path = path
-        self.method = MethodRepo.get(self.method_name)
-
-    def execute(self, in_resources, responsible, devices, controller=None):
-        if self.method:
-            self.path.prepare()
-            self.method(self.path, in_resources, devices, controller)
-            self.path.terminate(responsible)

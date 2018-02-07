@@ -26,18 +26,18 @@ class Part(Item):
     def __init__(self, part_model, **kwargs):
 
         Item.__init__(self, resource=part_model, **kwargs)
-        self._behaviour = None
+        self._bh = None
 
     @reconstructor
     def after_load(self):
-        self._behaviour = None
+        self._bh = None
 
     @property
-    def behaviour(self):
-        """Loads behaviour just when requested"""
-        if self._behaviour is None:
-            self._behaviour = self.resource.get_behaviour()
-        return self._behaviour
+    def bh(self):
+        """Loads bh just when requested"""
+        if self._bh is None:
+            self._bh = self.resource.get_behaviour()
+        return self._bh
 
 class Group(Node):
     __mapper_args__ = {'polymorphic_identity': 'group'}
@@ -77,7 +77,7 @@ class Device(Item):
         Item.__init__(self,
                       resource=device_model, tracking=tracking, **kwargs)
 
-        self.behaviour = None
+        self.bh = None
 
     def setup(self):
         if not self.resource.pars:
@@ -89,23 +89,24 @@ class Device(Item):
 
         class_name = resource_pars['class_name']
         FunctionalDevice = get_component(class_name)
+
         if not FunctionalDevice:
             raise Exception('class path {} can not be loaded'.format(class_name))
 
         pars = {}
         if self.pars:
             pars = self.pars.get()
-            self.behaviour = FunctionalDevice(**pars)
+            self.bh = FunctionalDevice(**pars)
         else:
-            self.behaviour = FunctionalDevice()
+            self.bh = FunctionalDevice()
 
     def assembly(self, devices):
-        if self.behaviour:
-            self.behaviour.assembly(devices)
+        if self.bh:
+            self.bh.assembly(devices)
 
     @reconstructor
     def after_load(self):
-        self.behaviour = None
+        self.bh = None
 
 
 class DataAccessModule:

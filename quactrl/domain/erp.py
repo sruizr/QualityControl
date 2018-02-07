@@ -19,7 +19,8 @@ class Pars(Base):
         self.set(pars)
 
     def get(self):
-        return json.loads(self._pars)
+        if self._pars:
+            return json.loads(self._pars)
 
     def set(self, value):
         self._pars = json.dumps(value)
@@ -44,16 +45,13 @@ class Resource(Base, WithPars):
 
     id = Column(Integer, primary_key=True)
     key = Column(String, unique=True)
-    name = Column(String)
-    description = Column(String)
+    name = Column(String, default='')
+    description = Column(String, default='')
 
-    def __init__(self, key, name='', description='', pars=None):
-        self.key = key
-        self.name = name
-        self.description = description
+    def __init__(self, key, name, description, pars=None):
+        Base.__init__(self, key=key, name=name, description=description)
         if pars:
             self.pars = Pars(pars)
-
 
 class ResourceRelation(Base):
     __tablename__ = 'resource_relation'
@@ -218,7 +216,9 @@ class Path(Base, WithPars):
         return True
 
     def create_flow(self, responsible, controller=None):
-        return Flow(self, responsible, controller)
+        return Flow(path=self,
+                    responsible=responsible,
+                    controller=controller)
 
 
 class PathResource(Base, WithPars):
@@ -257,9 +257,7 @@ class Token(Base):
     flow = relationship('Flow', backref='out_tokens')
     item = relationship('Item')
 
-    def __init__(self, item, qty, node, flow, **kwargs):
-        super().__init__(item=item, node=node, qty=qty,
-                         flow=flow, **kwargs)
+
 
     def encode(self):
         return {'resource_key': self.item.resource.key,
@@ -292,11 +290,9 @@ class Flow(Base):
                             backref=backref('parent', remote_side=[id])
                            )
 
-    def __init__(self, path, responsible, controller=None, **kwargs):
+    def __init__(self,  **kwargs):
+        self.controller = kwargs.pop('controller')
         super().__init__(**kwargs)
-        self.path = path
-        self.responsible = responsible
-        self.controller = controller
         self._load_fields()
 
     def _load_fields(self):
@@ -307,6 +303,8 @@ class Flow(Base):
             pass
         self.inputs = []
         self.outputs = []
+        self.in_tokens = []
+        self.out_tokens = []
 
     @reconstructor
     def after_load(self):
@@ -315,30 +313,30 @@ class Flow(Base):
     def prepare(self):
         # TODO
         self.started_on = datetime.now()
-        self.outputs = []
-        self.out_tokens = []
 
     def execute(self):
         if self.method:
             self.method(self, self.controller)
 
     def terminate(self):
-        for _input in self.inputs:
-            _input.state = 'consumed'
+        for token in self.in_tokens:
+            token.state = 'consumed'
 
-        self.out_tokens = []
+        # (item, qty)
         for output in self.outputs:
-            self.out_tokens.append(Token(
-                output[0], output[1], self.path.to_node,
-                self, state='avalaible'
-            ))
-
+            Token(
+                item= output[0],
+                qty=output[1],
+                node=self.path.to_node,
+                flow=self,
+                state='avalaible'
+            )
 
         self.finished_on = datetime.now()
         self.state = 'done'
 
     def cancel(self):
-        #TODO
+
         self.finished_on = datetime.now()
         self.state = 'cancelled'
 

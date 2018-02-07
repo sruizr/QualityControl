@@ -24,6 +24,7 @@ class Characteristic(Resource):
 
     def get_failure_mode(self, mode):
         if mode not in self._failure_modes:
+
             failure_mode = FailureMode(mode, self)
             self._failure_modes[mode] = failure_mode
 
@@ -42,10 +43,13 @@ class FailureMode(Resource):
     __mapper_args__ = {'polymorphic_identity': 'failure_mode'}
 
     def __init__(self, mode, characteristic):
-        self.key = '{}-{}'.format(mode[:3], characteristic.key)
-        self.description = '{} {}'.format(mode, characteristic.description)
-        ResourceRelation(characteristic, self)
 
+        key = '{}-{}'.format(mode[:3], characteristic.key)
+        description = '{} {}'.format(mode, characteristic.description)
+        Resource.__init__(self, key, '', description)
+
+        rl = ResourceRelation(relation_class='contains', to_resource=self)
+        characteristic.destinations.append(rl)
 
 
 class DeviceModel(Resource):

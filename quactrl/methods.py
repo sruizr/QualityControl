@@ -33,5 +33,5 @@ def gen_part(flow, controller=None):
 
 
 def by_pass(flow, controller=None):
-    for _input in flow.inputs:
-        flow.outputs.append((_input.item, _input.qty))
+    for token in flow.in_tokens:
+        flow.outputs.append((token.item, token.qty))
