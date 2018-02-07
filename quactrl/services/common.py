@@ -116,7 +116,7 @@ class PullRunner(Thread):
                     self.flow.prepare()
                     self._notify('cycle_started', self.flow)
                     if self.flow.children:
-                        for step in self.flow.childrens:
+                        for step in self.flow.children:
                             step.prepare()
                             self._notify('step_started', step)
                             step.execute()

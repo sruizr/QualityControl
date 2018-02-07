@@ -81,6 +81,8 @@ class Check(Flow):
     """Result a control after execution """
     __mapper_args__ = {'polymorphic_identity': 'check'}
 
+    control = synonym(path)
+
     def __init__(self, control, test, responsible, controller=None, **kwargs):
         super().__init__(path=control, parent=test, responsible=responsible, controller=controller, **kwargs)
 
@@ -105,6 +107,39 @@ class Check(Flow):
         self.defects.append(
             Defect(self.item, self, failure_mode)
             )
+
+
+    def eval_measure(self, value, characteristic,
+                     modes=['low', 'high', 'suspicious'],
+                     uncertainty=0):
+
+        self.append_measure(self, value, characteristic)
+
+        limits = getattr(characteristic, 'limits', None)
+        if limits:
+            mode = None
+
+            low_limit = limits[0]
+            if low_limit is not None:
+                sure_low = low_limit + uncertainty
+                if value < sure_low:
+                    mode = '{} {}'.format(modes[2],
+                                                       modes[0])
+                if value < low_limit:
+                    mode = modes[0]
+
+            top_limit = limits[1]
+            if top_limit is not None:
+                sure_top = top_limit - uncertainty
+                if value > sure_top:
+                    mode = '{} {}'.format(modes[2],
+                                                       modes[1])
+                if value > top_limit:
+                    mode = modes[1]
+
+            if mode:
+                failure_mode = characteristic.get_failure_mode(mode)
+                return failure_mode
 
     def terminate(self):
 
