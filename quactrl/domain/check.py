@@ -37,7 +37,7 @@ class Sampling(Enum):
 class ControlPlan(Path):
     __mapper_args__ = {'polymorphic_identity': 'control_plan'}
 
-    def __init__(self, name, method_name=None, pars=None, **kwargs):
+    def __init__(self, name='Plan for testing 100% pars', method_name='quactrl.methods.by_pass', pars=None, **kwargs):
         super().__init__(**kwargs)
         self.method_name = method_name
         self.name = name
@@ -69,7 +69,8 @@ class Control(Path):
         pass
 
     def add_characteristic(self, characteristic, **pars):
-        path_resource = PathResource(self, characteristic, pars)
+
+        path_resource = PathResource(self, characteristic, 'out', pars=pars)
         self.resource_list.append(path_resource)
 
     def create_flow(self, test, responsible):
@@ -83,19 +84,17 @@ class Check(Flow):
     def __init__(self, control, test, responsible, controller=None, **kwargs):
         super().__init__(path=control, parent=test, responsible=responsible, controller=controller, **kwargs)
 
-        self.control = control
-        self.control.insert_item(self)
-
-        self.item = item_to_check
-
-        if device:
-            device.children.append(ItemRelation(self, rel='with'))
-
-        self.view = view
-        self.update_view()
         self.defects = []
         self.measures = []
 
+    def prepare(self):
+        self.characteristics = {}
+        for res_rel in self.path.resource_list:
+            if res_rel.flow == 'out':
+                characteristic = res_rel.resource
+                self.characteristics[characteristic.key] = characteristic
+        self.part = self.parent.part
+        self.devices = self.parent.path.devices
 
     def add_measure(self, characteristic, value):
         self.measures.append(
@@ -107,17 +106,13 @@ class Check(Flow):
             Defect(self.item, self, failure_mode)
             )
 
-    def update_view(self):
-        if self.view:
-            self.view.udpate_check(self)
+    def terminate(self):
 
-    def close(self):
-        if self.defects:
-            self.state = 'nok'
-        else:
+        if len(self.defects) == 0:
             self.state = 'ok'
+        else:
+            self.state = 'nok'
 
-        self.update_view()
 
     def cancel(self):
         self.state = 'cancelled'
@@ -144,10 +139,32 @@ class Test(Flow):
     control_plan = synonym('path')
 
     def __init__(self, control_plan, responsible, controller=None):
-        self.control_plan = control_plan
+        Flow.__init__(self, path=control_plan,
+                      responsible=responsible,
+                      controller=controller)
+        self.state = 'started'
+        for control in control_plan.children:
+            self.children.append(Check(test=self, control=control, responsible=responsible,
+                                       controller=controller))
+    def prepare(self):
+        super().prepare()
+        self.part = self.inputs[0].item
+        self.devices = self.path.devices
 
+    def terminate(self):
+        super().terminate()
+        state = 'ok'
+        for check in self.children:
+            if check.state == 'nok':
+                state = 'nok'
+                break
+            elif check.state == 'cancelled':
+                state = 'cancelled'
+                break
+            elif check.state == 'suspicious':
+                state = 'suspicious'
 
-
+        self.state = state
 
 class Defect(Item):
     __mapper_args__ = {'polymorphic_identity': 'defect'}

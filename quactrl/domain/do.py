@@ -24,8 +24,20 @@ class Part(Item):
     __mapper_args__ = {'polymorphic_identity': 'part'}
 
     def __init__(self, part_model, **kwargs):
+
         Item.__init__(self, resource=part_model, **kwargs)
-        self.behaviour = self.resource.get_behaviour()
+        self._behaviour = None
+
+    @reconstructor
+    def after_load(self):
+        self._behaviour = None
+
+    @property
+    def behaviour(self):
+        """Loads behaviour just when requested"""
+        if self._behaviour is None:
+            self._behaviour = self.resource.get_behaviour()
+        return self._behaviour
 
 class Group(Node):
     __mapper_args__ = {'polymorphic_identity': 'group'}
@@ -61,11 +73,9 @@ class Location(Node):
 class Device(Item):
     __mapper_args__ = {'polymorphic_identity': 'device'}
 
-    def __init__(self, device_model, tracking, pars=None):
-        Item.__init__(self, device_model, tracking, )
-
-        if pars:
-            self.pars = Pars(pars)
+    def __init__(self, device_model, tracking, **kwargs):
+        Item.__init__(self,
+                      resource=device_model, tracking=tracking, **kwargs)
 
         self.behaviour = None
 
@@ -124,6 +134,12 @@ class DataAccessModule:
 
         return session.query(Person).filter_by(key=key).first()
 
+    def get_tokens_by_ids(self, ids, session=None):
+        session = self.dal.Session() if session is None else session
+        results = session.query(Token).filter(Token.id.in_(ids)).all()
+        return results
+
+
     def get_avalaible_token_ids(self, location_key, item_args, session=None):
         session = self.dal.Session() if session is None else session
 
@@ -136,9 +152,9 @@ class DataAccessModule:
         if 'tracking' in item_args:
             filters.append(Item.tracking == item_args['tracking'])
 
-        qry = qry.filter(*filters)
+        token_ids = [value[0] for value in qry.filter(*filters).all()]
 
-        return qry.all()
+        return token_ids
 
     # def create_dut(self, item):
     #     """Returns a fully functional device"""
@@ -160,13 +176,6 @@ class DataAccessModule:
     # def get_location(self, key):
     #     session = self.dal.Session()
     #     return session.query(Location).filter(Location.key == key).one()
-
-    def get_tokens_by_ids(self, token_ids, session=None):
-        session = self.dal.Session() if session is None else session
-
-        qry = session.qry(Token.id).filter(Token.id in token_ids)
-
-        return list(qry.all())
 
 
     def get_devices_by_location(self, location_key, session=None):

@@ -6,7 +6,7 @@ from sqlalchemy import ForeignKey, Column
 from sqlalchemy.types import (
     String, Integer, DateTime, Float
     )
-from sqlalchemy.orm import relationship, backref, reconstructor
+from sqlalchemy.orm import relationship, backref, reconstructor, aliased
 from quactrl.domain import Base, get_component
 
 
@@ -123,10 +123,12 @@ class Item(Base, WithPars):
     tracking = Column(String, index=True)
     state = Column(String, index=True, default='active')
 
-    def __init__(self, resource, tracking='', state='active'):
+    def __init__(self, resource, tracking='', state='active', pars=None):
         self.resource = resource
         self.tracking = tracking
         self.state = state
+        if pars:
+            self.pars = Pars(pars)
 
     def get_stocks(self):
         stocks = {}
@@ -191,6 +193,7 @@ class Path(Base, WithPars):
                 self.out_resources[path_resource.resource.key] = (
                     path_resource.resource, path_resource.qty
                 )
+
     @reconstructor
     def after_load(self):
         self._load_resources()
@@ -216,15 +219,6 @@ class Path(Base, WithPars):
 
     def create_flow(self, responsible, controller=None):
         return Flow(self, responsible, controller)
-
-    def notify_start(self):
-        if self.controller:
-            self.controller.notify('flow_started', self)
-
-    def notify_finish(self):
-        if self.controller:
-            self.controller.nofity('flow_finished', self)
-
 
 
 class PathResource(Base, WithPars):
@@ -321,6 +315,8 @@ class Flow(Base):
     def prepare(self):
         # TODO
         self.started_on = datetime.now()
+        self.outputs = []
+        self.out_tokens = []
 
     def execute(self):
         if self.method:
@@ -328,13 +324,15 @@ class Flow(Base):
 
     def terminate(self):
         for _input in self.inputs:
-            pass
+            _input.state = 'consumed'
 
+        self.out_tokens = []
         for output in self.outputs:
-            Token(
+            self.out_tokens.append(Token(
                 output[0], output[1], self.path.to_node,
                 self, state='avalaible'
-            )
+            ))
+
 
         self.finished_on = datetime.now()
         self.state = 'done'

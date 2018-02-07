@@ -47,6 +47,21 @@ class FailureMode(Resource):
         ResourceRelation(characteristic, self)
 
 
+
+class DeviceModel(Resource):
+    __mapper_args__ = {'polymorphic_identity': 'device_model'}
+
+
+class PartGenerator(Path):
+    def __init__(self, method_name='quactrl.methods.gen_part', **kwargs):
+        Path.__init__(self, method_name=method_name, **kwargs)
+
+
+class Generator(Path):
+    def __init__(self, to_node, method_name, **kwargs):
+        Path.__init__(self, from_node=None, to_node=to_node,
+                      method_name=method_name, **kwargs)
+
 class PartModel(Resource):
     __mapper_args__ = {'polymorphic_identity': 'part_model'}
 
@@ -75,16 +90,6 @@ class PartModel(Resource):
 
             return Dut(**pars)
 
-class DeviceModel(Resource):
-    __mapper_args__ = {'polymorphic_identity': 'device_model'}
-
-
-
-class Generator(Path):
-    def __init__(self, to_node, method_name, **kwargs):
-        Path.__init__(self, from_node=None, to_node=to_node,
-                      method_name=method_name, **kwargs)
-
 
 class DataAccessModule:
     """Operate with plan Entities"""
@@ -92,7 +97,7 @@ class DataAccessModule:
         self.dal = dal
 
     def get_avalaible_tokens(self, node_key, item_args, session=None):
-        session = self.dal.Session() if session is None else session
+        #session = self.dal.Session() if session is None else session
         qry = session.query(Token).join(Node).join(Item)
 
         filters = [Node.key == node_key]
@@ -107,7 +112,7 @@ class DataAccessModule:
 
     def get_path(self, args, session=None):
         """Return process by key, None if not exist"""
-        session = self.dal.Session() if session is None else session
+        # session = self.dal.Session() if session is None else session
 
         qry = session.query(Path)
 
@@ -154,6 +159,6 @@ class DataAccessModule:
     #     return process
 
     def get_part_model_by_key(self, key, session=None):
-        session = self.dal.Session() if session is None else session
+        # session = self.dal.Session() if session is None else session
 
         return session.query(PartModel).filter(PartModel.key==key).one()
