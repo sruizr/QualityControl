@@ -220,7 +220,7 @@ class Test(Flow):
             elif check.state == 'suspicious':
                 state = 'suspicious'
 
-        if self.state == 'ok':
+        if state == 'ok':
             super().terminate()
         self.state = state
 
