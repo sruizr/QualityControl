@@ -24,7 +24,6 @@ class Characteristic(Resource):
 
     def get_failure_mode(self, mode):
         if mode not in self._failure_modes:
-
             failure_mode = FailureMode(mode, self)
             self._failure_modes[mode] = failure_mode
 
@@ -34,9 +33,9 @@ class Characteristic(Resource):
     def after_load(self):
         self._failure_modes = {}
         for destination in self.destinations:
-            if destination.is_a == 'failure_mode':
-                mode = destination.resource.description.split('-')[0]
-                self._failure_modes[mode] = destination.resource
+            if destination.to_resource.is_a == 'failure_mode':
+                mode = destination.to_resource.key.split('-')[0]
+                self._failure_modes[mode] = destination.to_resource
 
 
 class FailureMode(Resource):
@@ -44,7 +43,7 @@ class FailureMode(Resource):
 
     def __init__(self, mode, characteristic):
 
-        key = '{}-{}'.format(mode[:3], characteristic.key)
+        key = '{}-{}'.format(mode, characteristic.key)
         description = '{} {}'.format(mode, characteristic.description)
         Resource.__init__(self, key, '', description)
 

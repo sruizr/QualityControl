@@ -13,7 +13,7 @@ from quactrl.domain import Base, get_component
 class Pars(Base):
     __tablename__ = 'pars'
     id = Column(Integer, primary_key=True)
-    _pars = Column(String)
+    _pars = Column(String(1000))
 
     def __init__(self, pars):
         self.set(pars)
@@ -38,15 +38,15 @@ class WithPars:
 
 class Resource(Base, WithPars):
     __tablename__ = 'resource'
-    is_a = Column(String)
-    __mapper_args__ = {
+    is_a = Column(String(30))
+    __mapper_args__  = {
         'polymorphic_on': is_a
     }
 
     id = Column(Integer, primary_key=True)
-    key = Column(String, unique=True)
-    name = Column(String, default='')
-    description = Column(String, default='')
+    key = Column(String(100), unique=True)
+    name = Column(String(100), default='')
+    description = Column(String(100), default='')
 
     def __init__(self, key, name, description, pars=None):
         Base.__init__(self, key=key, name=name, description=description)
@@ -57,7 +57,7 @@ class ResourceRelation(Base):
     __tablename__ = 'resource_relation'
 
     id = Column(Integer, primary_key=True)
-    relation_class = Column(String, default='bypass')
+    relation_class = Column(String(100), default='bypass')
     from_resource_id = Column(Integer, ForeignKey('resource.id'))
     to_resource_id = Column(Integer, ForeignKey('resource.id'))
     qty = Column(Float, default=1.0)
@@ -69,14 +69,14 @@ class ResourceRelation(Base):
 
 class Node(Base):
     __tablename__ = 'node'
-    is_a = Column(String)
+    is_a = Column(String(30))
     __mapper_args__ = {
         'polymorphic_on': is_a
     }
 
     id = Column(Integer, primary_key=True)
-    key = Column(String, unique=True)
-    name = Column(String)
+    key = Column(String(100), unique=True)
+    name = Column(String(30))
 
     def __init__(self, key, name=None):
         self.key = key
@@ -92,7 +92,7 @@ class Node(Base):
 class NodeRelation(Base):
     __tablename__ = 'node_relation'
     id = Column(Integer, primary_key=True)
-    relation_class = Column(String, default='contains')
+    relation_class = Column(String(100), default='contains')
     qty = Column(Float, default=1.0)
     from_node_id = Column(Integer, ForeignKey('node.id'))
     to_node_id = Column(Integer, ForeignKey('node.id'))
@@ -110,7 +110,7 @@ class NodeRelation(Base):
 
 class Item(Base, WithPars):
     __tablename__ = 'item'
-    is_a = Column(String)
+    is_a = Column(String(30))
     __mapper_args__ = {
         'polymorphic_on': is_a
     }
@@ -118,8 +118,8 @@ class Item(Base, WithPars):
     id = Column(Integer, primary_key=True)
     resource_id = Column(ForeignKey('resource.id'))
     resource = relationship("Resource")
-    tracking = Column(String, index=True)
-    state = Column(String, index=True, default='active')
+    tracking = Column(String(100), index=True)
+    state = Column(String(100), index=True, default='active')
 
     def __init__(self, resource, tracking='', state='active', pars=None):
         self.resource = resource
@@ -139,10 +139,11 @@ class Item(Base, WithPars):
 
         return stocks
 
+
 class ItemRelation(Base):
     __tablename__ = 'item_relation'
     id = Column(Integer, primary_key=True)
-    relation_class = Column(String, default='has')
+    relation_class = Column(String(100), default='has')
     from_item_id = Column(Integer, ForeignKey('item.id'))
     to_item_id = Column(Integer, ForeignKey('item.id'))
     qty = Column(Float, default=1.0)
@@ -161,8 +162,8 @@ class Path(Base, WithPars):
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey('path.id'))
     sequence = Column(Integer, default=0)
-    name = Column(String, default='')
-    method_name = Column(String, default='')
+    name = Column(String(100), default='')
+    method_name = Column(String(100), default='')
     from_node_id = Column(Integer, ForeignKey('node.id'), index=True)
     to_node_id = Column(Integer, ForeignKey('node.id'), index=True)
 
@@ -348,7 +349,7 @@ class DataAccessModule:
         self.dal = dal
 
     def get_stocks_by_node(self, node, session=None):
-        session = self.dal.Session() if session is NOne else session
+        session = self.dal.Session() if session is None else session
 
         qry = session.query(Token).filter(
             Token.node == node,

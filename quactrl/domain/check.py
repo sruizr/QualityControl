@@ -208,11 +208,11 @@ class Test(Flow):
         self.devices = self.path.devices
 
     def terminate(self):
-        super().terminate()
         state = 'ok'
         for check in self.children:
             if check.state == 'nok':
                 state = 'nok'
+
                 break
             elif check.state == 'cancelled':
                 state = 'cancelled'
@@ -220,6 +220,8 @@ class Test(Flow):
             elif check.state == 'suspicious':
                 state = 'suspicious'
 
+        if self.state == 'ok':
+            super().terminate()
         self.state = state
 
 

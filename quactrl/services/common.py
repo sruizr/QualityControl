@@ -53,6 +53,7 @@ class PullRunner(Thread):
         self.path = None
 
         self.stop_cycle = False
+        self.responsible_key = None
 
     def path_is_loaded(self):
         return self.path is not None
@@ -68,6 +69,7 @@ class PullRunner(Thread):
     def _shall_interrupt(self):
         return (self.interrupt_event is not None and
                 self.interrupt_event.is_set())
+
     def _are_tokens(self, inputs):
         result = type(inputs) is list
         if result:
@@ -76,11 +78,10 @@ class PullRunner(Thread):
         return result
 
     def run(self):
+
         self.adapter = ProcessAdapter(self, self.dal, self.path_args)
         self.adapter.open()
-        if self.responsible_key is None: # Not allowed any flow without responsible
-            self._notify_error('AbsentResponsible')
-        responsible = self.adapter.get_person(self.responsible_key)
+        responsible = None
         while True:
             inputs = self.origin.get()
 
@@ -88,12 +89,12 @@ class PullRunner(Thread):
             if inputs is None or self._shall_interrupt():  # thread is finished
                 break
 
-            if responsible is None:  # Not allowed any flow without responsible
-                self._notify_error('AbsentResponsible')
+            if responsible is None or (
+                    responsible.key != self.responsible_key):
+                responsible = self.adapter.get_person(self.responsible_key)
+            if responsible is None:
+                    self._notify_error('AbsentResponsible')
             else:
-                if responsible.key != self.responsible_key:
-                    responsible = self.adapter.get_person(self.responsible_key)
-
                 if self._are_tokens(inputs): # list of integers
                     in_tokens = self.adapter.get_tokens_by_ids(inputs)
                     inputs = []
@@ -118,38 +119,41 @@ class PullRunner(Thread):
                     self.flow.in_tokens = in_tokens
                     self.adapter.add(self.flow)
                     self.flow.prepare()
-                    self._notify('cycle_started', self.flow)
-                    if self.flow.children:
 
+                    self._update(self.flow)
+                    cancel = self.stop_cycle
+                    if self.flow.children:
                         for step in self.flow.children:
                             step.prepare()
-                            self._notify('step_started', step)
-                            try:
-                                step.execute()
-                            except Exception as e:
+                            self._update(step)
+                            if cancel:
                                 step.cancel()
-                                self._notify_error(e)
+                            else:
+                                try:
+                                    step.execute()
+                                    step.terminate()
+                                except Exception as e:
+                                    cancel = True
+                                    step.cancel()
+                                    self._notify_error(e, step=step)
+                            self._update(step)
 
-                            step.terminate()
-                            self._notify('step_finished', step)
                             if self._shall_interrupt():
-                                self.flow.cancel()
-                                self.adapter.commit()
-                                self._notify('cycle_cancelled', self.flow)
-                                break
+                                cancel = True
                             if self.stop_cycle:
-                                self.flow.cancel()
-                                self.adapter.commit()
+                                cancel = True
                                 self.stop_cycle = False
-                                self._notify('cycle_cancelled', self.flow)
-
-                    self.flow.execute()
-                    self.flow.terminate()
+                    if cancel:
+                        self.flow.cancel()
+                    else:
+                        self.flow.execute()
+                        self.flow.terminate()
                     self.adapter.commit()
+                    self._update(self.flow)
+                    if self._shall_interrupt():
+                        break
                     self.destination.put([token.id
                                           for token in self.flow.out_tokens])
-                    self._notify('cycle_finished', self.path)
-
         self.adapter.close()
 
     def cancel_cycle(self):
@@ -162,6 +166,10 @@ class PullRunner(Thread):
     def _notify_error(self, message_key, **kwargs):
         if self.controller:
             self.controller.notify_error(message_key, **kwargs)
+
+    def _update(self, obj):
+        if self.controller:
+            self.controller.update(obj)
 
 
 class ProcessAdapter:

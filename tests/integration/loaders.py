@@ -74,6 +74,7 @@ class Filler:
         part_generator = Generator(
             name='Generator for parts on wip',
             method_name='tests.integration.stuff.gen_dut_from_label',
+
             to_node=wip
         )
         part_generator.add_resource(part_model)
