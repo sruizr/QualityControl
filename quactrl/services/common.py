@@ -78,7 +78,6 @@ class PullRunner(Thread):
         return result
 
     def run(self):
-
         self.adapter = ProcessAdapter(self, self.dal, self.path_args)
         self.adapter.open()
         responsible = None

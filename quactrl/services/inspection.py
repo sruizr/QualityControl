@@ -67,3 +67,50 @@ class OneItemFlowService:
 
     def stop_cycle(self):
         self.operation.stop_cycle()
+
+
+class ManyCavitiesService:
+    def __init__(self, environment):
+        super().__init__()
+        dal = environment.dal
+
+        self.controller = environment.controller
+        self.controller.service = self
+
+        self.origin_key = environment.origin_key
+        self.destination_key = environment.destination_key
+
+        self.cavities = environment.cavities
+
+        self.inspectors = []
+        for cavity in range(cavities):
+            inspector = PullRunner(
+                dal, controller=self.controller,
+                interrupt_event=self.interrupt_event,
+                from_node_key=self.origin_key,
+                to_node_key=self.destination_key
+                )
+            inspector.cavity_number = cavity
+            self.inspectors.append(inspector)
+
+        self.interrupt_event = Event()
+        self.responsible_key = None
+
+
+    def enter_item(self, item_data, responsible_key):
+        cavity_number = item_data['cavity_number']
+        self.inspectors[cavity_number].origin.put(item_data)
+
+    def start(self):
+        for inspector in self.inspectors:
+            inspector.start()
+
+    def stop(self):
+        for inspector in self.inspectors:
+            inspector.origin.put(None)
+
+    def interrupt(self):
+        self.interrupt_event.set()
+
+    def cancel(self, cavity):
+        self.inspectors[cavity].cancel_order()
