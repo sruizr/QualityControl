@@ -208,6 +208,15 @@ class Test(Flow):
         self.devices = self.path.devices
 
     def terminate(self):
+        super().terminate()
+
+        self.state = self.eval_test_result()
+
+        if self.state != 'ok': # Return all to origin node
+            for token in self.out_tokens:
+                token.node = self.path.from_node
+
+    def eval_test_result(self):
         state = 'ok'
         for check in self.children:
             if check.state == 'nok':
@@ -220,10 +229,7 @@ class Test(Flow):
             elif check.state == 'suspicious':
                 state = 'suspicious'
 
-        if state == 'ok':
-            super().terminate()
-        self.state = state
-
+        return state
 
 class Defect(Item):
     __mapper_args__ = {'polymorphic_identity': 'defect'}
