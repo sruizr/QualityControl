@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
-from sqlalchemy.orm import sessionmaker, backref, relationship
+from sqlalchemy.orm import sessionmaker, backref, relationship, scoped_session
 from .erp import DataAccessModule as Erp
 from .plan import DataAccessModule as Plan
 from .do import DataAccessModule as Do
@@ -22,25 +22,33 @@ class DataAccessLayer:
 
     def __init__(self, file_path=None):
         self.file_path = file_path
+
+    def load_dams(self):
         self.erp = Erp(self)
         self.plan = Plan(self)
         self.check = Check(self)
         self.do = Do(self)
         self.act = Act(self)
 
-    def db_init(self, conn_string):
-        self.conn_string = conn_string
-        self.engine = create_engine(self.conn_string, # echo=echo)
-                                    connect_args={'check_same_thread': False},
+    def db_init(self, connection_string):
+        args = connection_string.split(';')
+        conn_string = args[0]
+
+        connect_args = {}
+        for index in range(1, len(args)):
+            key, value = args.split('=')
+            connect_args[key] = value
+        echo = connect_args.pop('echo', False)
+        self.engine = create_engine(conn_string, connect_args=connect_args,
                                     echo=echo)
         self.metadata = Base.metadata
         self.connection = self.engine.connect()
-        self.Session = sessionmaker()
 
     def prepare_db(self):
         """Create tables (if no exist) and bind database to class"""
         self.metadata.create_all(self.engine)
-        self.Session.configure(bind=self.engine)
+        session_factory = sessionmaker(bind=self.engine)
+        self.Session = scoped_session(session_factory)
 
     def load_db(self, filler):
         filler.load()
@@ -63,3 +71,6 @@ class DataAccessLayer:
 
     def clear_schema(self):
         pass
+
+
+dal = DataAccessLayer()

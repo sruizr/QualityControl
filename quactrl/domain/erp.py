@@ -155,6 +155,8 @@ class ItemRelation(Base):
 class Path(Base, WithPars):
     __tablename__ = 'path'
     is_a = Column(String(15))
+    created_on = Column(DateTime, default=datetime.now)
+    removed_on = Column(DateTime)
     __mapper_args__ = {
         'polymorphic_on': is_a
     }
