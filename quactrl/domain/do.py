@@ -1,11 +1,11 @@
 import importlib
-from threading import Queue
 import json
 import os
-from sqlalchemy.orm import synonym, reconstructor
-from quactrl.domain.erp import Item, Resource, Node, NodeRelation, Movement, Pars
+from sqlalchemy.orm import synonym, reconstructor, aliased
+from quactrl.domain.erp import Item, Resource, Node, NodeRelation, Pars, Flow, Token
 from quactrl.domain.plan import PartModel, Operation, DeviceModel
 from quactrl.domain import get_component
+from quactrl.domain.erp import Path
 
 
 class Material(Item):
@@ -20,9 +20,24 @@ class Person(Node):
         self.name = name
 
 
-class Dut(Item):
-    __mapper_args__ = {'polymorphic_identity': 'dut'}
+class Part(Item):
+    __mapper_args__ = {'polymorphic_identity': 'part'}
 
+    def __init__(self, part_model, **kwargs):
+
+        Item.__init__(self, resource=part_model, **kwargs)
+        self._bh = None
+
+    @reconstructor
+    def after_load(self):
+        self._bh = None
+
+    @property
+    def bh(self):
+        """Loads bh just when requested"""
+        if self._bh is None:
+            self._bh = self.resource.get_behaviour()
+        return self._bh
 
 class Group(Node):
     __mapper_args__ = {'polymorphic_identity': 'group'}
@@ -41,6 +56,7 @@ class Group(Node):
         return persons
 
 
+
 class Location(Node):
     __mapper_args__ = {'polymorphic_identity': 'location'}
 
@@ -51,22 +67,17 @@ class Location(Node):
     def add_devices(self, *devices):
         for device in devices:
             if device.is_a == 'device':
-                Movement(
-                    from_node=self,
-                    item=device
-                    )
+                pass
 
 
 class Device(Item):
     __mapper_args__ = {'polymorphic_identity': 'device'}
 
-    def __init__(self, device_model, tracking, path=None, pars=None):
-        Item.__init__(self, device_model, tracking, path)
+    def __init__(self, device_model, tracking, **kwargs):
+        Item.__init__(self,
+                      resource=device_model, tracking=tracking, **kwargs)
 
-        if pars:
-            self.pars = Pars(pars)
-
-        self.behaviour = None
+        self.bh = None
 
     def setup(self):
         if not self.resource.pars:
@@ -78,23 +89,25 @@ class Device(Item):
 
         class_name = resource_pars['class_name']
         FunctionalDevice = get_component(class_name)
+
         if not FunctionalDevice:
             raise Exception('class path {} can not be loaded'.format(class_name))
 
         pars = {}
         if self.pars:
             pars = self.pars.get()
-            self.behaviour = FunctionalDevice(**pars)
+            self.bh = FunctionalDevice(**pars)
         else:
-            self.behaviour = FunctionalDevice()
+            self.bh = FunctionalDevice()
 
     def assembly(self, devices):
-        if self.behaviour:
-            self.behaviour.assembly(devices)
+        if self.bh:
+            self.bh.assembly(devices)
 
     @reconstructor
     def after_load(self):
-        self.behaviour = None
+        self.bh = None
+
 
 class DataAccessModule:
     _devices = {}
@@ -105,62 +118,74 @@ class DataAccessModule:
         self._duts = {}
         self.session = None
 
-    def open_session(self):
-        self.session = self.dal.Session()
+    # def open_session(self):
+    #     self.session = self.dal.Session()
 
-    def get_item_by_sn(self, serial_number):
-        if not self.session:
-            self.open_session()
+    # def get_item_by_sn(self, serial_number):
+    #     if not self.session:
+    #         self.open_session()
 
+    # def get_or_create_dut(self, **kwargs):
+    #     """Return a fully functional dut for testing"""
+    #     pass
 
-    def get_or_create_dut(self, **kwargs):
-        """Return a fully functional dut for testing"""
-        pass
-
-    def get_operator(self, key):
+    def get_person(self, key, session=None):
         """Get operator from data layer if not exist it return None"""
-        session = self.dal.Session()
+        session = self.dal.Session() if session is None else session
+
         return session.query(Person).filter_by(key=key).first()
 
+    def get_tokens_by_ids(self, ids, session=None):
+        session = self.dal.Session() if session is None else session
+        results = session.query(Token).filter(Token.id.in_(ids)).all()
+        return results
 
-    def get_operation(self, part_number):
-        """Return process by key, None if not exist"""
-        session = self.dal.Session()
 
-        return session.query(Operation).filter(
-            Operation.resource_links.any(key=part_number)
-            ).filter(
-                Operation.method_name == 'final_test'
-            ).first()
+    def get_avalaible_token_ids(self, location_key, item_args, session=None):
+        session = self.dal.Session() if session is None else session
 
-    def create_dut(self, item):
-        """Returns a fully functional device"""
-        if item.resource.pars is None:
-            return item
+        filters = [Token.state == 'avalaible', Node.key == location_key]
+        qry = session.query(Token.id).join(Node).join(Item)
 
-        device_name = item.resource.key
-        pars = item.resource.pars.get()
-        if not device_name in self._duts:
-            class_name = pars['class_name']
-            modules = class_name.split('.')
-            module = importlib.import_module('.'.join(modules[:-1]))
-            Device = getattr(module, modules[-1], None)
-            self._duts[device_name] = (Device, pars)
+        if 'resource_key' in item_args:
+            qry = qry.join(Resource)
+            filters.append(Resource.key == item_args['resource_key'])
+        if 'tracking' in item_args:
+            filters.append(Item.tracking == item_args['tracking'])
 
-        Device, pars = self._devices.get(device_name)
-        return Device(item, pars)
+        token_ids = [value[0] for value in qry.filter(*filters).all()]
 
-    def get_location(self, key):
-        session = self.dal.Session()
-        return session.query(Location).filter(Location.key == key).one()
+        return token_ids
 
-    def get_devices_by_location(self, location):
+    # def create_dut(self, item):
+    #     """Returns a fully functional device"""
+    #     if item.resource.pars is None:
+    #         return item
+
+    #     device_name = item.resource.key
+    #     pars = item.resource.pars.get()
+    #     if not device_name in self._duts:
+    #         class_name = pars['class_name']
+    #         modules = class_name.split('.')
+    #         module = importlib.import_module('.'.join(modules[:-1]))
+    #         Device = getattr(module, modules[-1], None)
+    #         self._duts[device_name] = (Device, pars)
+
+    #     Device, pars = self._devices.get(device_name)
+    #     return Device(item, pars)
+
+    # def get_location(self, key):
+    #     session = self.dal.Session()
+    #     return session.query(Location).filter(Location.key == key).one()
+
+
+    def get_devices_by_location(self, location_key, session=None):
         """Return a dict with all devices of a location"""
-        session = self.dal.Session()
+        session = self.dal.Session() if session is None else session
 
-        query = session.query(Device).join(Movement).filter(
-            Movement.from_node == location,
-            Movement.to_node == None
+        query = session.query(Device).join(Token).join(Node).filter(
+            Node.key == location_key,
+            Token.state == 'avalaible'
             ).order_by(Device.tracking)
 
         devices_by_tracking = {}
@@ -189,22 +214,22 @@ class DataAccessModule:
 
         return devices_by_key
 
-    def get_item(self, serial_number, resource_key):
-        return self.dal.session.query(Item).join(Resource).filter(
-            Dut.tracking == serial_number,
-            Resource.key == resource_key
-            ).first()
+    # def get_item(self, serial_number, resource_key):
+    #     return self.dal.session.query(Item).join(Resource).filter(
+    #         Dut.tracking == serial_number,
+    #         Resource.key == resource_key
+    #         ).first()
 
-    def create_dut(self, resource_key, serial_number):
-        resource = self.dal.session.query(Resource).filter(
-            Resource.key == resource_key).first()
+    # def create_dut(self, resource_key, serial_number):
+    #     resource = self.dal.session.query(Resource).filter(
+    #         Resource.key == resource_key).first()
 
-        return Dut(resource, tracking= serial_number)
+    #     return Dut(resource, tracking= serial_number)
 
-    def get_dut_at_location(self, serial_number, location_key):
-        qry = self.dal.session.query(Dut).join(Movement).filter(
-            Dut.tracking == serial_number,
-            Movement.to_node is None,
-            Node.key == location_key
-            )
-        return qry.first()
+     # def get_dut_at_location(self, serial_number, location_key):
+     #    qry = self.dal.session.query(Dut).join(Movement).filter(
+     #        Dut.tracking == serial_number,
+     #        Movement.to_node is None,
+     #        Node.key == location_key
+     #        )
+     #    return qry.first()

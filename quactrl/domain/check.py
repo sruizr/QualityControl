@@ -1,10 +1,9 @@
 from enum import Enum
 from sqlalchemy.orm import synonym, reconstructor
 from threading import Thread, Event
-from quactrl.domain.erp import (Item, Resource, Movement, PathResource,
-                                ItemRelation, Path, Node, Pars)
+from quactrl.domain.erp import (Item, Resource, PathResource,
+                                ItemRelation, Path, Node, Pars, Flow)
 from datetime import datetime
-
 
 
 class Result(Enum):
@@ -38,18 +37,10 @@ class Sampling(Enum):
 class ControlPlan(Path):
     __mapper_args__ = {'polymorphic_identity': 'control_plan'}
 
-    @reconstructor
-    def after_load(self):
-        pass
-
-
-class Control(Path):
-    __mapper_args__ = {'polymorphic_identity': 'control'}
-
-    characteristic = None
-
-    def __init__(self, method_name, pars=None):
+    def __init__(self, name='Plan for testing 100% pars', method_name='quactrl.methods.by_pass', pars=None, **kwargs):
+        super().__init__(**kwargs)
         self.method_name = method_name
+        self.name = name
         if pars:
             self.pars = Pars(pars)
 
@@ -57,61 +48,129 @@ class Control(Path):
     def after_load(self):
         pass
 
+    def create_flow(self, responsible, controller=None):
+        return Test(self, responsible, controller)
+
+
+class Control(Path):
+    __mapper_args__ = {'polymorphic_identity': 'control'}
+
+    characteristic = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @reconstructor
+    def after_load(self):
+        pass
+
     def add_characteristic(self, characteristic, **pars):
-        path_resource = PathResource(self, characteristic, pars)
+
+        path_resource = PathResource(self, characteristic, 'out', pars=pars)
         self.resource_list.append(path_resource)
 
+    def create_flow(self, test, responsible):
+        return Check(self, test, responsible, self.controller)
 
-class Check(Item):
+    def set_pars(self, pars):
+        if self.pars:
+            self.pars.set(pars)
+        else:
+            self.pars = Pars(pars)
+
+    def get_pars(self):
+        if self.pars:
+            return self.pars.get()
+
+
+class Check(Flow):
     """Result a control after execution """
     __mapper_args__ = {'polymorphic_identity': 'check'}
 
-    def __init__(self, test, control, item_to_check, device=None, view=None):
-        super().__init__(path=control, resource=control.characteristic)
-        ItemRelation(
-            from_item=self,
-            to_item=item_to_check,
-            relation_class='for'
-            )
-        self.control = control
-        self.control.insert_item(self)
+    control = synonym('path')
 
-        self.item = item_to_check
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        self.state = 'ongoing'
-        if device:
-            device.children.append(ItemRelation(self, rel='with'))
-
-        self.view = view
-        self.update_view()
         self.defects = []
         self.measures = []
 
-    def add_measure(self, characteristic, value):
-        self.measures.append(
-            Measure(self.item, self, characteristic, value)
-            )
+    def prepare(self):
+        self.characteristics = {}
+        for res_rel in self.path.resource_list:
+            if res_rel.flow == 'out':
+                characteristic = res_rel.resource
+                if res_rel.pars:
+                    limits  = res_rel.pars.get().get('limits')
+                    if limits:
+                        characteristic.limits = limits
+                self.characteristics[characteristic.key] = characteristic
 
-    def add_defect(self, failure_mode):
-        self.defects.append(
-            Defect(self.item, self, failure_mode)
-            )
+        self.part = self.parent.part
+        self.devices = self.parent.path.devices
 
-    def update_view(self):
-        if self.view:
-            self.view.udpate_check(self)
+    def add_measure(self, value, characteristic, tracking='', parent=None):
+        measurement = Measurement(resource=characteristic, tracking=tracking)
+        if parent:
+            relation = ItemRelation(relation_class='contains')
+            relation.to_node = measurement
+            parent.destinations.append(relation)
 
-    def close(self):
-        if self.defects:
-            self.state = 'nok'
-        else:
+        self.outputs.append((measurement, value))
+
+    def add_defect(self, failure_mode, tracking='', parent=None):
+        self.state = 'nok'
+
+        defect = Defect(resource=failure_mode, tracking=tracking)
+        if parent:
+            relation = ItemRelation(relation_class='contains')
+            relation.to_node = defect
+            parent.destinations.append(relation)
+
+        self.outputs.append((defect, 1.0))
+
+    def eval_measure(self, value, characteristic,
+                     modes=['low', 'high', 'suspicious'],
+                     uncertainty=0):
+
+        limits = getattr(characteristic, 'limits', None)
+        if limits:
+            mode = None
+
+            low_limit = limits[0]
+            if low_limit is not None:
+                sure_low = low_limit + uncertainty
+                if value < sure_low:
+                    mode = '{} {}'.format(modes[2],
+                                                       modes[0])
+                if value < low_limit:
+                    mode = modes[0]
+
+            top_limit = limits[1]
+            if top_limit is not None:
+                sure_top = top_limit - uncertainty
+                if value > sure_top:
+                    mode = '{} {}'.format(modes[2],
+                                                       modes[1])
+                if value > top_limit:
+                    mode = modes[1]
+
+            if mode:
+                failure_mode = characteristic.get_failure_mode(mode)
+                return failure_mode
+
+    def terminate(self):
+        state = self.state
+        super().terminate()
+
+        if state == 'ongoing':
             self.state = 'ok'
-
-        self.update_view()
+        else:
+            self.state = state
 
     def cancel(self):
+        super().terminate()
         self.state = 'cancelled'
-        self.update_view()
 
     @reconstructor
     def after_load(self):
@@ -128,181 +187,58 @@ class Check(Item):
                 self.item = item
 
 
-class Test(Item):
+class Test(Flow):
     """Group of checks following a control plan"""
     __mapper_args__ = {'polymorphic_identity': 'test'}
     control_plan = synonym('path')
 
-    def __init__(self, control_plan, user):
-        self.control_plan = control_plan
-        self.control_plan.insert_item(self, user=user)
+    def __init__(self, control_plan, responsible, controller=None):
+        Flow.__init__(self, path=control_plan,
+                      responsible=responsible,
+                      controller=controller)
+        self.state = 'started'
+        for control in control_plan.children:
+            check = Check(control=control, responsible=responsible,
+                                       controller=controller)
+            self.children.append(check)
 
+    def prepare(self):
+        super().prepare()
+        self.part = self.in_tokens[0].item
+        self.devices = self.path.devices
+
+    def terminate(self):
+        super().terminate()
+
+        self.state = self.eval_test_result()
+
+        if self.state != 'ok': # Return all to origin node
+            for token in self.out_tokens:
+                token.node = self.path.from_node
+
+    def eval_test_result(self):
+        state = 'ok'
+        for check in self.children:
+            if check.state == 'nok':
+                state = 'nok'
+
+                break
+            elif check.state == 'cancelled':
+                state = 'cancelled'
+                break
+            elif check.state == 'suspicious':
+                state = 'suspicious'
+
+        return state
 
 class Defect(Item):
     __mapper_args__ = {'polymorphic_identity': 'defect'}
     failure_mode = synonym('resource')
 
-    def __init__(self, checked_item, check, failure_mode):
-        self.failure_mode = failure_mode
 
-        # Links check with defect result
-        self.check = check
-        ItemRelation(
-            from_item=check, to_item=self,
-            relation_class='contains'
-            )
-
-        # Links item with its defect
-        self.item = checked_item
-        ItemRelation(
-            from_item=checked_item, to_item=self,
-            relation_class='contains'
-            )
-
-
-class Measure(Item):
-    __mapper_args__ = {'polymorphic_identity': 'measure'}
+class Measurement(Item):
+    __mapper_args__ = {'polymorphic_identity': 'measurement'}
     characteristic = synonym('resource')
-
-    def __init__(self, measured_item, check, characteristic, value):
-        self.characteristic = characteristic
-
-        # Link check with measure as check result
-        self.check = check
-        ItemRelation(
-            from_item=check, to_item=self,
-            relation_class='contains'
-            )
-
-        # Link measured item with measure
-        self.item = measured_item
-        ItemRelation(
-            from_item=measured_item, to_item=self,
-            relation_class='contains'
-            )
-
-        self.value = value
-        check.control.insert_item(self, qty=value)
-
-    @reconstructor
-    def after_load(self):
-        self.value = self.movements[-1].qty
-
-    # sample = Column(Integer)
-    # verifier = Column(String)
-    # state = Column(Integer)
-    # checks = []
-    # # open_date = Column(Datetime)
-
-    # def __init__(self, part, verifier, process, control_plan):
-    #     self.verifier = verifier
-    #     self.process = process
-    #     self.state = Result.PENDING
-    #     for control in self.controls:
-    #         check = Check(self, control)
-    #         self.checks.append(check)
-
-    #     self.session = dal.Session()
-    #     self.session.add(self)
-    #     self.session.commit()
-
-    #     self.current_check_index = None
-    #     self.observers = []
-
-    # def execute(self):
-    #     """Run sequence of tests sequentially"""
-
-    #     if self.current_check_index is None:
-    #         self.current_check_index = 0
-
-    #     try:
-    #         check = self.checks[self.current_check_index]
-    #         check.execute()
-    #     except Exception as e:
-    #         self.close()
-    #         raise e
-
-    # def update(self, check, progress=100):
-    #     self.notify(check, progress)
-
-    #     if self.state == Result.CANCELLED:
-    #         return None
-
-    #     if progress == 100:
-    #         self.current_check_index += 1
-    #         if self.current_check_index == len(self.checks):
-    #             # check sequence  is finished
-    #             self.current_check_index = None
-    #             self.close()
-    #         else:
-    #             self.execute()
-
-
-
-
-# class Measurement(Model):
-#     __mapper_args__ = {'polymorphic_identity': 'measurement'}
-
-#     check_id = Column(Integer, ForeignKey('check.id'))
-#     characteristic_id = Column(Integer, ForeignKey('characteristic.id'))
-#     value = Column(DECIMAL)
-#     index = Column(Integer)
-
-
-# class Failure(Item):
-#     __mapper_args__ = {'polymorphic_identity': 'failure'}
-
-
-# class Check(Model):
-#     __tablename__ = 'check'
-#     control = Column(Integer)
-#     test_id = Column(Integer, ForeignKey('test.id'))
-#     result = Column(Integer)
-#     state = Column(Integer)
-
-
-#     failures = relationship('Failure', backref='check')
-#     measures = relationship('Measurement', backref='check')
-
-#     def __init__(self, test, control):
-#         self.open_date = datetime.now()
-#         self.test = test
-#         self.control = control
-
-#         self.method = method_factory.get_method(control.method)
-
-#         self.state = Result.PENDING
-#         self.failures = []
-#         self.measures = dict()
-
-#     def add_failure(self, f_mode, characteristic, item, device):
-#         """Append failures to checks"""
-#         failure = Failure(f_mode, characteristic, item, device)
-#         self.failures.append(failure)
-
-#     def get_measure(self, characteristic, item=None, device=None):
-#         """Get stored measure from characteristic"""
-#         pass
-
-#     def add_measure(self, value, characteristic, item=None, device=None):
-#         """Append measurements to measures"""
-#         measure = Measure(value, characteristic, item, device)
-#         self.measures.append(measure)
-
-#     def process_results(self):
-#         """"Persist measures and failures and state final result of check"""
-#         if self.failures == []:
-#             self.state = Result.OK
-#         else:
-#             self.state = Result.NOK
-
-#     def close(self, observer=None):
-#         """Execute the check"""
-#         self.open_date = datetime.now()
-#         self.state = Result.ONGOING
-#         self.method()
-#         self.process_results()
-#         self.close_date = datetime.now()
 
 
 class DataAccessModule:

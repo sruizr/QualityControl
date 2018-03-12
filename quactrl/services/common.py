@@ -1,6 +1,8 @@
-from threading import Thread, Event
+from threading import Thread, Event, get_ident
 from queue import Queue
 from quactrl.domain import get_component
+from quactrl.domain.check import Test
+from quactrl.domain.erp import Flow
 
 
 class InsertItemError(Exception):
@@ -14,58 +16,6 @@ class IncorrectOperationInputs(Exception):
 class MethodError(Exception):
     pass
 
-
-class OneItemFlowService:
-    def __init__(self, environment):
-        super().__init__()
-        dal = environment.dal
-
-        self.interrupt_event = Event()
-        self.controller = environment.controller
-        self.main_queue = Queue()
-        self.generator = PullRunner(destination=self.main_queue,
-                                    interrupt_event=self.interrupt_event
-                                    )
-        self.generator.adapter = ProcessAdapter(
-            self.generator, dal,
-            to_node_key=environment.location_key,
-            from_node=None
-            )
-        self.operation = PullRunner(origin=self.main_queue,
-                                    controller=self.controller,
-                                    interrupt_event=self.interrupt_event
-                                    )
-        self.operation.adapter = ProcessAdapter(
-            self.operation, dal,
-            from_node_key=environment.location_key,
-            name=environment.operation_name
-            )
-
-    def enter_item(self, item_data, responsible):
-        tokens = self.operation.adapter.get_tokens(item_data)
-        if tokens is None:
-            if self.generator.is_loaded():
-                self.generator.origin.put(((item_data, 1.0), responsible))
-            else:
-                self.controller.notify_error(
-                    InsertItemError(),
-                    item_data
-                    )
-        else:
-            self.operation.source.put((tokens, responsible))
-
-    def start(self):
-        if self.generator.is_loaded():
-            self.generator.start()
-        self.operation.start()
-
-    def stop(self):
-        self.operation.origin.put(None)
-        if self.generator.has_path():
-            self.generator.origin.put(None)
-
-    def interrupt(self):
-        self.interrupt_event.set()
 
 
 class MethodRepo:
@@ -83,9 +33,13 @@ class MethodRepo:
 
 
 class PullRunner(Thread):
-    def __init__(self, origin=None, destination=None, interrupt_event=None,
-                 controller=None):
+    def __init__(self, dal,  origin=None, destination=None,
+                 interrupt_event=None, controller=None, **path_args):
         super().__init__()
+
+        self.dal = dal
+        self.path_args = path_args
+
         self.interrupt_event = interrupt_event
         self.controller = controller
 
@@ -98,6 +52,9 @@ class PullRunner(Thread):
         self.adapter = None
         self.path = None
 
+        self.stop_cycle = False
+        self.responsible_key = None
+
     def path_is_loaded(self):
         return self.path is not None
 
@@ -105,82 +62,154 @@ class PullRunner(Thread):
         self.steps = []
         if self.path:
             self.method = MethodRepo.get(self.path.method_name)
-            for sub_path in self.path.children:
-                self.steps.append(StepRunner(sub_path))
+
+    def set_responsible_by_key(self, key):
+        self.responsible_key = key
+
+    def _shall_interrupt(self):
+        return (self.interrupt_event is not None and
+                self.interrupt_event.is_set())
+
+    def _are_tokens(self, inputs):
+        result = type(inputs) is list
+        if result:
+            for value in inputs:
+                result = result and type(value) is int
+        return result
 
     def run(self):
+        self.adapter = ProcessAdapter(self, self.dal, self.path_args)
+        self.adapter.open()
+        responsible = None
         while True:
-            _input = self.origin.get()
-            if _input is None or (
-                    self.interrupt_event is not None and
-                    self.interrupt_event.is_set()
-                    ):  # thread is finished
-                break
-            in_tokens, responsible = _input
-            if (self.path is None or
-                    not self.path.accept_tokens(in_tokens)):
-                self.adapter.set_path(in_tokens)
-                self.adapter.set_devices()
-                self.load_process()
+            inputs = self.origin.get()
 
-            if self.path is None:
-                self.notify_error(IncorrectOperationInputs(), tokens=in_tokens)
+            # There are external orders to stop thread
+            if inputs is None or self._shall_interrupt():  # thread is finished
+                break
+
+            if responsible is None or (
+                    responsible.key != self.responsible_key):
+                responsible = self.adapter.get_person(self.responsible_key)
+            if responsible is None:
+                    self._notify_error('AbsentResponsible')
             else:
-                if self.path.children:
-                    for step in self.steps:
-                        step.execute(in_tokens)
-                        if (self.interrupt_event is not None and
-                                self.interrupt_event.is_set()):
-                            self.adapter.commit()
-                            break
-                self.execute(in_tokens)
-                self.path.process_tokens(responsible)
-                self.destination.put(self.process.out_tokens)
-                self.controller.notify('process_finished', self.path)
-            self.adapter.commit()
+                if self._are_tokens(inputs): # list of integers
+                    in_tokens = self.adapter.get_tokens_by_ids(inputs)
+                    inputs = []
+                else:
+                    in_tokens = []
+                    inputs = [inputs]
+
+                if (self.path is None or
+                       not self.path.accept_inputs(inputs)):
+                    self.path = self.adapter.get_path(inputs)
+                    self.path.devices = self.adapter.get_devices()
+                    self.load_process()
+
+                if self.path is None:
+                    self._notify_error('IncorrentOperationInputs',
+                                                 inputs=inputs)
+                else:
+
+                    self.flow = self.path.create_flow(responsible,
+                                                      self.controller)
+                    self.flow.inputs = inputs
+                    self.flow.in_tokens = in_tokens
+                    self.adapter.add(self.flow)
+                    self.flow.prepare()
+
+                    self._update(self.flow)
+                    cancel = self.stop_cycle
+                    if self.flow.children:
+                        for step in self.flow.children:
+                            step.prepare()
+                            self._update(step)
+                            if cancel:
+                                step.cancel()
+                            else:
+                                try:
+                                    step.execute()
+                                    step.terminate()
+                                except Exception as e:
+                                    cancel = True
+                                    step.cancel()
+                                    self._notify_error(e, step=step)
+                            self._update(step)
+
+                            if self._shall_interrupt():
+                                cancel = True
+                            if self.stop_cycle:
+                                cancel = True
+                                self.stop_cycle = False
+                    if cancel:
+                        self.flow.cancel()
+                    else:
+                        self.flow.execute()
+                        self.flow.terminate()
+                    self.adapter.commit()
+                    self._update(self.flow)
+                    if self._shall_interrupt():
+                        break
+                    self.destination.put([token.id
+                                          for token in self.flow.out_tokens])
         self.adapter.close()
 
-    def execute(self, in_tokens):
-        if self.method:
-            self.method(self.path, in_tokens, self.devices,
-                        self.controller)
+    def cancel_cycle(self):
+        self.stop_cycle = True
+
+    def _notify(self, message_key, *obj):
+        if self.controller:
+            self.controller.notify(message_key, *obj)
+
+    def _notify_error(self, message_key, **kwargs):
+        if self.controller:
+            self.controller.notify_error(message_key, **kwargs)
+
+    def _update(self, obj):
+        if self.controller:
+            self.controller.update(obj)
 
 
 class ProcessAdapter:
     """Adapter between dinamic ProcessRunner and Static Path on Domain"""
-    def __init__(self, process_runner, dal, **path_args):
+    def __init__(self, process_runner, dal, path_args):
         self.process_runner = process_runner
         self.dal = dal
-        self.session = self.process_runner.session
         self.path_args = path_args
+        self._session = None
+
+    def get_path(self, in_items=None):
+        """Load a path compatible with the in_items, return None otherwise"""
+
+        return  self.dal.plan.get_path(self.path_args,
+                                                       self._session)
+
+    def get_devices(self):
+        return  self.dal.do.get_devices_by_location(
+            self.process_runner.path.from_node.key, self._session
+            )
+
+    def find_inputs(self, item_args):
+        inputs = self.dal.do.get_avalaible_inputs(
+            self.path_args['from_node_key'], item_args, self._session
+        )
+        return inputs
+
+    def get_person(self, key):
+        return self.dal.do.get_person(key, self._session)
+
+    def get_tokens_by_ids(self, token_ids):
+        return self.dal.do.get_tokens_by_ids(token_ids, self._session)
+
+    def open(self):
         self._session = self.dal.Session()
 
-    def set_path(self, in_items):
-        """Load a path compatible with the in_items, return None otherwise"""
-        self.process_runner.path = self.dal.get_path(self.path_args, self.session)
-
-    def set_devices(self):
-        if self.process_runner.path:
-            self.process_runner.devices = self.dal.do.get_devices_by_location(
-                self.process_runner.path.from_node
-            )
-    def find_inputs(self, **item_args):
-        inputs = self.dal.do.get_inputs(self.path, item_args, self.session)
-        return inputs
+    def add(self, obj):
+        self._session.add(obj)
 
     def commit(self):
         self._session.commit()
 
     def close(self):
         self._session.close()
-
-
-class StepRunner:
-    """Sync version of path"""
-    def __init__(self, process):
-        self.process = process
-        self.method = MethodRepo.get(self.method_name)
-
-    def execute(self, in_resources, devices, controller=None):
-        if self.method:
-            self.method(self.process, in_resources, devices, controller)

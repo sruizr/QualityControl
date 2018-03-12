@@ -38,6 +38,9 @@ class DataAccessLayer:
 
             self.conn_string = conn_string
             self.engine = create_engine(self.conn_string, echo=echo)
+            self.engine = create_engine(self.conn_string, # echo=echo)
+                                        connect_args={'check_same_thread': False},
+                                        echo=echo)
             self.metadata = Base.metadata
             self.connection = self.engine.connect()
             self.Session = sessionmaker()
@@ -51,10 +54,20 @@ class DataAccessLayer:
         filler.load()
 
     def clear_all_data(self):
-        session = self.Session()
-        for table in reversed(self.metadata.sorted_tables):
-            session.execute(table.delete())
-        session.commit()
+        self.metadata.drop_all(self.engine)
+        # session = self.Session()
+        # fks = set()
+        # for table in reversed(self.metadata.sorted_tables):
+        #     for fk in table.foreign_keys:
+        #         fks.add(fk)
+
+        # for fk in fks:
+        #     session.execute(fk.drop())
+
+        # for table in reversed(self.metadata.sorted_tables):
+        #     session.execute(table.delete())
+
+        # session.commit()
 
     def clear_schema(self):
         pass

@@ -155,8 +155,6 @@ class ItemRelation(Base):
 class Path(Base, WithPars):
     __tablename__ = 'path'
     is_a = Column(String(15))
-    created_on = Column(DateTime, default=datetime.now)
-    removed_on = Column(DateTime)
     __mapper_args__ = {
         'polymorphic_on': is_a
     }
@@ -327,14 +325,13 @@ class Flow(Base):
 
         # (item, qty)
         for output in self.outputs:
-            Token(
-                item= output[0],
-                qty=output[1],
-                node=self.path.to_node,
-                flow=self,
-                state='avalaible'
-            )
-
+                Token(
+                    item= output[0],
+                    qty=output[1],
+                    node=self.path.to_node,
+                    flow=self,
+                    state='avalaible'
+                )
         self.finished_on = datetime.now()
         self.state = 'done'
 

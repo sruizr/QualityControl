@@ -3,231 +3,114 @@ from threading import Thread, Event, Timer
 from queue import Queue
 from quactrl.domain.check import Test, Check
 from quactrl.domain import get_component
-import pdb
+from quactrl.services.common import ProcessAdapter, PullRunner
 
 
-
-
-class InspectionManager:
-    """Manage one tree of controls"""
+class OneItemFlowService:
     def __init__(self, environment):
-
-        self.env = environment
-        self.dal = self.env.dal
-        self._partnumber = None
-        self.process_inspector = None
-        self.process = None
-        self.batches = {}
-
-    def set_process(self, value):
-        """Load device repository for the current process"""
-        self.process = value
-        cavities = self.process.main_device.pars.get('cavities', 1)
-
-        self.inspectors = [None] * cavities
-
-        test_plan = self.dal.check.get_test_plan(self.process)
-        if test_plan:
-            self.process_inspector = Inspector(test_plan,
-                                               responsible=self.responsible)
-
-    def set_operator(self, value):
-        self.operator = value
-
-    def setup_batch(self, batch, cavity=None):
-        """Load inspectors and their controls into the service"""
-        for inspector in self.inspectors:
-            inspector.session.stop()
-
-        load_controls = self.batch is None
-        if not load_controls:
-            load_controls = (self.batch.partnumber == batch.partnumber)
-        self.batch = batch
-        if not load_controls:
-            return None
-
-        control_plans = self.dal.get_test_plan(self.process,
-                                               batch.partnumber)
-        self.inspectors = []
-        for control_plan in control_plans:
-            n_inspectors = getattr(control_plan, 'inspectors', 1)
-            resolution = getattr(control_plan, 'resolution', 0)
-            for _ in range(n_inspectors):
-                inspector = Inspector(self)
-                inspector.setup_batch(control_plan.controls, resolution)
-                self.inspectors.append(inspector)
-
-        for inspector in self.inspectors:
-            inspector.session.start()
-
-    def receive_part(self, part, cavity=0):
-        if part.batch != self.batch:
-            self.setup_batch(part.batch)
-        self.inspectors[cavity].receive_part(part)
-
-    def check_finished(self, inspector, check):
-        if inspector.session.resolution != 0:
-            self.env.session.add(check)
-            self.env.session.commit()
-
-        self.env.view.update_check(check)
-
-    def check_initialized(self, check, cavity):
-        self.env.view.update_check(inspector, check)
-
-    def test_initalized(self, inspector, test):
-        pass
-
-    def test_finished(self, inspector, test):
-        self.env.view.show_test_finished(inspector, test)
-        if inspector.session.resolution == 0:
-            self.env.session.add(test)
-
-
-class InspectionSession(Thread):
-    """Base class for inspection sessions, manages a secuence of
-control_runners"""
-
-    def __init__(self, inspector, resolution=0):
-        """"Inits with inspector inspection,  resolution = 0 means
-it waits till even init cycle is set"""
         super().__init__()
-        self.inspector = inspector
-        self.cycle_stopped = False
-        self.session_stopped = False
-        self.resolution = resolution
+        dal = environment.dal
 
-    def _process_cycle(self):
-        for control_runner in self.inspector.control_runners:
-            if self.cycle_stopped:  # Interrupts just before the test begins
-                self.inspector.test.state = 'cancelled'
-                return None
-            else:
-                check = control_runner.count()
-                if check:
-                    self.inspector.service.check_initialized(self.inspector,
-                                                             check)
-                    control_runner.run(check)
-                    # Asyncronous method
-                    wait_time = check.control.pars.get('wait_time', 1)
-                    while check.state == 'ongoing':  # Asyncronous (long time) method
-                        if self.cycle_stopped:
-                            check.cancel()
-                            check.state = 'cancelled'
-                            self.inspector.test.state = 'cancelled'
-                            return None
-                        time.sleep(wait_time)
-                    check.eval()
-                    self.inspector.service.check_finished(self.inspector,
-                                                          check)
 
-    def run(self):
-        while True:
-            self.inspector.current_part = self.inspector.parts_queue.get()
-            if self.session_stopped:
-                break
-            self.inspector.test = Test()
-            self.inspector.service.test_initalized(self.inspector)
-            self._process_cycle()
-            if self.inspector.test.checks:
-                self.inspector.service.test_finished(self.inspector)
-            else:
-                del(self.inspector.test)
-            self.cycle_stopped = False
-            if self.resolution != 0:
-                self.inspector.parts_queue.set(None)
-            time.sleep(self.resolution)
+        self.interrupt_event = Event()
+        self.controller = environment.controller
+        self.controller.service = self
+        self.location_key = environment.origin_key
+        self.destination_key = environment.destination_key
+        self.main_queue = Queue()
+        self.generator = PullRunner(
+            dal, destination=self.main_queue,
+            controller=self.controller,
+            interrupt_event=self.interrupt_event,
+            from_node_key='wip',
+            to_node_key=self.location_key
+        )
 
-    def stop_cycle(self):
-        """Stops a cycle as soon as possible"""
-        self.cycle_stopped = True
+        self.operation = PullRunner(
+            dal, origin=self.main_queue,
+            controller=self.controller,
+            interrupt_event=self.interrupt_event,
+            from_node_key=self.location_key,
+            to_node_key=self.destination_key
+        )
+        self.dal = dal
+        self.responsible_key = None
+
+    def enter_item(self, item_data, responsible_key):
+
+        if (self.responsible_key is None or
+                self.responsible_key != responsible_key):
+            self.operation.set_responsible_by_key(responsible_key)
+            self.generator.set_responsible_by_key(responsible_key)
+
+        token_ids = self.dal.do.get_avalaible_token_ids(
+            location_key=self.location_key, item_args=item_data)
+
+        if token_ids:
+            self.operation.origin.put(token_ids)
+        else:
+            self.generator.origin.put(item_data)
+
+    def start(self):
+        self.generator.start()
+        self.operation.start()
 
     def stop(self):
-        """Stop session but waits till cycle ends"""
-        self.session_stopped = True
-        if self.inspector.parts_queue.empty():
-            self.inspector.parts_queue.put(None)
-        self.join()
+        self.generator.origin.put(None)
+        while self.generator.is_alive():
+            pass
+
+        self.operation.origin.put(None)
 
     def interrupt(self):
-        self.stop_cycle()
-        self.stop_session()
+        self.interrupt_event.set()
+
+    def stop_cycle(self):
+        self.operation.stop_cycle()
 
 
-class Inspector:
-
-    def __init__(self, service, responsible):
+class ManyCavitiesService:
+    def __init__(self, environment):
         super().__init__()
-        self.service = service
-        self.control_runners = []
-        self.current_part = None
-        self.parts_queue = Queue()
-        self.responsible = responsible
+        dal = environment.dal
 
-    def setup_batch(self, controls):
-        self._load_controls(controls)
-        self.session = InspectionSession(self)
-        self.session.start()
+        self.controller = environment.controller
+        self.controller.service = self
 
-    def receive_part(self, part):
-        self.parts_queue.set(part)
+        self.origin_key = environment.origin_key
+        self.destination_key = environment.destination_key
 
-    def start_ongoing(self, controls, resolution):
-        """Begins a continous session no dependent of parts"""
-        self._load_controls(controls)
-        self.session = InspectionSession(self, resolution)
-        self.session.start()
+        self.cavities = environment.cavities
 
-    def _load_controls(self, controls):
-        for control in controls:
-            self.control_runners.append(
-                ControlRunner(self, control)
+        self.inspectors = []
+        for cavity in range(cavities):
+            inspector = PullRunner(
+                dal, controller=self.controller,
+                interrupt_event=self.interrupt_event,
+                from_node_key=self.origin_key,
+                to_node_key=self.destination_key
                 )
+            inspector.cavity_number = cavity
+            self.inspectors.append(inspector)
 
-    def eval_value(self, value, characteristic, uncertainty,
-                   modes=['low', 'high', 'suspicious']):
-
-        limits = characteristic.limits
-        repo_fry = self.service.env.repo_fry
-        failure_mode_repo = repo_fry.get('FailureMode')
-
-        mode = None
-
-        low_limit = limits[0]
-        if low_limit is not None:
-            sure_low = low_limit + uncertainty
-            if value < sure_low:
-                mode = '{} {}'.format(modes[2], modes[0])
-            if value < low_limit:
-                mode = modes[0]
-
-        top_limit = limits[1]
-        if top_limit is not None:
-            sure_top = top_limit - uncertainty
-            if value > sure_top:
-                mode = '{} {}'.format(modes[2], modes[1])
-            if value > top_limit:
-                mode = modes[1]
-
-        failure_mode = None
-        if mode:
-            failure_mode = failure_mode_repo.get(mode, characteristic)
-
-        return failure_mode
+        self.interrupt_event = Event()
+        self.responsible_key = None
 
 
-class ControlRunner:
-    """Execute the method of the control only if satisfy sampling criteria"""
-    def __init__(self, inspector, control):
-        self.inspector = inspector
-        self.control = control
-        self.method = self.inspector.service.env.method_repo.get(
-            control.method_name)
+    def enter_item(self, item_data, responsible_key):
+        cavity_number = item_data['cavity_number']
+        self.inspectors[cavity_number].origin.put(item_data)
 
-    def count(self):
-        if self.control.sampling.check_is_needed():
-            part = getattr(self.inspector, 'current_part', None)
-            return Check(self.inspector.test, self.control, part)
+    def start(self):
+        for inspector in self.inspectors:
+            inspector.start()
 
-    def run_method(self, check):
-        self.method(self.inspector, check)
+    def stop(self):
+        for inspector in self.inspectors:
+            inspector.origin.put(None)
+
+    def interrupt(self):
+        self.interrupt_event.set()
+
+    def cancel(self, cavity):
+        self.inspectors[cavity].cancel_order()
