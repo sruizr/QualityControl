@@ -28,12 +28,19 @@ class DataAccessLayer:
         self.do = Do(self)
         self.act = Act(self)
 
-    def db_init(self, conn_string, echo=False):
-        self.conn_string = conn_string
-        self.engine = create_engine(self.conn_string, echo=echo)
-        self.metadata = Base.metadata
-        self.connection = self.engine.connect()
-        self.Session = sessionmaker()
+    def db_init(self, connection_string):
+        args = connection_string.split(';')
+        self.connection_string = args[0]
+
+        self.option_args = {}
+        if len(args) > 1:
+            option_args = {}
+
+            self.conn_string = conn_string
+            self.engine = create_engine(self.conn_string, echo=echo)
+            self.metadata = Base.metadata
+            self.connection = self.engine.connect()
+            self.Session = sessionmaker()
 
     def prepare_db(self):
         """Create tables (if no exist) and bind database to class"""

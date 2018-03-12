@@ -91,6 +91,7 @@ class Node(Base):
     def remove_item(self, item, qty=1.0, path=None, responsible=None):
         pass #TODO
 
+
 class NodeRelation(Base):
     __tablename__ = 'node_relation'
     id = Column(Integer, primary_key=True)
@@ -157,6 +158,8 @@ class ItemRelation(Base):
 class Path(Base, WithPars):
     __tablename__ = 'path'
     is_a = Column(String(15))
+    created_on = Column(DateTime, default=datetime.now)
+    removed_on = Column(DateTime)
     __mapper_args__ = {
         'polymorphic_on': is_a
     }
