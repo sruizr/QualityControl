@@ -3,6 +3,7 @@ from queue import Queue
 from quactrl.domain import get_component
 from quactrl.domain.check import Test
 from quactrl.domain.erp import Flow
+from quactrl.domain.data import dal
 
 
 class InsertItemError(Exception):
@@ -31,8 +32,16 @@ class MethodRepo:
 
         return cls._methods[key]
 
+class ProcessRunner(Thread):
+    pass
 
-class PullRunner(Thread):
+
+class PullRunner(ProcessRunner):
+    pass
+
+
+
+class PushRunner(Thread):
     def __init__(self, dal,  origin=None, destination=None,
                  interrupt_event=None, controller=None, **path_args):
         super().__init__()
