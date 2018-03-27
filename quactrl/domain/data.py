@@ -28,11 +28,9 @@ class DataAccessLayer:
         self.do = Do(self)
         self.act = Act(self)
 
-    def db_init(self, conn_string, echo=False):
+    def db_init(self, conn_string, echo=False, **kwargs):
         self.conn_string = conn_string
-        self.engine = create_engine(self.conn_string, # echo=echo)
-                                    connect_args={'check_same_thread': False},
-                                    echo=echo)
+        self.engine = create_engine(self.conn_string, echo=echo, **kwargs)
         self.metadata = Base.metadata
         self.connection = self.engine.connect()
         self.Session = sessionmaker()
