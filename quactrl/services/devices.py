@@ -1,9 +1,10 @@
 from queue import Queue
 import types
+from abc import ABC, abstractmethod
 from threading import Thread, Lock
 from quactrl.helpers import get_class
 
-
+""" A way to access to a device repository"""
 class Device:
     def __init__(self, **pars):
         if pars:
@@ -20,31 +21,66 @@ class Device:
                 setattr(self, key, att_value)
 
 
-class DeviceManager:
-    def __init__(self, workers=1):
-        self.orders = Queue()
-        self.workers = [Worker(self) for _ in range]
+class DeviceManager(ABC):
+    def __init__(self):
         self.devices = {}
-        for worker in self.workers:
+
+    def add_device(self, name, tracking, pars):
+        device = self.create_device(pars)
+        device.tracking = tracking
+        if name in self.devices.keys():
+            if type(self.devices[name]) is not list:
+                self.devices[name] = [self.devices[name]]
+            self.devices[name].append(device)
+        else:
+            self.devices[name] = device
+
+    def assembly_all(self):
+        devices_by_tracking = {}
+        for device in self.devices:
+            devices_by_tracking[device.tracking] = device
+
+        for device in self.devices:
+            device.assembly(devices_by_tracking)
+
+    @abstractmethod
+    def create_device(self, pars):
+        pass
+
+
+class SimpleDeviceManager(DeviceManager):
+    def __init__(self):
+        super().__init__()
+
+    def create_device(self, pars):
+        dev_pars = pars.copy()
+        Device = get_class(dev_pars.pop('class_name'))
+        device = Device(**dev_pars)
+        return device
+
+
+class ThreadPoolDeviceManager(DeviceManager):
+    def __init__(self, workers=1):
+        super().__init__()
+        self._orders = Queue()
+        self._workers = [Worker(self) for _ in range]
+        for worker in self._workers:
             worker.start()
 
-    def add_device(self, name, pars):
+    def create_device(self, pars):
         dev_pars = pars.copy()
         Device = get_class(dev_pars.pop('class_name'))
         device = Device(**dev_pars)
         device_proxy = DeviceProxy(device, self)
-        if name in self.devices.keys():
-            if type(self.devices[name]) is not list:
-                self.devices[name] = [self.devices[name]]
-            self.devices[name].append(device_proxy)
-        else:
-            self.devices[name] = device_proxy
+        return device_proxy
 
     def stop(self):
-        for worker in self.workers:
-            worker._stop = True
         for _ in range(len(self.workers)):
             self.orders.put(None)
+
+    def __del__(self):
+        """Closes all internal worker's threads"""
+        self.stop()
 
 
 class DeviceProxy:
@@ -57,9 +93,8 @@ class DeviceProxy:
     def __getattr__(self, name):
         if hasattr(self._impl, name):
             self._method = getattr(self._impl, name)
-            if (
-                name != 'assembly' or
-                isinstance(self._method, types.MethodType)
+            if (name == 'assembly' or
+                not isinstance(self._method, types.MethodType)
             ):
                 return self._method
             else:

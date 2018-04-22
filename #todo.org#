@@ -34,6 +34,7 @@
     - TemperatureErrorView
 * Domain
 - Ubica todos los objetos de dominio a usar en los servicios. Dentro del dominio se incluye la capa de persistencia
+
 - get_process_test_plan
 ** AutoTesterRunners
 *** Estructura
@@ -48,42 +49,23 @@
 - En este directorio se ubicarán todos los recursos posibles a activar en el API Rest
 ** DigSigner
    - Realiza firmas digitales de documentos pdf.
-   - /dig_signer
-     - GET /{id}
-       - Response:
-
 ** Mailer
    - Envía un email a través de API Rest
-   - /mailer
-     - POST: Envía un email
-       - Request:
-	 - json: {'template': string, 'fields':{}}
-       - Response:
-	 - status:
-	   - 201: Email Enviado
-	   - ...: Email no enviado
 ** AutoTester
    - Ejecuta tests automáticos
    - /tester
      - GET: Devuelve el estado del test, un listado de eventos
        - Response:
-	 - status:
-	   - 101: Proceso ejecutándose
-	   - 200: Proceso finalizado / En espera
-	   - 499: Proceso cancelado
-	 - json: {'events': [{'object': {}, 'name': string, '(cavity)': int}...]}
+	 - json: {'status': string, 'events': [{'object': {}, 'name': string, 'cavity': int(optional)}...]}
      - POST: Arranca test, si está ocupado lo pone en cola
        - Request:
-	 - json: {'item': {'part_number': string, 'serial_number': string}, '(cavity)': int}}
-	 - header: Auth
+	 - json: {'item': {'part_number': string, 'serial_number': string}, '
        - Response:
 	 - status:
 	   - 201: Arrancado el proceso
-	   - 499: No está configurado el útil
-     - PUT: Configura el útil a la ubicación que tiene asignada, carga todos los devices de la ubicación
-       - Request:
-	 - json: {'location': string}
-     - DELETE: Cancela el test actual, para poder arrancar el proceso se deberá hacer un PUT.
+     - PUT: Configura el útil a la ubicación que tiene asignada
+     - DELETE: Cancela el test actual
+
 * Root
 - Aquí se realizará el run.py con el que se corre el programa.
 - run.py deberá recibir un archivo .yaml para poder configurarse.

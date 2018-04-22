@@ -1,0 +1,64 @@
+#
+tittle: API REST interface from service of inspection
+
+/tester:
+  get:
+    description: Return status of tester
+    response:
+      status: 200
+      json:
+	status:  waiting | ongoing | closed
+	events: list
+	errors: [error, tracking]
+  post:
+    description: Insert a item order to inspect on tester
+    request:
+      json:
+	partnumber: string
+	tracking: string.
+	cavity: integer(optional)
+    response:
+      status: 200 | ???
+      json: error: optional
+  put:
+    description: Start/ComnfigConfig the service
+    request:
+      json:
+	location: string
+  delete:
+    description: Stops the service of testing
+
+/person:
+  get:
+    description: Return data of person
+    response:
+      json:
+	key: string
+	description: string
+	name: string
+  post:
+    description:
+    request:
+  put:
+    description: Set authorization of person to api rest
+    request:
+      json:
+	person_key: string
+	password: string
+    response:
+      token_id: cooke for authorizations
+
+
+
+
+/authorization:
+  post:
+    request:
+      json:
+	person_key: string
+	password: string
+
+event:
+  what: string
+  who: object{serialized}
+  how: string
