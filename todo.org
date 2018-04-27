@@ -1,3 +1,4 @@
+# TODOTAGS
 * Asegurarse que check.eval_measure da siempre None si no hay limits
 * View.request_event(message, event) -> Esta orden debe esperar hasta que el usuario decida arrancar
 * Children de caracteristicas debe tner un key tal que sea accesible. La estructura será un diccionario, no un listado
@@ -92,3 +93,22 @@
 - requests-mock el más utilizado
 - requests-staticmock parece que está mas pensado?
 - Se debe diseñar el API
+* Service
+** ApiRest
+*** TODO Server loads with host and port
+** Mail
+*** TODO PUT- MailResource loads template
+*** TODO POST- MailResource sends mail
+** Sign
+*** TODO PUT- SignResource loads a user certificate
+*** TODO GET- SignResource supplies signed document
+*** TODO POST- SignResource signs a doc
+** Test
+*** TODO POST- TestResource is started test from part information
+*** TODO POST- TestResource receives feedback from user
+*** TODO GET- TestResource reports events
+*** TODO GET- TestResource reports current parts under test
+*** TODO GET- TestResource reports current state
+*** TODO DEL- TestResource is stopped
+*** TODO POST- TestResource is logged
+*** OTOD
