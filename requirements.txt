@@ -13,4 +13,8 @@ rest-behave
 
 
 invoke
+
+# apirest
 ruamel.yaml
+cherrypy
+requests

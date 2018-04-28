@@ -9,17 +9,16 @@ from quactrl.domain.check import TestRunner
 def echo(request):
     return request.json
 
+
 runner = TestRunner
+
 
 @cherrypy.expose
 class AuTestResource:
-
-    def __init__(self,  counter):
-        self.counter = counter
+    runner = runner
 
     @cherrypy.tools.encode()
-    def GET(self, cavity=None):
-
+    def GET(self):
         return '{"hola":"Salva"}'
 
     @cherrypy.tools.json_in()
@@ -30,7 +29,6 @@ class AuTestResource:
         value['counter'] = self.counter
         return value
 
-    @cherrypy.popargs('location')
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
     def PUT(self, location):
