@@ -5,6 +5,8 @@ from quactrl.domain.erp import (Item, Resource, PathResource,
                                 ItemRelation, Path, Node, Pars, Flow)
 from datetime import datetime
 
+class TestRunner:
+    pass
 
 class Result(Enum):
     PENDING = 0

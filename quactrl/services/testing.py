@@ -1,6 +1,6 @@
 import cherrypy
 import json
-# from quactrl.domain.testers import TestRunner
+from quactrl.domain.check import TestRunner
 
 
 # runner = TestRunner()
@@ -9,14 +9,16 @@ import json
 def echo(request):
     return request.json
 
+runner = TestRunner
+
 @cherrypy.expose
-class TestResource:
+class AuTestResource:
 
     def __init__(self,  counter):
         self.counter = counter
 
     @cherrypy.tools.encode()
-    def GET(self):
+    def GET(self, cavity=None):
 
         return '{"hola":"Salva"}'
 

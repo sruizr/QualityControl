@@ -104,6 +104,7 @@
 *** TODO GET- SignResource supplies signed document
 *** TODO POST- SignResource signs a doc
 ** Test
+*** TODO PUT- TestResource is configured from location
 *** TODO POST- TestResource is started test from part information
 *** TODO POST- TestResource receives feedback from user
 *** TODO GET- TestResource reports events
@@ -111,4 +112,3 @@
 *** TODO GET- TestResource reports current state
 *** TODO DEL- TestResource is stopped
 *** TODO POST- TestResource is logged
-*** OTOD
