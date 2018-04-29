@@ -3,38 +3,83 @@ import json
 from quactrl.domain.check import TestRunner
 
 
-# runner = TestRunner()
-"""Tester for automatic testing with my tools"""
 
 def echo(request):
     return request.json
 
 
-runner = TestRunner
-
-
 @cherrypy.expose
 class AuTestResource:
-    runner = runner
+    runner = TestRunner()
 
-    @cherrypy.tools.encode()
-    def GET(self):
-        return '{"hola":"Salva"}'
+    @cherrypy.tools.json_out()
+    @cherrypy.popargs('filter')
+    def GET(self, filter=None):
+        if filter is None:
+            json_res = []
+            for test in self.runner.tests:
+                json_res.append(self._parse_test(test))
+            return json_res
+        elif filter == 'events':
+            return self._parse_events()
+        elif self._is_num(filter):
+            index = int(filter) - 1
+            test = self.runner.tests[index]
+            return self._parse_test(test)
+
+    def _is_num(self, value):
+        try:
+            int(value)
+            return True
+        except:
+            return False
+
+    def _parse_events(self):
+        pass
+
+
+    def _parse_test(self, test):
+        if test is None:
+            test_res ={'status': 'waiting'}
+        else:
+            test_res = {
+                'status': 'iddle',
+                'test_description': test.path.description,
+                'responsible_key': test.responsible.key,
+                'part': {
+                    'tracking': test.part.tracking,
+                    'key': test.part.resource.key,
+                    'name': test.part.resource.name,
+                    'description': test.part.resource.description
+                }
+            }
+        return test_res
 
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
     def POST(self):
-        value = cherrypy.request.json
-        self.counter += 1
-        value['counter'] = self.counter
-        return value
+        part_info = cherrypy.request.json
 
-    @cherrypy.tools.json_in()
+        self.runner.begin_test(**part_info)
+        index = int(part_info.get('cavity', 1)) - 1
+
+        json_res = self._parse_test(self.runner.tests[index])
+        return json_res
+
+    @cherrypy.popargs('location')
     @cherrypy.tools.json_out()
     def PUT(self, location):
+        try:
+            self.runner.set_location(location)
+        except:
+            cherrypy.response.status_code = 404
+            raise
+
         return {'status': 'done', 'location': location}
 
-    @cherrypy.tools.json_in()
-    @cherrypy.tools.json_out()
-    def PATCH(self):
-        return echo(cherrypy.request)
+    @cherrypy.popargs('filter')
+    def DELETE(self, filter=None):
+        if filter is None:
+            pending_parts = self.runner.stop()
+        else:
+            pending_parts = self.runner.stop(int(filter) - 1)
