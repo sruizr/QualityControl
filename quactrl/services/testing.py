@@ -7,10 +7,19 @@ from quactrl.domain.check import TestRunner
 def echo(request):
     return request.json
 
+class Parser:
+    """Parse domain objects to dicts"""
+
+    def parse(self, obj):
+        types = {
+
+    def _parse_event(self, event):
+
 
 @cherrypy.expose
 class AuTestResource:
     runner = TestRunner()
+    parser = Parser()
 
     @cherrypy.tools.json_out()
     @cherrypy.popargs('filter')
@@ -35,8 +44,19 @@ class AuTestResource:
             return False
 
     def _parse_events(self):
-        pass
 
+        events = self.runner.events
+        res = []
+        for _ in range(events.qsize()):
+            event = events.get()
+            res.append(self._parse(event))
+        return res
+
+    def _parse_event(self, event):
+        event_data = {
+            'signal': event.signal,
+            'who': self._parse(event.who)}
+        return event_data
 
     def _parse_test(self, test):
         if test is None:
@@ -83,3 +103,14 @@ class AuTestResource:
             pending_parts = self.runner.stop()
         else:
             pending_parts = self.runner.stop(int(filter) - 1)
+
+        return pending_parts
+
+    def _parse(self, obj):
+        types = {
+            'Test': self._parse_test,
+            'Check': self._parse_check,
+            'Part': self._parse_part,
+            'Event': self._parse_event
+        }
+        return types[obj.__class__.__name__](obj)
