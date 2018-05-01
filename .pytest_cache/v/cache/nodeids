@@ -1,0 +1,4 @@
+[
+  "tests/services/test_testing.py::A_Patcher::()::should_select_suitable_method_from_class_name",
+  "tests/services/test_testing.py::A_Patcher::()::should_parse_test"
+]
