@@ -26,14 +26,14 @@ class Parser:
             test_res ={'status': 'waiting'}
         else:
             test_res = {
-                'status': 'iddle',
+                'status': test.status,
                 'test_description': test.path.description,
                 'responsible_key': test.responsible.key,
                 'part': self.parse_part(test.part)
             }
 
-        if id is not None:
-            test_res['id'] = str(id)
+        for key, value in fields.items():
+            test_res[key] = value
 
         return test_res
 
