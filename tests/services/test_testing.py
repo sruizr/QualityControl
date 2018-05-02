@@ -153,7 +153,6 @@ class An_AuTestResource:
                  'measures': [],
                  'defects':[],
                  'result': 'ok'
-
              }
             }
         ]
