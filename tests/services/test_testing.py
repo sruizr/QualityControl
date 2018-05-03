@@ -206,6 +206,7 @@ class An_AuTestResource:
         json_req = {
             'tracking': '123456789',
             'part_name': 'part_name',
+            'part_number': 'part_number',
             'responsible_key': 'sruiz',
             'cavity': 1
         }
@@ -221,6 +222,12 @@ class An_AuTestResource:
 
         response = requests.post(self.url, json=json_req)
         assert response.json() == {'key': 'test_1'}
+        self.runner.start_test.assert_called_with(
+            {'tracking': '123456789',
+             'part_name': 'part_name',
+             'part_number': 'part_number'},
+            'sruiz',
+            cavity=2)
 
     def should_stop_any_test(self):
         response = requests.delete(self.url + '/1')

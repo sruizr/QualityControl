@@ -123,10 +123,21 @@ class AuTestResource:
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
     def POST(self):
-        part_info = cherrypy.request.json
+        data = cherrypy.request.json
+        part = {}
+        responsible_key = None
+        test_pars = {}
+        for key, value in data.items():
+            if key.startswith('part_') or key=='tracking':
+                part[key] = value
+            elif key=='responsible_key':
+                responsible_key = value
+            else:
+                test_pars[key] = value
 
-        self.runner.begin_test(**part_info)
-        index = int(part_info.get('cavity', 1)) - 1
+        self.runner.start_test(part, responsible_key, **test_pars)
+
+        index = int(test_pars.get('cavity', 1)) - 1
 
         json_res = self.parser.parse(self.runner.tests[index])
         return json_res

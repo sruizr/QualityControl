@@ -1,20 +1,38 @@
 import threading
 from queue import Queue
 from quactrl.domain.data import dal
+from quactrl.domain.do import DeviceRepo
 
 
 class ControlRunner:
-"""Create  and manage testers"""
+    """Create  and manage testers"""
     def __init__(self):
         self.events = Queue()
+        self.testers = []
 
     def set_location(self, key):
-        """Load
+        """Load all devices from location"""
+        self.devices = DeviceRepo(key)
+
+    def start_test(self, part, responsible, **test_pars):
+        cavity = test_pars.get('cavity', 1)
+        # Amplified testers from cavity information
+        for _ in range(len(self.testers), cavity):
+            self.testers.append(None)
+
+        # Created new tester if necesary
+        if self.testers[cavity-1] is None:
+            self.testers[cavity -1] = Tester(self.devices, self.events)
+            self.testers.start()
+        self.testers
+
+
         pass
 
-    def enter_part(self, part_info):
-        pass
-
+    @property
+    def tests(self):
+        tests
+        return [tester.test for tester in self.testers]
 
 
 
