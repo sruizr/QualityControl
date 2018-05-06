@@ -7,7 +7,7 @@ from quactrl.services.testing import AuTestResource, Parser
 # from quactrl.helpers.rest import RestTester  #
 
 
-class A_Patcher:
+class A_Parser:
 
     def setup_method(self, method):
         self.parser = Parser()
