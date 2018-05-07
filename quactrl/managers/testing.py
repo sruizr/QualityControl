@@ -11,7 +11,7 @@ class TestManager:
         self.events = Queue()
         self.testers = []
         self.dev_manager = DevManager()
-        self._location = None
+        self.location = None
 
     @property
     def tests(self):
@@ -37,13 +37,14 @@ class TestManager:
         tester.orders.put((part_info, responsible, test_pars))
 
     def _get_tester(self, cavity):
+        """Lazy loading of testers"""
         if cavity > len(self.testers):
             for _ in range(cavity - len(self.testers)):
                 self.testers.append(None)
 
         index = cavity - 1
         if self.testers[index] is None:
-            tester = Tester(self._location, self.dev_manager, self.events)
+            tester = Tester(self)
             tester.start()
             self.testers[index] = tester
 
@@ -55,24 +56,43 @@ class TestManager:
                 if tester:
                     tester.stop()
         else:
-          tester = self.testers[cavity-1]
-          if tester:
-              tester.stop()
+            tester = self.testers[cavity-1]
+            if tester:
+                tester.stop()
+
+
+class Feedback(threading.Event):
+    def __init__(self, template):
+        super.__init__(self)
+        self.template
+
+    def answer(self, data):
+        for field in self.template:
+            if field not in data:
+                self.set()
+                raise Exception('Lack of {} information'.format(field))
+
+        self.data = data
+        self.set()
 
 
 class Tester(threading.Thread):
-    def __init__(self, location, dev_manager, events ):
+    def __init__(self, manager, cavity=1):
         super().__init__()
-        self.location = location
-        self.dev_manager = dev_manager
-        self.events = events
+        self.location = manager.location
+        self.dev_manager = manager.dev_manager
+        self.events = manager.events
         self.orders = Queue()
         self.responsible = None
         self.stop_signal = False
+        self.cancel_signal = False
         self.control_plan = None
-        self._responsible = None
+        self.responsible = None
+        self._current_check = None
+        self.cavity = cavity
 
     def run(self):
+        self.session = dal.Session()
         while not self.stop_signal:
             order = self.orders.get()
             if order is not None:
@@ -83,158 +103,87 @@ class Tester(threading.Thread):
         if self.orders.qsize() == 0:
             self.orders.put(None)
 
+    def cancel_test(self):
+        self.cancel_signal = True
+        if self.open_check is not None:
+            self.open_check.result = 'cancelled'
+            self.open_check.finished.set()
+
     def process(self, order):
         part_info, responsible_key, test_pars = order
-        part = dal.get_or_create_part(part_info, location)
+        part = dal.get_or_create_part(part_info, self.location)
 
         self.set_responsible_by(responsible_key)
-        self.set_control_plan_by(part, self.location)
+        self.set_control_plan_by(part)
 
-        test = self.control_plan.get_test()
+        test = self.control_plan.get_test(part)
         test.part = part
         test.responsible = self.responsible
 
-        self.events.put(Event('start', test))
+        self.events.put(Event('start', test, cavity=self.cavity))
 
-        session = dal.Session()
         for check in test.checks:
-            pass
+            check.prepare()
+            self.events.put(Event('start', check, cavity=self.cavity))
+            if self.cancel_signal:
+                self.events.put(Event('cancel', check, cavity=self.cavity))
+                break
+            else:
+                try:
+                    check.tester = self
+                    check.execute()
+                    if check.result == 'ongoing':
+                        self.open_check = check
+                        self.events.put(Event('ongoing', check,
+                                              cavity=self.cavity))
+                        check.finished = threading.Event()
+                        check.finished.wait()
+                        self.open_check = None
 
+                except Exception:
+                    check.result = 'cancelled'
+                    self.cancel_signal = True
 
-#     class PushRunner(Thread):
-    # def __init__(self, dal,  origin=None, destination=None,
-    #              interrupt_event=None, controller=None, **path_args):
-    #     super().__init__()
+                if check.result != 'cancelled':
+                    self.events.put(Event('finish', check,
+                                          cavity=self.cavity))
+                else:
+                    self.events.put(Event('cancel', check, cavity=self.cavity))
 
-    #     self.dal = dal
-    #     self.path_args = path_args
+                check.terminate()
 
-    #     self.interrupt_event = interrupt_event
-    #     self.controller = controller
+        test.execute()
+        test.terminate()
+        self._current_check = None
 
-    #     self.devices = None
-    #     self.method = None
+        self.session.add(test)
+        self.session.commit()
 
-    #     self.steps = None
-    #     self.origin = Queue() if origin is None else origin
-    #     self.destination = Queue() if destination is None else destination
-    #     self.adapter = None
-    #     self.path = None
+        self.events.put(Event('finish', test, cavity=self.cavity))
+        self.cancel_signal = False
 
-    #     self.stop_cycle = False
-    #     self.responsible_key = None
+    def request_feedback(self, template):
+        self.events.put(Event('feedback_request', template,
+                              cavity=self.cavity))
+        # Event for waiting
+        self.feedback = Feedback(template)
+        self.feedback.wait()
 
-    # def path_is_loaded(self):
-    #     return self.path is not None
+        self.events.put(Event('feedback_process', self.feedback.data,
+                              cavity=self.cavity))
+        return self.feedback.data
 
-    # def load_process(self):
-    #     self.steps = []
-    #     if self.path:
-    #         self.method = MethodRepo.get(self.path.method_name)
+    def set_responsible_by(self, key):
+        if self.responsible is None or self.responsible.key != key:
+            self.responsible = dal.get_responsible_by(key=key)
 
-    # def set_responsible_by_key(self, key):
-    #     self.responsible_key = key
+    def set_control_plan_for(self, part):
+        if (
+                self.control_plan is None
+                or not self.control_plan.has_output(part.resource)
+        ):
+            self.control_plan = dal.get_control_plan_by(self.location,
+                                                        part.resource)
 
-    # def _shall_interrupt(self):
-    #     return (self.interrupt_event is not None and
-    #             self.interrupt_event.is_set())
-
-    # def _are_tokens(self, inputs):
-    #     result = type(inputs) is list
-    #     if result:
-    #         for value in inputs:
-    #             result = result and type(value) is int
-    #     return result
-
-    # def run(self):
-    #     self.adapter = ProcessAdapter(self, self.dal, self.path_args)
-    #     self.adapter.open()
-    #     responsible = None
-    #     while True:
-    #         inputs = self.origin.get()
-
-    #         # There are external orders to stop thread
-    #         if inputs is None or self._shall_interrupt():  # thread is finished
-    #             break
-
-    #         if responsible is None or (
-    #                 responsible.key != self.responsible_key):
-    #             responsible = self.adapter.get_person(self.responsible_key)
-    #         if responsible is None:
-    #                 self._notify_error('AbsentResponsible')
-    #         else:
-    #             if self._are_tokens(inputs): # list of integers
-    #                 in_tokens = self.adapter.get_tokens_by_ids(inputs)
-    #                 inputs = []
-    #             else:
-    #                 in_tokens = []
-    #                 inputs = [inputs]
-
-    #             if (self.path is None or
-    #                    not self.path.accept_inputs(inputs)):
-    #                 self.path = self.adapter.get_path(inputs)
-    #                 self.path.devices = self.adapter.get_devices()
-    #                 self.load_process()
-
-    #             if self.path is None:
-    #                 self._notify_error('IncorrentOperationInputs',
-    #                                              inputs=inputs)
-    #             else:
-
-    #                 self.flow = self.path.create_flow(responsible,
-    #                                                   self.controller)
-    #                 self.flow.inputs = inputs
-    #                 self.flow.in_tokens = in_tokens
-    #                 self.adapter.add(self.flow)
-    #                 self.flow.prepare()
-
-    #                 self._update(self.flow)
-    #                 cancel = self.stop_cycle
-    #                 if self.flow.children:
-    #                     for step in self.flow.children:
-    #                         step.prepare()
-    #                         self._update(step)
-    #                         if cancel:
-    #                             step.cancel()
-    #                         else:
-    #                             try:
-    #                                 step.execute()
-    #                                 step.terminate()
-    #                             except Exception as e:
-    #                                 cancel = True
-    #                                 step.cancel()
-    #                                 self._notify_error(e, step=step)
-    #                         self._update(step)
-
-    #                         if self._shall_interrupt():
-    #                             cancel = True
-    #                         if self.stop_cycle:
-    #                             cancel = True
-    #                             self.stop_cycle = False
-    #                 if cancel:
-    #                     self.flow.cancel()
-    #                 else:
-    #                     self.flow.execute()
-    #                     self.flow.terminate()
-    #                 self.adapter.commit()
-    #                 self._update(self.flow)
-    #                 if self._shall_interrupt():
-    #                     break
-    #                 self.destination.put([token.id
-    #                                       for token in self.flow.out_tokens])
-    #     self.adapter.close()
-
-    # def cancel_cycle(self):
-    #     self.stop_cycle = True
-
-    # def _notify(self, message_key, *obj):
-    #     if self.controller:
-    #         self.controller.notify(message_key, *obj)
-
-    # def _notify_error(self, message_key, **kwargs):
-    #     if self.controller:
-    #         self.controller.notify_error(message_key, **kwargs)
-
-    # def _update(self, obj):
-    #     if self.controller:
-    #         self.controller.update(obj)
+    def cancel(self):
+        self.cancel_signal = True

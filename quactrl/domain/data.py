@@ -72,5 +72,18 @@ class DataAccessLayer:
     def clear_schema(self):
         pass
 
+    # Generated from managers.Tester
+    def get_control_plan_by(self, location, part):
+        pass
+
+    def get_responsible_by(self, key):
+        pass
+
+    def get_or_create_part(self, part_info, location):
+        pass
+
+    def connect(self, connection_string):
+        pass
+
 
 dal = DataAccessLayer()
