@@ -1,10 +1,16 @@
 [
-  "tests/services/test_testing.py::A_Patcher::()::should_select_suitable_method_from_class_name",
-  "tests/services/test_testing.py::A_Patcher::()::should_parse_part",
-  "tests/services/test_testing.py::A_Patcher::()::should_parse_test",
-  "tests/services/test_testing.py::An_AuTestResource::()::should_return_open_tests",
-  "tests/services/test_testing.py::An_AuTestResource::()::should_setup_from_PUT_request",
-  "tests/services/test_testing.py::An_AuTestResource::()::should_begin_test_from_part_information",
-  "tests/services/test_testing.py::An_AuTestResource::()::should_stop_any_test",
-  "tests/services/test_testing.py::An_AuTestResource::()::should_report_events"
+  "tests/managers/test_testing.py::A_TestManager::()::should_set_database",
+  "tests/managers/test_testing.py::A_TestManager::()::should_go_to_location",
+  "tests/managers/test_testing.py::A_TestManager::()::should_lazy_loading_testers",
+  "tests/managers/test_testing.py::A_TestManager::()::should_stop_any_test",
+  "tests/managers/test_testing.py::A_Tester::()::should_run_till_stops",
+  "tests/managers/test_testing.py::A_Tester::()::should_process_order",
+  "tests/managers/test_testing.py::A_Tester::()::should_waits_till_long_check_is_finished",
+  "tests/managers/test_testing.py::A_Tester::()::should_cancel_test",
+  "tests/managers/test_testing.py::A_Tester::()::should_cancel_ongoing_check",
+  "tests/managers/test_testing.py::A_Tester::()::should_set_responsible",
+  "tests/managers/test_testing.py::A_Tester::()::should_set_control_plan",
+  "tests/managers/test_testing.py::A_Tester::()::should_manage_feedback",
+  "tests/managers/test_testing.py::A_Feedback::()::should_waits_till_receive_feedback_from_client",
+  "tests/managers/test_testing.py::A_Feedback::()::should_raise_exception_if_data_not_supplied"
 ]
