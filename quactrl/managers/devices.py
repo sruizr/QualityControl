@@ -26,6 +26,13 @@ class DeviceManager:
     """Thread safe manager of a repository of devices"""
     def __init__(self):
         self.devices = {}
+        self.lock = Lock()
+
+    def __getitem__(self, key):
+        return self.devices[key]
+
+    def __setitem__(self, key, value):
+        self.devices[key] = value
 
     def load_devs_from(self, location_key):
         db_devices = dal.get_devices_by(location_key=location_key)

@@ -1,4 +1,5 @@
 [
+  "tests/managers/test_devices.py::A_DeviceManager::()::should_behave_like_dict",
   "tests/managers/test_devices.py::A_DeviceManager::()::should_load_devs_from_location",
   "tests/managers/test_devices.py::A_DeviceManager::()::should_create_device_proxies",
   "tests/managers/test_devices.py::A_DeviceProxy::()::should_lock_device_when_executed"

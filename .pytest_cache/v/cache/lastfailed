@@ -1,3 +1,6 @@
 {
-  "tests/managers/test_devices.py::A_DeviceManager::()::should_load_devs_from_location": true
+  "tests/managers/test_devices.py::A_Device": true,
+  "tests/managers/test_devices.py::A_DeviceManager": true,
+  "tests/managers/test_devices.py::A_DeviceManager::()::should_load_devs_from_location": true,
+  "tests/managers/test_devices.py::A_DeviceProxy": true
 }

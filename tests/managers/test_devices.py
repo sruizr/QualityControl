@@ -48,6 +48,17 @@ class A_DeviceManager(TestWithPatches):
 
         return devices
 
+    def should_behave_like_dict(self):
+        devices = {'name1': Mock(),
+                   'name2': Mock()}
+        self.dev_manager.devices = devices
+
+        assert devices['name1'] == self.dev_manager['name1']
+        new_device = Mock()
+        self.dev_manager['other'] = new_device
+        assert self.dev_manager['other'] == new_device
+
+
     def should_load_devs_from_location(self):
         devices = self.gen_domain_devices()
         self.dal.get_devices_by.return_value = devices
