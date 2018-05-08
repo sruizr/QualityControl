@@ -63,8 +63,8 @@ class TestManager:
 
 class Feedback(threading.Event):
     def __init__(self, template):
-        super.__init__(self)
-        self.template
+        super().__init__()
+        self.template = template
 
     def answer(self, data):
         for field in self.template:
@@ -88,11 +88,10 @@ class Tester(threading.Thread):
         self.cancel_signal = False
         self.control_plan = None
         self.responsible = None
-        self._current_check = None
+        self.open_check = None
         self.cavity = cavity
 
     def run(self):
-        self.session = dal.Session()
         while not self.stop_signal:
             order = self.orders.get()
             if order is not None:
@@ -114,7 +113,7 @@ class Tester(threading.Thread):
         part = dal.get_or_create_part(part_info, self.location)
 
         self.set_responsible_by(responsible_key)
-        self.set_control_plan_by(part)
+        self.set_control_plan_for(part)
 
         test = self.control_plan.get_test(part)
         test.part = part
@@ -127,7 +126,7 @@ class Tester(threading.Thread):
             self.events.put(Event('start', check, cavity=self.cavity))
             if self.cancel_signal:
                 self.events.put(Event('cancel', check, cavity=self.cavity))
-                break
+                check.result = 'cancelled'
             else:
                 try:
                     check.tester = self
@@ -156,6 +155,7 @@ class Tester(threading.Thread):
         test.terminate()
         self._current_check = None
 
+        self.session = dal.Session()
         self.session.add(test)
         self.session.commit()
 

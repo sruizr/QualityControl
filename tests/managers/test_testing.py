@@ -1,7 +1,6 @@
 from unittest.mock import Mock
 from queue import Queue
 import threading
-import time
 from tests import TestWithPatches
 from quactrl.managers.testing import TestManager, Tester, Feedback
 import pytest
@@ -77,20 +76,24 @@ class A_Tester(TestWithPatches):
         patches = [
             'quactrl.managers.testing.dal',
             'quactrl.managers.testing.Event',
-            'quactrl.managers.testing.FeedBack'
+            'quactrl.managers.testing.Feedback'
             ]
         self.create_patches(patches)
         self.manager = Mock()
         self.events = self.manager.events = Queue()
         self.tester = Tester(self.manager, cavity=2)
 
+    def teardown_method(self, method):
+        if self.tester.is_alive():
+            self.tester.stop()
+
     def should_run_till_stops(self):
         self.tester.process = Mock()
         self.tester.start()
         self.tester.stop()
 
-        while self.tester.join():
-            pass
+        self.tester.join(timeout=1)
+        assert not self.tester.is_alive()
 
     def prepare_process_order(self):
         order = (
@@ -103,7 +106,7 @@ class A_Tester(TestWithPatches):
         )
         self.tester.set_responsible_by = Mock()
         self.tester.responsible = Mock()
-        self.tester.set_control_plan_by = Mock()
+        self.tester.set_control_plan_for = Mock()
         self.tester.control_plan = Mock()
         part = self.dal.get_or_create_part.return_value
         test = self.tester.control_plan.get_test.return_value
@@ -125,7 +128,7 @@ class A_Tester(TestWithPatches):
         session.add.assert_called_with(test)
         session.commit.assert_called_with()
         assert test.part == part
-        for flow in test.checks.append(test):
+        for flow in test.checks:
             for method_name in ('prepare', 'execute', 'terminate'):
                 method = getattr(flow, method_name)
                 method.assert_called_with()
@@ -145,7 +148,6 @@ class A_Tester(TestWithPatches):
 
         caller = ProcessCaller(self.tester, order)
         caller.start()
-        time.sleep(1)
         assert caller.is_alive()
 
         test.checks[0].finished.set()
@@ -164,6 +166,7 @@ class A_Tester(TestWithPatches):
     def should_cancel_ongoing_check(self):
         class ProcessCaller(threading.Thread):
             def __init__(self, tester, order):
+                super().__init__()
                 self.tester = tester
                 self.order = order
 
@@ -179,7 +182,7 @@ class A_Tester(TestWithPatches):
 
         self.tester.cancel_test()
 
-        self.caller.join(timeout=0.5)
+        caller.join(timeout=0.5)
         assert not caller.is_alive()
 
     def should_set_responsible(self):
@@ -195,17 +198,18 @@ class A_Tester(TestWithPatches):
 
     def should_set_control_plan(self):
         self.tester.location = 'location'
-        self.tester.part = Mock()
         control_plan = self.dal.get_control_plan_by.return_value
+        part = Mock()
+        part.resource = 'resource'
 
         self.tester.set_control_plan_for(part)
         self.dal.get_control_plan_by.assert_called_with(
-            'location', self.tester.part.resource
+            'location', part.resource
         )
 
         control_plan.has_output.return_value = False
-        self.tester.part.resource = 'resource'
         self.tester.set_control_plan_for(part)
+
         self.dal.get_control_plan_by.assert_called_with(
             'location', 'resource'
         )
@@ -214,9 +218,9 @@ class A_Tester(TestWithPatches):
         data = self.tester.request_feedback({'name': None})
 
         assert self.events.qsize() == 2
-        self.FeedBack.assert_called_with({'name': None})
+        self.Feedback.assert_called_with({'name': None})
 
-        feedback = self.FeedBack.return_value
+        feedback = self.Feedback.return_value
         feedback.wait.assert_called_with()
         assert data == feedback.data
 
@@ -249,5 +253,6 @@ class A_Feedback:
             caller.answer({})
             pytest.fails('Not exception is raised')
             caller.join(timeout=0.5)
+            assert not caller.is_alive()
         except Exception as e:
-            pass
+            caller.feedback.set()

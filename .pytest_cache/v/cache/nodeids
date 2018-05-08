@@ -1,5 +1,22 @@
 [
+<<<<<<< HEAD
   "tests/managers/test_devices.py::A_DeviceManager::()::should_load_devs_from_location",
   "tests/managers/test_devices.py::A_DeviceManager::()::should_create_device_proxies",
   "tests/managers/test_devices.py::A_DeviceProxy::()::should_lock_device_when_executed"
+=======
+  "tests/managers/test_testing.py::A_TestManager::()::should_set_database",
+  "tests/managers/test_testing.py::A_TestManager::()::should_go_to_location",
+  "tests/managers/test_testing.py::A_TestManager::()::should_lazy_loading_testers",
+  "tests/managers/test_testing.py::A_TestManager::()::should_stop_any_test",
+  "tests/managers/test_testing.py::A_Tester::()::should_run_till_stops",
+  "tests/managers/test_testing.py::A_Tester::()::should_process_order",
+  "tests/managers/test_testing.py::A_Tester::()::should_waits_till_long_check_is_finished",
+  "tests/managers/test_testing.py::A_Tester::()::should_cancel_test",
+  "tests/managers/test_testing.py::A_Tester::()::should_cancel_ongoing_check",
+  "tests/managers/test_testing.py::A_Tester::()::should_set_responsible",
+  "tests/managers/test_testing.py::A_Tester::()::should_set_control_plan",
+  "tests/managers/test_testing.py::A_Tester::()::should_manage_feedback",
+  "tests/managers/test_testing.py::A_Feedback::()::should_waits_till_receive_feedback_from_client",
+  "tests/managers/test_testing.py::A_Feedback::()::should_raise_exception_if_data_not_supplied"
+>>>>>>> 3d35d6fc41725f7b1b6d695ae7c859836d26b059
 ]
