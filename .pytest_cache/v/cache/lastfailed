@@ -1,1 +1,4 @@
-{}
+{
+  "tests/managers/test_devices.py::A_DeviceManager::()::should_load_devs_from_location": true,
+  "tests/managers/test_devices.py::A_DeviceProxy::()::should_lock_device_when_executed": true
+}
