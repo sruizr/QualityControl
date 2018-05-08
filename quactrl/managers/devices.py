@@ -32,18 +32,19 @@ class DeviceManager:
 
         self.devices = {}  # Clearing previous loading
         for db_device in db_devices:
-            pars = db_device.pars.get().copy()
+            pars = db_device.pars.copy()
             pars['tracking'] = db_device.tracking
             pars['name'] = db_device.resource.name
 
             device = self.create_device(pars)
-            if device.name in self.devices.keys():
-                if type(self.devices['name']) is not dict:
-                    first_dev = self.devices['name']
-                    self.devices['name'] = {first_dev.tracking: first_dev}
-                self.devices['name'][device.name] = device
+            name = device.name
+            if name in self.devices.keys():
+                if type(self.devices[name]) is not dict:
+                    first_dev = self.devices[name]
+                    self.devices[name] = {first_dev.tracking: first_dev}
+                self.devices[name][device.tracking] = device
             else:
-                self.devices['name'] = device
+                self.devices[name] = device
 
     def assembly_all(self):
         devices_by_tracking = {}
@@ -61,29 +62,28 @@ class DeviceManager:
         return DeviceProxy(device, self)
 
 
+# class ThreadPoolDeviceManager(DeviceManager):
+#     def __init__(self, workers=1):
+#         super().__init__()
+#         self._orders = Queue()
+#         self._workers = [Worker(self) for _ in range]
+#         for worker in self._workers:
+#             worker.start()
 
-class ThreadPoolDeviceManager(DeviceManager):
-    def __init__(self, workers=1):
-        super().__init__()
-        self._orders = Queue()
-        self._workers = [Worker(self) for _ in range]
-        for worker in self._workers:
-            worker.start()
+#     def create_device(self, pars):
+#         dev_pars = pars.copy()
+#         Device = get_class(dev_pars.pop('class_name'))
+#         device = Device(**dev_pars)
+#         device_proxy = DeviceProxy(device, self)
+#         return device_proxy
 
-    def create_device(self, pars):
-        dev_pars = pars.copy()
-        Device = get_class(dev_pars.pop('class_name'))
-        device = Device(**dev_pars)
-        device_proxy = DeviceProxy(device, self)
-        return device_proxy
+#     def stop(self):
+#         for _ in range(len(self.workers)):
+#             self.orders.put(None)
 
-    def stop(self):
-        for _ in range(len(self.workers)):
-            self.orders.put(None)
-
-    def __del__(self):
-        """Closes all internal worker's threads"""
-        self.stop()
+#     def __del__(self):
+#         """Closes all internal worker's threads"""
+#         self.stop()
 
 
 class DeviceProxy:
@@ -91,9 +91,9 @@ class DeviceProxy:
         self.lock = Lock()
         self.manager = device_manager
         self._impl = implementation
-        self._answer = Queue()
 
     def __getattr__(self, name):
+
         if hasattr(self._impl, name):
             self._method = getattr(self._impl, name)
             if (name == 'assembly' or
@@ -106,30 +106,31 @@ class DeviceProxy:
         raise AttributeError()
 
     def _exec(self, *args, **kwargs):
+
         with self.lock:
             result = self._method(*args, **kwargs)
         return result
 
 
-class Worker(Thread):
-    def __init__(self, device_manager):
-        super().__init__()
-        self.device_manager = device_manager
-        self._stop = False
+# class Worker(Thread):
+#     def __init__(self, device_manager):
+#         super().__init__()
+#         self.device_manager = device_manager
+#         self._stop = False
 
-    def run(self):
-        while not self._stop:
-            self.cycle()
+#     def run(self):
+#         while not self._stop:
+#             self.cycle()
 
-    def cycle(self):
-        order = self.device_manager.orders.get()
-        if order is None:
-            self._stop = True
-        else:
-            client, method, args, kwargs = order
-            with client.lock:
-                try:
-                    answer = method(*args, **kwargs)
-                except Exception as e:
-                    answer = e
-                client.answer.put(answer)
+#     def cycle(self):
+#         order = self.device_manager.orders.get()
+#         if order is None:
+#             self._stop = True
+#         else:
+#             client, method, args, kwargs = order
+#             with client.lock:
+#                 try:
+#                     answer = method(*args, **kwargs)
+#                 except Exception as e:
+#                     answer = e
+#                 client.answer.put(answer)

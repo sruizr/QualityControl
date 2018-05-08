@@ -3,7 +3,10 @@ from tests import TestWithPatches
 from quactrl.managers.devices import DeviceManager, DeviceProxy
 import time
 import threading
-import pytest
+
+
+class A_Device:
+    pass
 
 
 class A_DeviceManager(TestWithPatches):
@@ -46,8 +49,11 @@ class A_DeviceManager(TestWithPatches):
         return devices
 
     def should_load_devs_from_location(self):
-        self.dal.get_devices_by.return_value = self.gen_domain_devices()
-
+        devices = self.gen_domain_devices()
+        self.dal.get_devices_by.return_value = devices
+        self.DeviceProxy.side_effect = [Mock(name=device.resource.name,
+                                            tracking=device.tracking)
+                                        for device in devices]
         self.dev_manager.create_device = Mock()
         self.dev_manager.load_devs_from('location_key')
 
@@ -74,7 +80,7 @@ class A_DeviceManager(TestWithPatches):
 class A_DeviceProxy:
 
     def should_lock_device_when_executed(self):
-        wait = 0.2
+        wait = 0.1
 
         class FakeDevice:
             def method(self):
@@ -96,6 +102,6 @@ class A_DeviceProxy:
         client.start()
 
         assert not device_proxy.lock.acquire(timeout=0)
-        assert device_proxy.lock.acquire(timeout=wait)
+        assert device_proxy.lock.acquire(timeout=wait+0.2)
 
         device_proxy.lock.release()
