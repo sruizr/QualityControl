@@ -7,18 +7,17 @@ import pytest
 
 
 class A_TestManager(TestWithPatches):
-
     def setup_method(self, method):
         patches = [
             'quactrl.managers.testing.dal',
-            'quactrl.managers.testing.DevManager',
+            'quactrl.managers.testing.DeviceManager',
             'quactrl.managers.testing.Tester'
             ]
         self.create_patches(patches)
         # self.control = Mock()
         # self.inspector = Mock()
         self.manager = TestManager()
-        self.dev_manager = self.DevManager()
+        self.dev_manager = self.DeviceManager()
 
     def should_set_database(self):
         self.manager.set_database('connection_string')
@@ -235,7 +234,6 @@ class FeedbackCaller(threading.Thread):
 
 
 class A_Feedback:
-
     def should_waits_till_receive_feedback_from_client(self):
         caller = FeedbackCaller(['data'])
         caller.start()

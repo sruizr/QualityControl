@@ -1,20 +1,21 @@
 import threading
 from queue import Queue
 from quactrl.domain.data import dal
-from quactrl.managers.devices import DevManager
+from quactrl.managers.devices import DeviceManager
 from quactrl.managers import Event
 
 
 class TestManager:
-    """Create  and manage testers"""
+    """Create and manage tests"""
     def __init__(self):
         self.events = Queue()
         self.testers = []
-        self.dev_manager = DevManager()
+        self.dev_manager = DeviceManager()
         self.location = None
 
     @property
     def tests(self):
+        """List tests by cavity"""
         return [None if tester is None
                 else tester.test
                 for tester in self.testers]

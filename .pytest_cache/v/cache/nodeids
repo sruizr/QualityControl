@@ -1,6 +1,8 @@
 [
-  "tests/managers/test_devices.py::A_DeviceManager::()::should_behave_like_dict",
-  "tests/managers/test_devices.py::A_DeviceManager::()::should_load_devs_from_location",
-  "tests/managers/test_devices.py::A_DeviceManager::()::should_create_device_proxies",
-  "tests/managers/test_devices.py::A_DeviceProxy::()::should_lock_device_when_executed"
+  "tests/rest/test_devices.py::A_DeviceResource::()::should_return_devices_status",
+  "tests/rest/test_devices.py::A_DeviceResource::()::should_load_devices_to_repository_from_device_info",
+  "tests/rest/test_devices.py::A_DeviceResource::()::should_load_devices_from_database",
+  "tests/rest/test_devices.py::A_DeviceResource::()::should_avoid_load_devices_from_database_if_not_connected",
+  "tests/rest/test_devices.py::A_DeviceResource::()::should_load_database",
+  "tests/rest/test_devices.py::A_DeviceResource::()::should_stop_any_test"
 ]

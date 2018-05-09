@@ -1,6 +1,6 @@
 {
-  "tests/managers/test_devices.py::A_Device": true,
-  "tests/managers/test_devices.py::A_DeviceManager": true,
-  "tests/managers/test_devices.py::A_DeviceManager::()::should_load_devs_from_location": true,
-  "tests/managers/test_devices.py::A_DeviceProxy": true
+  "tests/managers/test_devices.py::A_DeviceManager::()::should_create_device_proxies": true,
+  "tests/managers/test_devices.py::A_DeviceProxy::()::should_create_device": true,
+  "tests/managers/test_devices.py::A_DeviceProxy::()::should_lock_device_when_executed": true,
+  "tests/rest/test_testing.py": true
 }
