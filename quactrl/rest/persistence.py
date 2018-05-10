@@ -1,14 +1,11 @@
 import cherrypy
 import json
 from quactrl.domain.data import dal
-import quactrl.check as check
-import quactrl.do as doe
-import quactrl.plan as plan
-import quactrl.act as act
-from quactrl.
+from quactrl.rest.parsers import ParserToDict, ParserToDomain
+
 
 @cherrypy.expose
-class DataResource(RestResource):
+class DomainResource:
 
     def __init__(self, **parsers):
         self._parsers = parsers
@@ -40,7 +37,12 @@ class DataResource(RestResource):
         """Clears all database"""
         dal.clear_all_data()
 
-    def _bulk_load(self, data):
+
+class BulkProcessor:
+    def __init__(self):
+        pass
+
+    def load(self, data):
         # Loading persons
 
         nodes = {}

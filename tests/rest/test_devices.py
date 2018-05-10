@@ -38,16 +38,15 @@ class A_DeviceResource(TestResource):
         response = requests.get(url)
         assert response.json() == {'status': 'waiting'}
 
-
         for device in device_manager.devices['multiple'].values():
             device.is_bussy.return_value = False
         url = self.url + '/multiple'
         response = requests.get(url)
-        expected = {'001': {'status': 'waiting'},
-                    '002': {'status': 'waiting'}
+        expected = {
+            '001': {'status': 'waiting'},
+            '002': {'status': 'waiting'}
         }
         assert response.json() == expected
-
 
         url = self.url + '/absent'
         response = requests.get(url)
@@ -72,7 +71,6 @@ class A_DeviceResource(TestResource):
 
     def should_load_devices_from_database(self):
         device_manager = self.DeviceManager.return_value
-        device = self.DeviceProxy.return_value
 
         self.dal.is_connected.return_value = True
         response = requests.put(self.url + '/loc', json={})
@@ -81,7 +79,6 @@ class A_DeviceResource(TestResource):
 
     def should_avoid_load_devices_from_database_if_not_connected(self):
         device_manager = self.DeviceManager.return_value
-        device = self.DeviceProxy.return_value
 
         self.dal.is_connected.return_value = False
         response = requests.put(self.url + '/loc', json={})
@@ -89,51 +86,52 @@ class A_DeviceResource(TestResource):
         device_manager.load_devs_from.assert_called_with('loc')
 
     def should_load_database(self):
-        pass
+        self.dal.connect.return_value = True
+        self.dal.is_connected.return_value = True
+        pars = {
+            'connection_string': 'conn'
+        }
+        response = requests.put(self.url, json=pars)
 
+        assert response.status_code == 200
+        self.dal.connect.assert_called_with('conn')
 
-    # def _should_setup_from_PUT_request(self):
-    #     self.runner.set_location.side_effect = [None, Exception()]
+        self.dal.connect.return_value = False
+        response = requests.put(self.url, json=pars)
+        assert response.status_code == 406
 
-    #     url = self.url + '/fake'
-    #     response = requests.put(url)
+    def should_execute_any_device_command(self):
+        device_manager = self.DeviceManager.return_value
+        devs = [Mock(name='dev_track{}'.format(i)) for i in range(3)]
+        devs[0].foo.return_value = 1
+        devs[1].foo.return_value = 1
+        devs[2].foo.side_effect = Exception
 
-    #     assert response.status_code == 200
-    #     expected = {'status': 'done',
-    #                 'location': 'fake'}
-    #     assert response.json() == expected
+        device_manager.devices = {
+            'single': devs[0],
+            'many': {'track1': devs[1], 'track2': devs[2]}
+        }
 
-    #     response = requests.put(self.url + '/invalid')
-    #     assert response.status_code == 500
+        pars = [[1, 2], {'par': 0}]
+        response = requests.post(self.url + '/single/foo?tracking=1234', json=pars)
+        assert response.status_code == 200
+        assert response.json() == 1
 
-    # def _should_begin_test_from_part_information(self):
-    #     json_req = {
-    #         'tracking': '123456789',
-    #         'part_name': 'part_name',
-    #         'part_number': 'part_number',
-    #         'responsible_key': 'sruiz',
-    #         'cavity': 1
-    #     }
+        response = requests.post(self.url + '/many/foo', json={})
+        assert response.status_code == 405
 
-    #     response = requests.post(self.url,
-    #                              json=json_req)
+        response = requests.post(self.url + '/many/foo?tracking=track1',
+                                 json={})
+        assert response.status_code == 200
 
-    #     assert response.status_code == 200
-    #     expected = {'key': 'test_0'}
-    #     assert response.json() == expected
+        response = requests.post(self.url + '/many/foo?tracking=track2',
+                                 json=pars)
+        assert response.status_code == 405
 
-    #     json_req['cavity'] = 2
+        devs[0].foo.assert_called_with(1, 2, par=0)
+        devs[1].foo.assert_called_with()
 
-    #     response = requests.post(self.url, json=json_req)
-    #     assert response.json() == {'key': 'test_1'}
-    #     self.runner.start_test.assert_called_with(
-    #         {'tracking': '123456789',
-    #          'part_name': 'part_name',
-    #          'part_number': 'part_number'},
-    #         'sruiz',
-    #         cavity=2)
-
-    def should_stop_any_test(self):
+    def should_remove_any_device(self):
         device_manager = self.DeviceManager.return_value
 
         device_manager.devices = {'name{}'.format(i): Mock()

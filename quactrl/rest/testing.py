@@ -2,10 +2,6 @@ import cherrypy
 from quactrl.domain.check import TestRunner
 
 
-
-def echo(request):
-    return request.json
-
 class Parser:
     """Parse domain objects to dicts"""
 
@@ -86,6 +82,7 @@ class Parser:
 
 @cherrypy.expose
 class AuTestResource:
+
     runner = TestRunner()
     parser = Parser()
 

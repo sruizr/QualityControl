@@ -33,12 +33,34 @@ class DeviceResource:
             cherrypy.response.status = 404
             return  {'status': 'absent'}
 
+    @cherrypy.popargs('device_key', 'action')
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
-    def POST(self, key, tracking=None):
-        """Sends to command to device"""
+    def POST(self, device_key, action, tracking=None):
+        """Send command to device and return result"""
+        device = self.device_manager.devices[device_key]
+        if type(device) is dict:  # Many devices with the same key
+            if tracking is None:  # None concrete device!
+                cherrypy.response.status = 405
+                return
+            else:
+                device = device[tracking]
 
-        return None
+        method = getattr(device, action)
+
+        if cherrypy.request.json:
+            args, kawrgs = cherrypy.request.json
+            try:
+                result = method(*args, **kawrgs)
+                return result
+            except Exception:
+                cherrypy.response.status = 405
+        else:
+            try:
+                result = method()
+                return result
+            except Exception:
+                cherrypy.response.statuse = 405
 
     @cherrypy.popargs('location')
     @cherrypy.tools.json_in()
@@ -54,7 +76,11 @@ class DeviceResource:
             )
         else:
             if location is None:  # Connection to database
-                dal.connect(pars['connection_string'])
+                success = dal.connect(pars['connection_string'])
+                if success:
+                    return
+                else:
+                    cherrypy.response.status = 406
             else:
                 if dal.is_connected():
                     self.device_manager.load_devs_from(location)
