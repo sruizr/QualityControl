@@ -1,5 +1,5 @@
 from quactrl.domain.check import Check, Test, Control, ControlPlan, Measure, Defect
-from quactrl.domain.erp import Resource, Path, Item, Node, PathResource
+from quactrl.domain.base import Resource, Path, Item, Node, PathResource
 from tests.domain.test_data import OnMemoryTest
 
 

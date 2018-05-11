@@ -1,6 +1,18 @@
 {
+  "tests/domain/test_check.py": true,
+  "tests/domain/test_data.py": true,
+  "tests/domain/test_do.py": true,
+  "tests/domain/test_erp.py": true,
+  "tests/entities/test_base.py": true,
+  "tests/entities/test_check.py": true,
+  "tests/entities/test_controls.py": true,
+  "tests/entities/test_plan.py": true,
+  "tests/entities/test_resources.py": true,
+  "tests/integration/test_inspection.py": true,
   "tests/managers/test_devices.py::A_DeviceManager::()::should_create_device_proxies": true,
   "tests/managers/test_devices.py::A_DeviceProxy::()::should_create_device": true,
   "tests/managers/test_devices.py::A_DeviceProxy::()::should_lock_device_when_executed": true,
-  "tests/rest/test_testing.py": true
+  "tests/services/test_common.py": true,
+  "tests/services/test_inspection.py": true,
+  "tests/services/test_sampling.py": true
 }

@@ -1,5 +1,5 @@
 from quactrl.domain.do import Person, Device, Group, Location, Part, Generator
-from quactrl.domain.erp import Flow
+from quactrl.domain.base import Flow
 from quactrl.domain.plan import (
     DeviceModel, PartModel, Characteristic, Operation
     )

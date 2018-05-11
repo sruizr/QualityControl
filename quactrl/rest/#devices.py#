@@ -1,6 +1,6 @@
 import cherrypy
 from quactrl.managers.devices import DeviceManager, DeviceProxy
-from quactrl.domain.data import dal
+from quactrl.domain.persistence import dal
 
 
 @cherrypy.expose

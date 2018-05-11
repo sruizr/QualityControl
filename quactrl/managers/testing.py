@@ -1,6 +1,6 @@
 import threading
 from queue import Queue
-from quactrl.domain.data import dal
+from quactrl.domain.persistence import dal
 from quactrl.managers.devices import DeviceManager
 from quactrl.managers import Event
 

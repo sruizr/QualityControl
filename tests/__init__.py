@@ -1,5 +1,5 @@
 from unittest.mock import patch
-from quactrl.domain.data import dal
+from quactrl.domain.persistence import dal
 import pytest
 
 current = pytest.mark.current

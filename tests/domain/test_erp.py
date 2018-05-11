@@ -1,8 +1,8 @@
-from quactrl.domain.erp import (
+from quactrl.domain.base import (
     Resource, ResourceRelation, Node, NodeRelation, Item, ItemRelation,
     Path, PathResource, Token, Flow, Pars
     )
-from quactrl.domain.data import DataAccessLayer
+from quactrl.domain.persistence import DataAccessLayer
 from tests.domain.test_data import OnMemoryTest
 
 

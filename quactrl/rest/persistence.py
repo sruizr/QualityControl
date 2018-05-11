@@ -1,6 +1,6 @@
 import cherrypy
 import json
-from quactrl.domain.data import dal
+from quactrl.domain.persistence import dal
 from quactrl.rest.parsers import ParserToDict, ParserToDomain
 
 

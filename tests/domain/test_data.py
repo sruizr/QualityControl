@@ -1,5 +1,5 @@
-from quactrl.domain.data import DataAccessLayer
-from quactrl.domain.erp import Node
+from quactrl.domain.persistence import DataAccessLayer
+from quactrl.domain.base import Node
 from quactrl.domain.plan import Operation
 from quactrl.domain.check import Control, ControlPlan
 from quactrl.domain.do import Location, Person

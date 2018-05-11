@@ -2,10 +2,10 @@ import importlib
 import json
 import os
 from sqlalchemy.orm import synonym, reconstructor, aliased
-from quactrl.domain.erp import Item, Resource, Node, NodeRelation, Pars, Flow, Token
+from quactrl.domain.base import Item, Resource, Node, NodeRelation, Pars, Flow, Token
 from quactrl.domain.plan import PartModel, Operation, DeviceModel
 from quactrl.domain import get_component
-from quactrl.domain.erp import Path
+from quactrl.domain.base import Path
 
 
 class Material(Item):

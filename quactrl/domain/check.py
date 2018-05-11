@@ -1,7 +1,7 @@
 from enum import Enum
 from sqlalchemy.orm import synonym, reconstructor
 from threading import Thread, Event
-from quactrl.domain.erp import (Item, Resource, PathResource,
+from quactrl.domain.base import (Item, Resource, PathResource,
                                 ItemRelation, Path, Node, Pars, Flow)
 from datetime import datetime
 

@@ -1,7 +1,7 @@
 from quactrl.domain.do import (
     Material, Person, Location, Device
 )
-from quactrl.domain.erp import Resource
+from quactrl.domain.base import Resource
 from tests.domain.test_data import OnMemoryTest
 
 class A_Material(OnMemoryTest):

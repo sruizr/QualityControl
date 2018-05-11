@@ -1,6 +1,6 @@
 import os
 from unittest.mock import Mock
-from quactrl.domain.data import DataAccessLayer
+from quactrl.domain.persistence import DataAccessLayer
 from quactrl.services.common import OneItemFlowService
 from tests.integration.loaders import Filler
 

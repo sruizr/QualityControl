@@ -2,8 +2,8 @@ from threading import Thread, Event, get_ident
 from queue import Queue
 from quactrl.domain import get_component
 from quactrl.domain.check import Test
-from quactrl.domain.erp import Flow
-from quactrl.domain.data import dal
+from quactrl.domain.base import Flow
+from quactrl.domain.persistence import dal
 
 
 class InsertItemError(Exception):

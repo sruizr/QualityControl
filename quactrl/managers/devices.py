@@ -1,7 +1,7 @@
 import types
 from threading import Lock
 from quactrl.helpers import get_class
-from quactrl.domain.data import dal
+from quactrl.domain.persistence import dal
 
 
 class DeviceManager:
