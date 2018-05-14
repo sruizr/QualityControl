@@ -1,11 +1,20 @@
 from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, backref, relationship, scoped_session
-from .base import DataAccessModule as Erp
-from .plan import DataAccessModule as Plan
-from .do import DataAccessModule as Do
-from .check import DataAccessModule as Check
-from .act import DataAccessModule as Act
-from quactrl.domain import Base
+import quactrl.domain.nodes as nodes
+import quactrl.domain.resources as resources
+import quactrl.domain.paths as paths
+import quactrl.domain.items as items
+
+# CLASS_NAMES = {
+#     'person': nodes.Person,
+#     'location': nodes.Location,
+#     'part': items.Part,
+#     'part_model': resources.PartModel,
+#     'control_plan': paths.ControlPlan,
+#     'control': paths.Control,
+#     'check': items.Check,
+#     'test': items.Test
+# }
 
 
 class DataAccessLayer:
@@ -76,11 +85,25 @@ class DataAccessLayer:
         pass
 
     def get_responsible_by(self, key):
-        pass
+        responsible = self.get('person', key=key)
+        return responsible
 
     def get_or_create_part(self, part_info, location):
+        session = self.Session()
+        session.query(items.Part).filters()
         pass
 
+    def create(self, class_name, obj_data):
+        pass
+
+    def remove(self, class_name, id):
+        pass
+
+    def get(self, class_name, **pars):
+        pass
+
+    def update(self, class_name, **pars):
+        pass
 
 
 dal = DataAccessLayer()
