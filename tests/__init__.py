@@ -1,6 +1,6 @@
 from unittest.mock import patch
-from quactrl.domain.persistence import dal
 import pytest
+
 
 current = pytest.mark.current
 
@@ -20,12 +20,3 @@ class TestWithPatches:
     def teardown_method(self, method):
         for patcher in self._patchers:
             patcher.stop()
-
-
-class DataTest:
-    def setup_method(self, method):
-        self.session = dal.Session()
-
-    def teardown_method(self, method):
-        self.session.rollback()
-        self.session.close()

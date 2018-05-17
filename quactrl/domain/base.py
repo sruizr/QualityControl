@@ -76,7 +76,8 @@ class Node(Base):
 
     id = Column(Integer, primary_key=True)
     key = Column(String(100), unique=True)
-    name = Column(String(30))
+    name = Column(String(50))
+    description = Column(String(200))
 
     def __init__(self, key, name=None):
         self.key = key
@@ -349,7 +350,6 @@ class DataAccessModule:
 
     def __init__(self, dal):
         self.dal = dal
-
     def get_stocks_by_node(self, node, session=None):
         session = self.dal.Session() if session is None else session
 

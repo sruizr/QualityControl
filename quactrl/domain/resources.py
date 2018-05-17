@@ -29,6 +29,7 @@ class Characteristic(Resource):
                 self._failure_modes[mode] = destination.to_resource
 
 
+
 class FailureMode(Resource):
     __mapper_args__ = {'polymorphic_identity': 'failure_mode'}
 
@@ -44,3 +45,32 @@ class FailureMode(Resource):
 
 class DeviceModel(Resource):
     __mapper_args__ = {'polymorphic_identity': 'device_model'}
+
+
+class PartModel(Resource):
+    __mapper_args__ = {'polymorphic_identity': 'part_model'}
+
+    _dut_classes = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._load_dut_class()
+
+    def _load_dut_class(self):
+        if self.pars:
+            pars = self.pars.get()
+            if self.key not in self._dut_classes:
+                class_name = pars.pop('class_name')
+                Dut = get_component(class_name)
+                self._dut_classes[self.key] = (Dut, pars)
+
+    @reconstructor
+    def after_load(self):
+        self._load_dut_class()
+
+    def get_behaviour(self):
+        if self.key in self._dut_classes:
+            Dut = self._dut_classes[self.key][0]
+            pars = self._dut_classes[self.key][1]
+
+            return Dut(**pars)
