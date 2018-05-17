@@ -1,9 +1,9 @@
-from tests.domain import OnMemoryDataTest
+from tests.domain import EmptyDataTest
 from quactrl.managers.crud import Crud
 from quactrl.domain.nodes import Person
 
 
-class A_Crud(OnMemoryDataTest):
+class A_Crud(EmptyDataTest):
     def setup_method(self, method):
         super().setup_method(method)
         self.manager = Crud()

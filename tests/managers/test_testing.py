@@ -52,22 +52,29 @@ class A_TestManager(TestWithPatches):
                 [test, None, None, None, None, None, test]
         )
 
-    def should_stop_any_test(self):
+    def should_stop_all_tests(self):
         tester_1 = Mock()
         tester_3 = Mock()
-        self.manager.testers = [ tester_1, None, tester_3]
+        self.manager.testers = [tester_1, None, tester_3]
+        tester_1.stop.return_value = [None]
+        tester_3.stop.return_value = [None]
 
-        self.manager.stop()
+        result = self.manager.stop()
         tester_1.stop.assert_called_with()
         tester_3.stop.assert_called_with()
+        assert result == [None, None]
 
+
+    def should_stop_only_one_tester(self):
         tester_1 = Mock()
         tester_3 = Mock()
-        self.manager.testers = [ tester_1, None, tester_3]
-        self.manager.stop(1)
+        self.manager.testers = [tester_1, None, tester_3]
+        tester_1.stop.return_value = ['tester1']
+        tester_3.stop.return_value = ['tester3']
+        result = self.manager.stop(1)
         assert not tester_3.stop.called
         tester_1.stop.assert_called_with()
-
+        assert result == ['tester1']
 
 class A_Tester(TestWithPatches):
 

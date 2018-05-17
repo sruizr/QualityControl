@@ -1,11 +1,11 @@
 import cherrypy
-from quactrl.domain.check import TestRunner
+from quactrl.managers.testing import TestManager
 import quactrl.helpers.parse as parse
 
 
 @cherrypy.expose
 class AuTestResource:
-    runner = TestRunner()
+    runner = TestManager()
 
     @cherrypy.tools.json_out()
     @cherrypy.popargs('filter')
@@ -79,4 +79,4 @@ class AuTestResource:
         else:
             pending_parts = self.runner.stop(int(filter) - 1)
 
-        return [parse.from_obj(part) for part in pending_parts]
+        return pending_parts

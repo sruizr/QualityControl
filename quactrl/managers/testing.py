@@ -52,15 +52,17 @@ class TestManager:
         return tester
 
     def stop(self, cavity=None):
+        pending_pars = []
+
         if cavity is None:
             for tester in self.testers:
                 if tester:
-                    tester.stop()
+                    pending_pars.extend(tester.stop())
         else:
             tester = self.testers[cavity-1]
             if tester:
-                tester.stop()
-
+                pending_pars.extend(tester.stop())
+        return pending_pars
 
 class Feedback(threading.Event):
     def __init__(self, template):
@@ -99,9 +101,15 @@ class Tester(threading.Thread):
                 self.process(order)
 
     def stop(self):
+        pending_pars = []
         self.stop_signal = True
+
         if self.orders.qsize() == 0:
             self.orders.put(None)
+        else:
+            while not self.orders.empty():
+                part_info, _, _ = self.orders.get()
+                pending_pars.append(part_info)
 
     def cancel_test(self):
         self.cancel_signal = True
