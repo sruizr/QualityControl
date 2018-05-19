@@ -73,7 +73,9 @@ class AuTestResource:
 
 
     @cherrypy.popargs('filter')
+    @cherrypy.tools.json_out()
     def DELETE(self, filter=None):
+
         if filter is None:
             pending_parts = self.runner.stop()
         else:

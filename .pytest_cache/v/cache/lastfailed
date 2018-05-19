@@ -36,6 +36,7 @@
   "tests/managers/test_devices.py::A_DeviceProxy::()::should_lock_device_when_executed": true,
   "tests/rest/test_domain.py::An_AuTestResource::()::should_query_any_domain_object": true,
   "tests/rest/test_domain.py::An_AuTestResource::()::should_remove_domain_objectes": true,
+  "tests/rest/test_testing.py::An_AuTestResource::()": true,
   "tests/services/test_common.py": true,
   "tests/services/test_inspection.py": true,
   "tests/services/test_sampling.py": true

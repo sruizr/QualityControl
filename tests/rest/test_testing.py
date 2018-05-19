@@ -75,12 +75,13 @@ class An_AuTestResource(TestResource):
             'sruiz',
             cavity=2)
 
-    def _should_stop_any_test(self):
-        import pdb; pdb.set_trace()
-
+    def should_stop_any_test(self):
+        self.runner.stop.return_value = {'info': 1}
         response = requests.delete(self.url + '/1')
         assert response.status_code == 200
         self.runner.stop.assert_called_with(0)
+
+        assert response.json() == {'info': 1}
 
         response = requests.delete(self.url)
         assert response.status_code == 200
