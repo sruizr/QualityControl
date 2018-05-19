@@ -5,7 +5,6 @@ from quactrl.rest.testing import AuTestResource
 from tests.rest import TestResource
 
 
-
 class An_AuTestResource(TestResource):
     def setup_class(cls):
         # Patch runner
@@ -76,7 +75,9 @@ class An_AuTestResource(TestResource):
             'sruiz',
             cavity=2)
 
-    def should_stop_any_test(self):
+    def _should_stop_any_test(self):
+        import pdb; pdb.set_trace()
+
         response = requests.delete(self.url + '/1')
         assert response.status_code == 200
         self.runner.stop.assert_called_with(0)

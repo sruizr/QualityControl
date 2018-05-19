@@ -39,7 +39,7 @@ class WithPars:
 class Resource(Base, WithPars):
     __tablename__ = 'resource'
     is_a = Column(String(30))
-    __mapper_args__  = {
+    __mapper_args__ = {
         'polymorphic_on': is_a
     }
 
@@ -48,10 +48,14 @@ class Resource(Base, WithPars):
     name = Column(String(100), default='')
     description = Column(String(100), default='')
 
-    def __init__(self, key, name, description, pars=None):
+    def __init__(self, **kwargs):
+        key = kwargs.pop('key')
+        name = kwargs.pop('name')
+        description = kwargs.pop('description')
         Base.__init__(self, key=key, name=name, description=description)
-        if pars:
-            self.pars = Pars(pars)
+        if kwargs:
+            self.pars = Pars(kwargs)
+
 
 class ResourceRelation(Base):
     __tablename__ = 'resource_relation'
@@ -67,7 +71,7 @@ class ResourceRelation(Base):
     to_resource = relationship('Resource', foreign_keys=[to_resource_id])
 
 
-class Node(Base):
+class Node(Base, WithPars):
     __tablename__ = 'node'
     is_a = Column(String(30))
     __mapper_args__ = {
@@ -79,9 +83,11 @@ class Node(Base):
     name = Column(String(50))
     description = Column(String(200))
 
-    def __init__(self, key, name=None):
-        self.key = key
-        self.name = name
+    def __init__(self, **kwargs):
+        self.key = kwargs.pop('key')
+        self.name = kwargs.pop('name')
+        self.description = kwargs.pop('description')
+        self._pars.set(kwargs)
 
     def add_item(self, item, qty=1.0, path=None, responsible=None):
         pass #TODO
@@ -177,7 +183,6 @@ class Path(Base, WithPars):
                             order_by='Path.sequence'
                             )
 
-
     def __init__(self, **kwargs):
         Base.__init__(self, **kwargs)
         self._load_resources()
@@ -261,13 +266,11 @@ class Token(Base):
     flow = relationship('Flow', backref='out_tokens')
     item = relationship('Item')
 
-
-
     def encode(self):
         return {'resource_key': self.item.resource.key,
                 'tracking': self.item.tracking,
                 'qty': self.qty,
-                'state':self.state,
+                'state': self.state,
                 'flow_id': self.flow_id,
                 'id': self.id
         }
@@ -329,7 +332,7 @@ class Flow(Base):
         # (item, qty)
         for output in self.outputs:
             Token(
-                item= output[0],
+                item = output[0],
                 qty=output[1],
                 node=self.path.to_node,
                 flow=self,
@@ -343,19 +346,3 @@ class Flow(Base):
 
         self.finished_on = datetime.now()
         self.state = 'cancelled'
-
-
-class DataAccessModule:
-    _methods = {}
-
-    def __init__(self, dal):
-        self.dal = dal
-    def get_stocks_by_node(self, node, session=None):
-        session = self.dal.Session() if session is None else session
-
-        qry = session.query(Token).filter(
-            Token.node == node,
-            Token.state == 'avalaible'
-            )
-
-        return qry.all()

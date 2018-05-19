@@ -171,3 +171,13 @@ def get_devices_by_location(location_key):
     #  #        Node.key == location_key
     #  #        )
     #  #    return qry.first()
+
+def get_stocks_by_node(self, node, session=None):
+    session = self.dal.Session() if session is None else session
+
+    qry = session.query(Token).filter(
+        Token.node == node,
+        Token.state == 'avalaible'
+        )
+
+    return qry.all()
