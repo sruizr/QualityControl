@@ -1,6 +1,5 @@
 from enum import Enum
-from threading import Thread, Event
-from datetime import datetime
+
 
 class Result(Enum):
     PENDING = 0

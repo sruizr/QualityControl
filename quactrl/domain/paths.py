@@ -20,10 +20,6 @@ class ControlPlan(Path):
     def after_load(self):
         pass
 
-    def create_flow(self, responsible, controller=None):
-        return Test(self, responsible, controller)
-
-
 class Control(Path):
     __mapper_args__ = {'polymorphic_identity': 'control'}
 

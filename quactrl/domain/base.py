@@ -3,7 +3,7 @@ import importlib
 from datetime import datetime
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import reconstructor
-from sqlalchemy import ForeignKey, Column
+from sqlalchemy import ForeignKey, Column, Table
 from sqlalchemy.types import (
     String, Integer, DateTime, Float
     )
@@ -97,6 +97,12 @@ class ResourceRelation(Base, WithPars):
 
     Base
 
+
+NodeLink = Table('node_link', Base.metadata,
+                 Column('from_node_id', Integer, ForeignKey('node.id')),
+                 Column('to_node_id', Integer, ForeignKey('node.id')))
+
+
 class Node(Base, WithPars):
     __tablename__ = 'node'
     is_a = Column(String(30))
@@ -105,9 +111,12 @@ class Node(Base, WithPars):
     }
 
     id = Column(Integer, primary_key=True)
-    key = Column(String(100), unique=True)
+    key = Column(String(15), unique=True)
     name = Column(String(50))
     description = Column(String(250))
+
+    parent_id = Column(Integer, ForeignKey('node.id'))
+    parent = relationship('Node')
 
     def __init__(self, **kwargs):
         self.key = kwargs.pop('key')
@@ -116,30 +125,11 @@ class Node(Base, WithPars):
         if kwargs:
             self.pars = Pars(**kwargs)
 
-    def add_item(self, item, qty=1.0, path=None, responsible=None):
-        pass #TODO
+    # def add_item(self, item, qty=1.0, path=None, responsible=None):
+    #     pass #TODO
 
-    def remove_item(self, item, qty=1.0, path=None, responsible=None):
-        pass #TODO
-
-
-class NodeRelation(Base):
-    __tablename__ = 'node_relation'
-    id = Column(Integer, primary_key=True)
-    relation_class = Column(String(100), default='has')
-    qty = Column(Float, default=1.0)
-    from_node_id = Column(Integer, ForeignKey('node.id'))
-    to_node_id = Column(Integer, ForeignKey('node.id'))
-
-    from_node = relationship('Node', foreign_keys=[from_node_id],
-                             backref='destinations')
-    to_node = relationship('Node', foreign_keys=[to_node_id], backref='sources')
-
-    def __init__(self, from_node, to_node, relation='has', qty=1.0):
-        self.from_node = from_node
-        self.to_node = to_node
-        self.relation_class = relation
-        self.qty = qty
+    # def remove_item(self, item, qty=1.0, path=None, responsible=None):
+    #     pass #TODO
 
 
 class Item(Base, WithPars):
@@ -293,18 +283,16 @@ class Path(Base, WithPars):
                     controller=controller)
 
 
-class PathResource(Base):
+class PathOutput(Base):
     __tablename__ = 'path_resource'
 
     id = Column(Integer, primary_key=True)
     path_id = Column(Integer, ForeignKey('path.id'), index=True)
     resource_id = Column(Integer, ForeignKey('resource.id'))
 
+    key = Column(String(10), nullable=False)
     path = relationship('Path', backref='resource_list')
     resource = relationship('Resource')
-    key = Column(String(10), nullable=False)
-    inout = Column(String(10), default='bypass')
-    qty = Column(Float, default=1.0)
 
 
 class Token(Base):

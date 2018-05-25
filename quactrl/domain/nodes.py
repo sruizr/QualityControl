@@ -1,8 +1,15 @@
-from quactrl.domain.base import Node, NodeRelation
+from sqlalchemy.orm import relationship
+from quactrl.domain.base import (
+    Node, NodeLink
+)
 
 
 class Person(Node):
     __mapper_args__ = {'polymorphic_identity': 'person'}
+    roles = relationship('Roles',
+                         foreign_keys=[NodeLink.to_node_id])
+    reports_to = None
+    in_charge_of = None
 
     def __init__(self, key, **kwargs):
         self.key = key
@@ -10,30 +17,25 @@ class Person(Node):
         self.description = kwargs.get('description')
 
 
-class Group(Node):
-    __mapper_args__ = {'polymorphic_identity': 'group'}
-
-    def add_person(self, *persons):
-        for person in persons:
-            NodeRelation(self, person)
-
-    def get_persons(self):
-        persons = []
-        for destination in self.destinations:
-            if (destination.relation_class == 'contains' and
-                    type(destination.to_node) is Person):
-                persons.append(self.destinations.to_node)
-        return persons
+class Roles(Node):
+    __mapper_args__ = {'polymorphic_identity': 'roles'}
+    members = relationship('Person',
+                           foreign_keys=[NodeLink.from_node_id])
 
 
 class Location(Node):
+    """Phisycal location for parts"""
     __mapper_args__ = {'polymorphic_identity': 'location'}
+    site = relationship('Location')
+    boxes = relationship('Location', foreign_key=[])
+    owners = None
 
-    def __init__(self, key, name=''):
-        self.key = key
-        self.name = name
 
-    def add_devices(self, *devices):
-        for device in devices:
-            if device.is_a == 'device':
-                pass
+class InBox(Node):
+    """Node for storing process instances"""
+    __mapper_args__ = {'polymorphic_identity': 'inbox'}
+    owners = None
+
+
+class Library(Node):
+    __mapper_args__ = {'polymorphic_identity': 'library'}
