@@ -1,8 +1,11 @@
 import threading
 from queue import Queue
 from quactrl.domain.persistence import dal
+import quactrl.domain.queries as qry
 from quactrl.managers.devices import DeviceManager
 from quactrl.managers import Event
+from quactrl.domain.flows import Creation
+from quactrl.domain.flows import Test, Check
 
 
 class TestManager:
@@ -64,6 +67,7 @@ class TestManager:
                 pending_pars.extend(tester.stop())
         return pending_pars
 
+
 class Feedback(threading.Event):
     def __init__(self, template):
         super().__init__()
@@ -117,28 +121,38 @@ class Tester(threading.Thread):
             self.open_check.result = 'cancelled'
             self.open_check.finished.set()
 
+    def _get_or_create_part(self, part_info, location):
+        pass
+
     def process(self, order):
+        session = dal.Session()
+
         part_info, responsible_key, test_pars = order
-        part = dal.get_or_create_part(part_info, self.location)
+
+        part = self._get_or_create_part(part_info, self.location)
 
         self.set_responsible_by(responsible_key)
         self.set_control_plan_for(part)
 
-        test = self.control_plan.get_test(part)
-        test.part = part
-        test.responsible = self.responsible
-
+        test = Test(self.control_plan, self.responsible)
+        test.set_input('part', part)
+        session.add(test)
         self.events.put(Event('start', test, cavity=self.cavity))
 
-        for check in test.checks:
-            check.prepare()
+        for control in self.control_plan.steps:
+            check = Check(test, control, self.responsible)
+            session.add(check)
             self.events.put(Event('start', check, cavity=self.cavity))
+
+            check.prepare()
+            check.dev_manager = self.dev_manager
+            check.tester = self
+
             if self.cancel_signal:
                 self.events.put(Event('cancel', check, cavity=self.cavity))
                 check.result = 'cancelled'
             else:
                 try:
-                    check.tester = self
                     check.execute()
                     if check.result == 'ongoing':
                         self.open_check = check

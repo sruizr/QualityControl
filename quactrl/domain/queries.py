@@ -7,7 +7,12 @@ import quactrl.domain.base as base
 import quactrl.domain.paths as paths
 
 
+def get_location(key):
+    session = dal.Session()
+    return session.query(nodes.Location).filter_by(key=key).one_or_none()
 
+def get_resource(**kargs):
+    pass
 
 # Generated from managers.Tester
 def get_control_plan_by(location_key, part_model_key):
@@ -66,7 +71,7 @@ def get_devices_by_location(location_key):
     # def get_or_create_dut(self, **kwargs):
     #     """Return a fully functional dut for testing"""
     #     pass
-1
+
     # def get_person(self, key, session=None):
     #     """Get operator from data layer if not exist it return None"""
     #     session = self.dal.Session() if session is None else session

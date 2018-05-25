@@ -1,76 +1,234 @@
-from .base import Resource, ResourceRelation
-from sqlalchemy.orm import reconstructor
+from .base import Resource, ResourceRelation, Pars
+from sqlalchemy.orm import reconstructor, relationship
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.ext.hybrid import hybrid_property
 
 
-class Characteristic(Resource):
+class IsA(ResourceRelation):
+    """A member is a group"""
+    __mapper_args__ = {'polymorphic_identity': 'is_a'}
+
+    def __init__(self, member, group, pars=None):
+        self.from_resource = member
+        self.to_resource = group
+        if pars:
+            self.pars = Pars(pars)
+
+    @hybrid_property
+    def group(self):
+        return self.to_resource
+
+    @hybrid_property
+    def member(self):
+        return self.from_resource
+
+    @group.setter
+    def group(self, group):
+        self.to_resource = group
+
+    @member.setter
+    def member(self, member):
+        self.from_resource = member
+
+
+class Composition(ResourceRelation):
+    """A system contains a component"""
+    __mapper_args__ = {'polymorphic_identity': 'contains'}
+
+    def __init__(self, system, component, qty=1.0):
+        self.from_resource = system
+        self.to_resource = component
+        self.qty = qty
+
+    @hybrid_property
+    def component(self):
+        return self.to_resource
+
+    @hybrid_property
+    def system(self):
+        return self.from_resource
+
+    @component.setter
+    def component(self, component):
+        self.to_resource = component
+
+    @system.setter
+    def system(self, system):
+        self.from_resource = system
+
+
+class Requirement(ResourceRelation):
+    """A resource requires a characteristic"""
+    __mapper_args__ = {'polymorphic_identity': 'requires'}
+
+    def __init__(self, resource, characteristic, specs=None):
+        self.from_resource = resource
+        self.to_resource = characteristic
+        if specs:
+            self.pars = Pars(**specs)
+
+    @hybrid_property
+    def characteristic(self):
+        return self.to_resource
+
+    @characteristic.setter
+    def characteristic(self, char):
+        self.to_resource = char
+
+
+class Failure(ResourceRelation):
+    """A characteristic fails with a mode"""
+    __mapper_args__ = {'polymorphic_identity': 'fails'}
+
+    def __init__(self, characteristic, mode, mode_key=None):
+        m_key = mode if mode_key is None else mode_key
+
+        for failure in characteristic.failures:
+            if failure.fmode.key == '{}-{}'.format(m_key, characteristic.key):
+                raise DuplicatedFailure(
+                    'Characteristic "{}" has duplicated failures mode {}'.format(
+                        characteristic.description, mode
+                    ))
+
+        self.from_resource = characteristic
+        self.to_resource = FailureMode(characteristic, mode, m_key)
+
+    @hybrid_property
+    def fmode(self):
+        return self.to_resource
+
+    @fmode.setter
+    def fmode(self, fmode):
+        self.to_resource = fmode
+
+
+class WithMembers:
+    @declared_attr
+    def members(cls):
+        return relationship('IsA', foreign_keys=[IsA.to_resource_id])
+
+
+class WithRequirements:
+    @declared_attr
+    def requirements(cls):
+        return relationship('Requirement',
+                            foreign_keys=[Requirement.from_resource_id])
+
+
+class WithComponents:
+    @declared_attr
+    def components(cls):
+        return relationship('Composition',
+                            foreign_keys=[Composition.from_resource_id])
+
+    def __getitem__(self, key):
+        for composition in self.components:
+            if composition.component.key == key:
+                return composition.component
+
+
+class WithGroups:
+    @declared_attr
+    def groups(cls):
+        return relationship('IsA', foreign_keys=[IsA.from_resource_id])
+
+    def get_pars_from_group(self, name):
+        pars = None
+        for group in self.groups:
+            if group.group.name == name:
+                pars = group.pars.dict
+        return pars
+
+
+class Characteristic(Resource, WithRequirements):
     __mapper_args__ = {'polymorphic_identity': 'characteristic'}
 
-    def __init__(self, key, description):
+    failures = relationship('Failure',
+                            foreign_keys=[Failure.from_resource_id])
+
+    def __init__(self, key, description=''):
         self.key = key
         self.description = description
-        self._failure_modes = {}
 
-    def add_failure_mode(self, mode):
-        self.get_failure_mode(mode)
+    def get_or_create_failure_mode(self, mode_key):
+        failure_mode_key = self.compose_failure_mode_key(mode_key)
 
-    def get_failure_mode(self, mode):
-        if mode not in self._failure_modes:
-            failure_mode = FailureMode(mode, self)
-            self._failure_modes[mode] = failure_mode
+        for failure in self.failures:
+            if failure.fmode.key == failure_mode_key:
+                return failure.fmode
+        failure_mode = Failure(failure_mode_key)
+        self.failures.append(failure_mode)
 
-        return self._failure_modes[mode]
+        return failure_mode
 
-    @reconstructor
-    def after_load(self):
-        self._failure_modes = {}
-        for destination in self.destinations:
-            if destination.to_resource.is_a == 'failure_mode':
-                mode = destination.to_resource.key.split('-')[0]
-                self._failure_modes[mode] = destination.to_resource
+    def _compose_failure_mode_key(self, mode_key):
+        return '{}-{}'.format(mode_key, self.key)
 
+
+class DuplicatedFailure(Exception):
+    pass
 
 
 class FailureMode(Resource):
     __mapper_args__ = {'polymorphic_identity': 'failure_mode'}
 
-    def __init__(self, mode, characteristic):
+    def __init__(self, characteristic, mode, mode_key=None):
+        if mode_key is None:
+            mode_key = mode
 
-        key = '{}-{}'.format(mode, characteristic.key)
-        description = '{} {}'.format(mode, characteristic.description)
-        Resource.__init__(self, key, '', description)
-
-        rl = ResourceRelation(relation_class='contains', to_resource=self)
-        characteristic.destinations.append(rl)
+        key = '{}-{}'.format(mode_key, characteristic.key)
+        self.description = '{}, {}'.format(characteristic.description, mode)
+        self.key = key
+        self.name = mode
 
 
 class DeviceModel(Resource):
     __mapper_args__ = {'polymorphic_identity': 'device_model'}
 
+    def get_configuration(self):
+        return self.get_pars_from_group('device')
 
-class PartModel(Resource):
+
+class PartGroup(Resource, WithMembers, WithGroups, WithRequirements):
+    __mapper_args__ = {'polymorphic_identity': 'part_group'}
+
+
+class PartModel(Resource, WithGroups, WithComponents, WithRequirements):
     __mapper_args__ = {'polymorphic_identity': 'part_model'}
 
-    _dut_classes = {}
+    def get_configuration(self):
+        return self.get_pars_from_group('device')
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._load_dut_class()
 
-    def _load_dut_class(self):
-        if self.pars:
-            pars = self.pars.get()
-            if self.key not in self._dut_classes:
-                class_name = pars.pop('class_name')
-                Dut = get_component(class_name)
-                self._dut_classes[self.key] = (Dut, pars)
+class Document(Resource, WithGroups):
+    __mapper_args__ = {'polymorphic_identity': 'report'}
 
-    @reconstructor
-    def after_load(self):
-        self._load_dut_class()
+    def get_template(self):
+        """Return parameters to be filled by the report"""
+        return self.get_pars_from_group('template')
 
-    def get_behaviour(self):
-        if self.key in self._dut_classes:
-            Dut = self._dut_classes[self.key][0]
-            pars = self._dut_classes[self.key][1]
+        # _dut_classes = {}
 
-            return Dut(**pars)
+
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self._load_dut_class()
+
+    # def _load_dut_class(self):
+    #     if self.pars:
+    #         pars = self.pars.get()
+    #         if self.key not in self._dut_classes:
+    #             class_name = pars.pop('class_name')
+    #             Dut = get_component(class_name)
+    #             self._dut_classes[self.key] = (Dut, pars)
+
+    # @reconstructor
+    # def after_load(self):
+    #     self._load_dut_class()
+
+    # def get_behaviour(self):
+    #     if self.key in self._dut_classes:
+    #         Dut = self._dut_classes[self.key][0]
+    #         pars = self._dut_classes[self.key][1]
+
+    #         return Dut(**pars)

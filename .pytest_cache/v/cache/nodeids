@@ -1,7 +1,8 @@
 [
-  "tests/rest/test_testing.py::An_AuTestResource::()::should_return_open_tests",
-  "tests/rest/test_testing.py::An_AuTestResource::()::should_setup_from_PUT_request",
-  "tests/rest/test_testing.py::An_AuTestResource::()::should_begin_test_from_part_information",
-  "tests/rest/test_testing.py::An_AuTestResource::()::should_stop_any_test",
-  "tests/rest/test_testing.py::An_AuTestResource::()::should_report_events"
+  "tests/domain/test_resources.py::A_IsA::()::should_stores_part_grouping",
+  "tests/domain/test_resources.py::A_Composition::()::should_stores_part_compositions",
+  "tests/domain/test_resources.py::A_Requirement::()::should_stores_requirements_for_part",
+  "tests/domain/test_resources.py::A_Requirement::()::should_stores_requirements_for_characteristic",
+  "tests/domain/test_resources.py::A_Requirement::()::should_stores_requirements_for_part_group",
+  "tests/domain/test_resources.py::A_Failure::()::should_avoid_repeat_failure_modes"
 ]
