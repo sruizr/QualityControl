@@ -99,8 +99,10 @@ class ResourceRelation(Base, WithPars):
 
 
 NodeLink = Table('node_link', Base.metadata,
-                 Column('from_node_id', Integer, ForeignKey('node.id')),
-                 Column('to_node_id', Integer, ForeignKey('node.id')))
+                 Column('from_node_id', Integer, ForeignKey('node.id'),
+                        primary_key=True),
+                 Column('to_node_id', Integer, ForeignKey('node.id'),
+                        primary_key=True))
 
 
 class Node(Base, WithPars):
@@ -115,13 +117,10 @@ class Node(Base, WithPars):
     name = Column(String(50))
     description = Column(String(250))
 
-    # parent_id = Column(Integer, ForeignKey('node.id'))
-    # parent = relationship('Node')
-
-    def __init__(self, **kwargs):
-        self.key = kwargs.pop('key')
-        self.name = kwargs.pop('name', '')
-        self.description = kwargs.pop('description', '')
+    def __init__(self, key,  **kwargs):
+        self.key = key
+        self.name = kwargs.pop('name', None)
+        self.description = kwargs.pop('description', None)
         if kwargs:
             self.pars = Pars(**kwargs)
 
