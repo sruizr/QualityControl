@@ -1,8 +1,3 @@
 [
-  "tests/domain/test_resources.py::A_IsA::()::should_stores_part_grouping",
-  "tests/domain/test_resources.py::A_Composition::()::should_stores_part_compositions",
-  "tests/domain/test_resources.py::A_Requirement::()::should_stores_requirements_for_part",
-  "tests/domain/test_resources.py::A_Requirement::()::should_stores_requirements_for_characteristic",
-  "tests/domain/test_resources.py::A_Requirement::()::should_stores_requirements_for_part_group",
-  "tests/domain/test_resources.py::A_Failure::()::should_avoid_repeat_failure_modes"
+  "tests/domain/test_nodes.py::A_Person::()::should_have_roles"
 ]

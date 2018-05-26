@@ -115,8 +115,8 @@ class Node(Base, WithPars):
     name = Column(String(50))
     description = Column(String(250))
 
-    parent_id = Column(Integer, ForeignKey('node.id'))
-    parent = relationship('Node')
+    # parent_id = Column(Integer, ForeignKey('node.id'))
+    # parent = relationship('Node')
 
     def __init__(self, **kwargs):
         self.key = kwargs.pop('key')
