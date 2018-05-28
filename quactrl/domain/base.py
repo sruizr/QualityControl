@@ -199,16 +199,9 @@ class Item(Base, WithPars):
                     qty = 0
 
 
-class ItemRelation(Base):
-    __tablename__ = 'item_relation'
-    id = Column(Integer, primary_key=True)
-    relation_class = Column(String(100), default='has')
-    from_item_id = Column(Integer, ForeignKey('item.id'))
-    to_item_id = Column(Integer, ForeignKey('item.id'))
-    qty = Column(Float, default=1.0)
-
-    from_item = relationship('Item', foreign_keys=[from_item_id], backref='destinations')
-    to_item = relationship('Item', foreign_keys=[to_item_id])
+ItemLink = Table('item_link', Base.metadata,
+                 Column('from_item_id', Integer, ForeignKey('item.id')),
+                 Column('to_item_id', Integer, ForeignKey('item.id')))
 
 
 class Path(Base, WithPars):
