@@ -139,7 +139,7 @@ class Measurement(Item, PartAttribute):
         'Defect', secondary=ItemLink,
         primaryjoin=Item.id == ItemLink.c.from_item_id,
         secondaryjoin=Defect.id == ItemLink.c.to_item_id,
-        backref='_measurements'
+        backref='measurements'
     )
 
     def __init__(self, part, characteristic, value, **kwargs):
@@ -151,12 +151,13 @@ class Measurement(Item, PartAttribute):
     def evaluate(self, limits, uncertainty=0.0):
         """Evals the measurement against limits and add defect to part if NC"""
         defect = None
+        mode_key = None
         low_limit, high_limit = limits
 
-        if self.qty > high_limit - uncertainty:
+        if high_limit is not None and self.qty > high_limit - uncertainty:
             mode_key = 'hi' if self.qty > high_limit else 'shi'
 
-        if self.qty < low_limit + uncertainty:
+        if low_limit is not None and self.qty < low_limit + uncertainty:
             mode_key = 'lw' if self.qty < low_limit else 'slw'
 
         if mode_key:
@@ -177,6 +178,8 @@ class Measurement(Item, PartAttribute):
 
     @defect.setter
     def defect(self, defect):
+        import pdb; pdb.set_trace()
+
         if self._defects:
             self._defects[0] = defect
         else:

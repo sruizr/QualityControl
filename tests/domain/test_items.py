@@ -2,6 +2,7 @@ import quactrl.domain.items as i
 import quactrl.domain.resources as r
 from tests import TestWithPatches
 from tests.domain import EmptyDataTest
+from unittest.mock import Mock
 
 
 class A_Part(EmptyDataTest):
@@ -99,24 +100,40 @@ class A_Measurement(EmptyDataTest):
 
     def should_have_only_one_defect_linked(self):
         failure_mode = r.FailureMode(self.characteristic, 'lw')
+        other_failure_mode = r.FailureMode(self.characteristic, 'slw')
         defect = i.Defect(self.part, failure_mode)
+        other_defect = i.Defect(self.part, other_failure_mode)
 
         measurement = i.Measurement(self.part, self.characteristic, value=1.0)
+        measurement.defect = defect
         self.session.add(measurement)
         self.session.commit()
 
+        assert defect.measurements[0] == measurement
 
-        measurement.part = other_part
+        measurement.defect == other_defect
         self.session.commit()
+        assert measurement.defect == other_defect
 
-
-        assert measurement.part == other_part
-        assert not self.part.measurements
-        assert other_part.measurements[0] == measurement
-
-class A_Measurement_(TestWithPatchs):
-    pass
+        assert other_defect.measurements[0]== measurement
 
 
 class A_Document(EmptyDataTest):
-    pass
+
+    def should_report_from_test(self):
+        pass
+
+
+class A_Measurement_(TestWithPatches):
+    def setup_method(self, method):
+        self.create_patches([
+            'quactrl.domain.items.Defect'
+            ])
+
+    def should_eval_ok_from_limits(self):
+        characteristic = Mock()
+        part = Mock()
+
+        measurement = i.Measurement(part, characteristic, 2.0)
+        defect = measurement.evaluate([None, None], 1.0)
+        assert defect is None
