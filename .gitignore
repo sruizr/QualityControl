@@ -8,6 +8,10 @@ __pycache__/
 # Temporary files
 *.*~
 
+
+# Pytest
+.pytest_cache/
+
 # Distribution / packaging
 .Python
 env/

@@ -1,6 +1,0 @@
-[
-  "tests/domain/test_items.py::A_Part::()::should_start_with_part_model",
-  "tests/domain/test_items.py::A_Part::()::should_store_measurements",
-  "tests/domain/test_items.py::A_Part::()::should_store_defects",
-  "tests/domain/test_items.py::A_Defect::()::should_keep_part"
-]

@@ -99,7 +99,22 @@ class Report(Item):
     pass
 
 
-class Defect(Item):
+class PartAttribute:
+    @hybrid_property
+    def part(self):
+        if self._parts:
+            return self._parts[0]
+
+    @part.setter
+    def part(self, part):
+        if self._parts:
+            self._parts[0] = part
+        else:
+            self._parts.append(part)
+
+
+
+class Defect(Item, PartAttribute):
     __mapper_args__ = {'polymorphic_identity': 'defect'}
 
     def __init__(self, part, failure_mode, qty=1.0, measurement=None):
@@ -118,7 +133,7 @@ class Defect(Item):
         self.resource = failure_mode
 
 
-class Measurement(Item):
+class Measurement(Item, PartAttribute):
     __mapper_args__ = {'polymorphic_identity': 'measurement'}
     _defects = relationship(
         'Defect', secondary=ItemLink,
@@ -132,20 +147,28 @@ class Measurement(Item):
         self.qty = value
         self.part = part
 
+
+    def evaluate(self, limits, uncertainty=0.0):
+        """Evals the measurement against limits and add defect to part if NC"""
+        defect = None
+        low_limit, high_limit = limits
+
+        if self.qty > high_limit - uncertainty:
+            mode_key = 'hi' if self.qty > high_limit else 'shi'
+
+        if self.qty < low_limit + uncertainty:
+            mode_key = 'lw' if self.qty < low_limit else 'slw'
+
+        if mode_key:
+            failure_mode = self.characteristic.get_or_create_failure_mode(mode_key)
+            defect = self.part.add_defect(failure_mode)
+            self.defect = defect
+
+        return defect
+
     @hybrid_property
     def characteristic(self):
         return self.resource
-
-    @hybrid_property
-    def part(self):
-        return self._parts[0]
-
-    @part.setter
-    def part(self, part):
-        if self._parts:
-            self._parts[0] = part
-        else:
-            self._parts.append(part)
 
     @hybrid_property
     def defect(self):
