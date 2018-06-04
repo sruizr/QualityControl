@@ -1,8 +1,18 @@
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column
+from sqlalchemy.types import Integer, String
 import importlib
 
 
 Base = declarative_base()
+
+
+class Abstract:
+    id = Column(Integer, primary_key=True)
+    is_a = Column(String(30))
+    __mapper_args__ = {
+        'polymorphic_on': is_a
+    }
 
 
 def get_component(name):

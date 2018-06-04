@@ -3,7 +3,6 @@ from quactrl.domain.base import Resource, Path, Item, Node, PathResource
 from tests.domain.test_data import OnMemoryTest
 
 
-
 class A_Check(OnMemoryTest):
     def setup_method(self, method):
         super().setup_method(method)
@@ -108,7 +107,3 @@ class A_Test(OnMemoryTest):
 
         assert test.id is not None
         assert test.is_a == 'test'
-
-
-# class A_Measure(OnMemoryTest):
-#     def

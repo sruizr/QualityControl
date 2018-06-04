@@ -3,7 +3,18 @@ from sqlalchemy.orm import synonym, reconstructor
 from threading import Thread, Event
 from quactrl.domain.base import (Item, Resource, PathResource,
                                 ItemRelation, Path, Node, Pars, Flow)
+import quactrl.domain.flows as f
 from datetime import datetime
+
+
+
+class NotAutorizedResponsible(Exception):
+    # duplicated!!
+    pass
+
+
+class IncorrectOutResource(Exception):
+    pass
 
 
 class ControlPlan(Path):
@@ -19,6 +30,26 @@ class ControlPlan(Path):
     @reconstructor
     def after_load(self):
         pass
+
+    def create_flow(self, in_part, responsible):
+        if self.role not in responsible.roles:
+            raise NotAutorizedResponsible(
+                'Responsible {} can not access to the flow'.format(
+                    responsible.name)
+            )
+
+        if in_part.resource not in self.resources.values():
+            raise IncorrectOutResource(
+                'Resource {} is not allowed for the current control plan'.format(
+                    in_part.resource.name)
+            )
+
+        test = f.Test(self, in_part, responsible)
+        for step in self.steps:
+            test.steps.append(step.create_flow())
+
+        return test
+
 
 class Control(Path):
     __mapper_args__ = {'polymorphic_identity': 'control'}
@@ -38,7 +69,7 @@ class Control(Path):
         self.resource_list.append(path_resource)
 
     def create_flow(self, test, responsible):
-        return Check(self, test, responsible, self.controller)
+        return f.Check(self, test, responsible, self.controller)
 
     def set_pars(self, pars):
         if self.pars:

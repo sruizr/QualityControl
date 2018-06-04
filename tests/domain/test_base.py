@@ -2,6 +2,7 @@ from tests.domain import EmptyDataTest
 import json
 import quactrl.domain.base as base
 import pytest
+from unittest.mock import Mock, patch
 
 
 class A_ParsMixin(EmptyDataTest):
@@ -32,8 +33,78 @@ class A_ParsMixin(EmptyDataTest):
 
 
 class A_Flow(EmptyDataTest):
-    def should_be_created_from_path_definition(self):
-        pass
+    def should_persist_basic_relationships(self):
+        flow = base.Flow()
+        flow.path = base.Path(role=base.Node(key='role'))
+
+        flow.responsible = base.Node(key='responsible')
+
+        self.session.add(flow)
+        self.session.commit()
+
+        assert flow.path.role.key == 'role'
+        assert flow.responsible.key == 'responsible'
+
+    @patch('quactrl.domain.base.datetime')
+    def should_prepare_flow(self, mock_datetime):
+        flow = base.Flow()
+
+        flow.prepare()
+
+        assert flow.inputs == []
+        assert flow.outputs == []
+        assert not flow.origin
+        assert not flow.destination
+        assert flow.state == 'started'
+        mock_datetime.now.assert_called_with()
+
+        path = Mock()
+        flow.path = path
+
+        flow.prepare()
+        assert flow.origin == path.from_node
+        assert flow.destination == path.to_node
+
+    @patch('quactrl.domain.base.datetime')
+    def should_terminate_flow(self, mock_datetime):
+        flow = base.Flow()
+
+        _input = Mock()
+        flow.inputs = [_input]
+        output = Mock()
+        flow.outputs = [output]
+        flow.destination = Mock()
+        flow.origin = Mock()
+
+        flow.terminate()
+
+        assert flow.finished_on == mock_datetime.now.return_value
+        mock_datetime.now.assert_called_with()
+        assert flow.state == 'finished'
+
+        _input.consume.assert_called_with(flow)
+        output.produce.assert_called_with(flow)
+
+    @patch('quactrl.domain.base.datetime')
+    def should_cancel_flow(self, mock_datetime):
+        flow = base.Flow()
+
+        _input = Mock()
+        flow.inputs = [_input]
+        output = Mock()
+        flow.outputs = [output]
+        flow.destination = Mock()
+        flow.origin = origin = Mock()
+
+        flow.cancel()
+
+        assert flow.finished_on == mock_datetime.now.return_value
+        mock_datetime.now.assert_called_with()
+        assert flow.state == 'cancelled'
+        assert origin == flow.destination
+
+        _input.consume.assert_called_with(flow)
+        output.produce.assert_called_with(flow)
 
 
 class An_Item(EmptyDataTest):
@@ -48,7 +119,8 @@ class An_Item(EmptyDataTest):
         flow.destination = base.Node(key='destination')
         flow.origin = base.Node(key='origin')
 
-        self.item.produce(flow, 2)
+        self.item.qty = 2
+        self.item.produce(flow)
 
         self.session.add(self.item)
         self.session.commit()
@@ -144,17 +216,76 @@ class A_Path(EmptyDataTest):
         super().setup_method(method)
         self.path = base.Path()
 
-    def should_have_compsution_plan(self):
-        pass
+    def should_persist_basic_relationships(self):
+        path = self.path
 
-    def should_have_production_plan(self):
-        pass
+        path.from_node = base.Node(key='from')
+        path.to_node = base.Node(key='to')
+        path.role = base.Node(key='role')
 
-    def should_confirm_if_can_consume_resource(self):
-        pass
+        self.session.add(path)
+        self.session.commit()
 
-    def should_confirm_if_can_produce_resource(self):
-        pass
+        assert path.role.key == 'role'
+        assert path.from_node.key == 'from'
+        assert path.to_node.key == 'to'
 
-    def should_confirm_if_responsible_can_execute_path(self):
-        pass
+    def should_contain_posible_resources(self):
+        resource = base.Resource(key='resource')
+        self.path.resources['out'] = resource
+
+        self.session.add(self.path)
+        self.session.commit()
+
+        assert self.path.resources['out'] == resource
+
+    def setup_validate_responsible(self):
+        role = base.Node(key='role')
+        self.path.role = role
+
+    def should_validate_responsible(self):
+        self.setup_validate_responsible()
+        responsible = Mock()
+        responsible.roles = [self.path.role]
+
+        self.path.validate_responsible(responsible)
+
+    def should_raise_responsible_exception_on_validate_responsible(self):
+        self.setup_validate_responsible()
+        responsible = Mock()
+        responsible.roles = [Mock()]
+
+        with pytest.raises(base.NotAuthorizedResponsible):
+            self.path.validate_responsible(responsible)
+
+    def setup_validate_item(self):
+        resource = Mock()
+        self.path.resources['out'] = resource
+
+    def should_validate_item(self):
+        self.setup_validate_item()
+        item = Mock()
+        item.resource = self.path.resources['out']
+
+        self.path.validate_item(item)
+
+        item = Mock()
+        item.resource.groups = [self.path.resources['out']]
+        self.path.validate_item(item)
+
+    def should_raise_item_exception_on_validate_item(self):
+        self.setup_validate_item()
+        item = Mock()
+        item.resource.groups = [Mock()]
+
+        with pytest.raises(base.NoCompatibleItem):
+            self.path.validate_item(item)
+
+    def should_request_to_implement_create_flow(self):
+        responsible = Mock()
+
+        try:
+            self.path.create_flow(responsible)
+            pytest.fail('NotImplementedError should be raised')
+        except NotImplementedError:
+            pass

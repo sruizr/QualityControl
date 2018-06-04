@@ -8,14 +8,25 @@ from sqlalchemy.types import (
     String, Integer, DateTime, Float
     )
 from sqlalchemy.orm import relationship, backref, reconstructor, aliased
-from quactrl.domain import Base, get_component
+from quactrl.domain import Base, get_component, Abstract
+from sqlalchemy.orm.collections import attribute_mapped_collection
+from sqlalchemy.ext.associationproxy import association_proxy
 
 
 class StockException(Exception):
     pass
 
 
-class ResponsibleNotAuthorized(Exception):
+class NotAuthorizedResponsible(Exception):
+    pass
+
+
+class MethodLoadError(Exception):
+    """Method can not be loaded"""
+    pass
+
+
+class NoCompatibleItem(Exception):
     pass
 
 
@@ -59,14 +70,9 @@ class WithPars:
         return relationship('Pars')
 
 
-class Resource(Base):
+class Resource(Base, Abstract):
     __tablename__ = 'resource'
-    is_a = Column(String(30))
-    __mapper_args__ = {
-        'polymorphic_on': is_a
-    }
 
-    id = Column(Integer, primary_key=True)
     key = Column(String(100), unique=True)
     name = Column(String(100), default='')
     description = Column(String(100), default='')
@@ -105,14 +111,9 @@ NodeLink = Table('node_link', Base.metadata,
                         primary_key=True))
 
 
-class Node(Base, WithPars):
+class Node(Base, Abstract, WithPars):
     __tablename__ = 'node'
-    is_a = Column(String(30))
-    __mapper_args__ = {
-        'polymorphic_on': is_a
-    }
 
-    id = Column(Integer, primary_key=True)
     key = Column(String(15), unique=True)
     name = Column(String(50))
     description = Column(String(250))
@@ -131,18 +132,14 @@ class Node(Base, WithPars):
     #     pass #TODO
 
 
-class Item(Base, WithPars):
+class Item(Base, Abstract, WithPars):
     __tablename__ = 'item'
-    is_a = Column(String(30))
-    __mapper_args__ = {
-        'polymorphic_on': is_a
-    }
 
-    id = Column(Integer, primary_key=True)
     resource_id = Column(ForeignKey('resource.id'))
-    resource = relationship("Resource")
     tracking = Column(String(100), index=True)
     state = Column(String(100), index=True, default='active')
+
+    resource = relationship("Resource")
     avalaible_tokens = relationship(
         'Token',
         primaryjoin="and_(Item.id==Token.item_id, Token.consumer_id == None)")
@@ -165,12 +162,14 @@ class Item(Base, WithPars):
 
         return stocks
 
-    def produce(self, producer, qty=1):
+    def produce(self, producer):
         """Produce a qty of item at producer destination"""
+        qty = getattr(self, 'qty', 1.0)
         self.avalaible_tokens.append(Token(qty=qty, producer=producer, node=producer.destination))
 
-    def consume(self, consumer, qty=None):
+    def consume(self, consumer):
         """Cosume a qty of item at consumer origin"""
+        qty = getattr(self, 'qty', None)
         stocks = self.get_stocks()
         if consumer.origin not in stocks.keys():
             raise StockException('There is no stock on "{}"'.format(
@@ -204,78 +203,68 @@ ItemLink = Table('item_link', Base.metadata,
                  Column('to_item_id', Integer, ForeignKey('item.id')))
 
 
-class Path(Base, WithPars):
-    __tablename__ = 'path'
-    is_a = Column(String(15))
+class Step(Base, Abstract, WithPars):
+    __tablename__ = 'step'
+
+    path_id = Column(Integer, ForeignKey('path.id'))
     created_on = Column(DateTime, default=datetime.now)
     removed_on = Column(DateTime)
-    __mapper_args__ = {
-        'polymorphic_on': is_a
-    }
 
-    id = Column(Integer, primary_key=True)
-    parent_id = Column(Integer, ForeignKey('path.id'))
+    path = relationship('Path', back_populates='steps')
     sequence = Column(Integer, default=0)
     method_name = Column(String(100), default='')
+
+
+class Path(Base, Abstract, WithPars):
+    __tablename__ = 'path'
+
     from_node_id = Column(Integer, ForeignKey('node.id'), index=True)
     to_node_id = Column(Integer, ForeignKey('node.id'), index=True)
+    role_id = Column(Integer, ForeignKey('node.id'))
+
+    created_on = Column(DateTime, default=datetime.now)
+    removed_on = Column(DateTime)
 
     from_node = relationship('Node', foreign_keys=[from_node_id])
     to_node = relationship('Node', foreign_keys=[to_node_id])
+    role = relationship('Node', foreign_keys=[role_id])
     steps = relationship(
-        'Path',
-        backref=backref('parent', remote_side=[id]),
-        order_by='Path.sequence'
+        'Step',
+        order_by='Step.sequence',
+        back_populates='path'
     )
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._load_resources()
+    resources = association_proxy(
+        'path_resource', 'resource',
+        creator=lambda k, v: PathResource(key=k, resource=v)
+    )
 
-    def _load_resources(self):
-        self.consumes = {}
-        self.produces = {}
+    def create_flow(self, responsible):
+        raise NotImplementedError()
 
-        for path_resource in self.resource_list:
-            if path_resource.flow in ('inout', 'in'):
-                self.in_resources[path_resource.resource.key] = (
-                    path_resource.resource, path_resource.qty
+    def validate_responsible(self, responsible):
+        # Check responsible has role
+        if self.role not in responsible.roles:
+            raise NotAuthorizedResponsible(
+                'Responsible {} is not autorized to implement path'.format(
+                    responsible.name
                 )
-            if path_resource.flow in ('inout', 'out'):
-                self.out_resources[path_resource.resource.key] = (
-                    path_resource.resource, path_resource.qty
+            )
+
+    def validate_item(self, item):
+        if (item.resource not in self.resources.values()):
+            for resource in self.resources.values():
+                if resource in item.resource.groups:
+                    return
+
+            raise NoCompatibleItem(
+                'Item of resource {} is not compatible with path'.format(
+                    item.resource.name
                 )
-
-    @reconstructor
-    def after_load(self):
-        self._load_resources()
-
-    def append_step(self, step_path):
-        new_seq = self.children[-1].sequence + 5 if self.children else 0
-        step_path.sequence = new_seq
-        step_path.parent = self
-        step_path.from_node = self.from_node
-        step_path.to_node = self.from_node
-
-    def add_resource(self, resource, flow='inout', qty=1.0):
-        self.resource_list.append(PathResource(
-            path=self,
-            resource=resource,
-            flow=flow
-        ))
-        self._load_resources()
-
-    def accept_inputs(self, inputs):
-        #  TODO:
-        return True
-
-    def create_flow(self, responsible, controller=None):
-        return Flow(path=self,
-                    responsible=responsible,
-                    controller=controller)
+            )
 
 
-class PathOutput(Base):
+class PathResource(Base):
     __tablename__ = 'path_resource'
 
     id = Column(Integer, primary_key=True)
@@ -283,8 +272,11 @@ class PathOutput(Base):
     resource_id = Column(Integer, ForeignKey('resource.id'))
 
     key = Column(String(10), nullable=False)
-    path = relationship('Path', backref='resource_list')
     resource = relationship('Resource')
+    path = relationship('Path', backref=backref(
+        'path_resource',
+        collection_class=attribute_mapped_collection('key')
+    ))
 
 
 class Token(Base):
@@ -329,99 +321,97 @@ class Token(Base):
     #     }
 
 
-class Flow(Base):
+class Flow(Base, Abstract):
     __tablename__ = 'flow'
-    id = Column(Integer, primary_key=True)
-    is_a = Column(String(15))
-    __mapper_args__ = {
-        'polymorphic_on': is_a
-    }
 
-    started_on = Column(DateTime, default=datetime.now)
-    path_id = Column(Integer, ForeignKey('path.id'))
-    parent_id = Column(Integer, ForeignKey('flow.id'))
-    responsible_id = Column(Integer, ForeignKey('node.id'))
+    started_on = Column(DateTime)
     finished_on = Column(DateTime)
-    state = Column(String(15), default='ongoing')
-    tracking  = Column(String(100))
+    state = Column(String(15), default='open')
 
-    responsible = relationship('Node')
+    path_id = Column(Integer, ForeignKey('path.id'))
+    responsible_id = Column(Integer, ForeignKey('node.id'))
+
     path = relationship('Path')
-    children = relationship('Flow',
-                            backref=backref('parent', remote_side=[id])
-                           )
-
-    def __init__(self, **kwargs):
-        self.controller = kwargs.pop('controller', None)
-        super().__init__(**kwargs)
-        self._load_fields()
-
-    def _load_fields(self):
-        self.method = None
-        try:
-            self.method = get_component(self.path.method_name)
-        except Exception as e:
-            pass
-        self.inputs = {}
-        self.outputs = {}
-
-    @reconstructor
-    def after_load(self):
-        self._load_fields()
+    responsible = relationship('Node')
+    operations = relationship('Operation',
+                              back_populates='flow',
+                              order_by='Operation.sequence')
 
     def prepare(self):
-        """Load inputs and set parameters for flow from path info"""
+        """Create internal fields for assuring the flow of items"""
+        self.inputs = []
+        self.outputs = []
         self.started_on = datetime.now()
+        self.state = 'started'
+
+        self.destination = self.origin = None
         if self.path:
             self.origin = self.path.from_node
-            self.destination = self.path.from_node
-
-            # Loads inputs
-            input_filters = self.order.get('inputs', {})
-            for key, filters in input_filters.items():
-                item = qry.get_item_by(location=self.origin,  **filters)
-                self.inputs[key] = item
-
-    def execute(self):
-        """Execute method for generating outputs"""
-        if self.method:
-            self.method(self, self.controller)
+            self.destination = self.path.to_node
 
     def terminate(self):
-        """Commit the flow, consuming inputs and pushing outputs"""
+        """Commit the flow, pulling inputs and pushing outputs"""
+
+        self._move_items()
+        self.state = 'finished'
+
+    def _move_items(self):
         # Consume inputs
+        self.finished_on = datetime.now()
         if self.origin:
-            for _input in self.inputs.values():
-                if type(_input) is list:
-                    for item in _input:
-                        qty = self._get_qty(item, 'in')
-                        item.consume(self, qty)
+            for _input in self.inputs:
+                _input.consume(self)
 
         # Produce outputs
         if self.destination:
-            for output in self.outputs.values():
-                if type(output) is list:
-                    for item in output:
-                        qty = self._get_qty(item, 'out')
-                        item.produce(self, qty)
-                else:
-                    qty = self._get_qty(output)
-                    output.produce(self, qty)
+            for output in self.outputs:
+                output.produce(self)
 
+    def cancel(self):
+        """Returns to origin movement of items"""
+        self.destination = self.origin
+        self._move_items()
+        self.state = 'cancelled'
+
+
+class Operation(Abstract, Base):
+    """Execute a python function defined by step method"""
+    __tablename__ = 'operation'
+
+    step_id = Column(Integer, ForeignKey('step.id'))
+    flow_id = Column(Integer, ForeignKey('flow.id'))
+
+    started_on = Column(DateTime)
+    finished_on = Column(DateTime)
+
+    state = Column(String(15), default='open')
+    sequence = Column(Integer, default=0)
+    tracking = Column(String(100))
+
+    flow = relationship('Flow', back_populates='operations')
+    step = relationship('Step')
+
+    def __init__(self, flow, step):
+        self.flow = flow
+        self.step = step
+        self.sequence = self.step.sequence
+        method_name = self.step.method
+        try:
+            self.method = get_component(method_name)
+        except Exception:
+            raise MethodError('Error loading method {}'.format(method_name))
+
+    def start(self):
+        self.state = 'started'
+        self.started_on = datetime.now()
+
+    def execute(self):
+        self.method(self)
+
+    def finish(self):
         self.finished_on = datetime.now()
         self.state = 'done'
 
-    def _get_qty(self, item, inout):
-        if hasattr(item, 'qty'):
-            return item.qty
-        elif self.path:   #  Gets information of qty from path
-            item_flows = {'in': self.path.consumes,
-                          'out': self.path.productions}
-            for item_flow in item_flows[inout]:
-                if item_flow.resource == item.resource:
-                    return item_flow.qty
-
     def cancel(self):
-        # No movements
         self.finished_on = datetime.now()
         self.state = 'cancelled'
