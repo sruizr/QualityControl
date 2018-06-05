@@ -95,10 +95,6 @@ class Device(Item):
         self.bh = None
 
 
-class Report(Item):
-    pass
-
-
 class PartAttribute:
     @hybrid_property
     def part(self):
@@ -178,7 +174,6 @@ class Measurement(Item, PartAttribute):
 
     @defect.setter
     def defect(self, defect):
-        import pdb; pdb.set_trace()
 
         if self._defects:
             self._defects[0] = defect
@@ -188,7 +183,6 @@ class Measurement(Item, PartAttribute):
 
 class Report(Item):
     __mapper_args__ = {'polymorphic_identity': 'report'}
-
     parts = relationship('Part', secondary=ItemLink,
                          primaryjoin=Item.id==ItemLink.c.from_item_id,
                          secondaryjoin=Part.id==ItemLink.c.to_item_id)

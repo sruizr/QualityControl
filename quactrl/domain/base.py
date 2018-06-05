@@ -162,32 +162,41 @@ class Item(Base, Abstract, WithPars):
 
         return stocks
 
-    def produce(self, producer):
+    @property
+    def total_qty(self):
+        return sum([token.qty for token in self.avalaible_tokens])
+
+    def produce(self):
         """Produce a qty of item at producer destination"""
         qty = getattr(self, 'qty', 1.0)
-        self.avalaible_tokens.append(Token(qty=qty, producer=producer, node=producer.destination))
+        producer = self.op
+        self.avalaible_tokens.append(Token(qty=qty, producer=producer,
+                                           node=producer.flow.destination))
 
-    def consume(self, consumer):
+    def consume(self):
         """Cosume a qty of item at consumer origin"""
         qty = getattr(self, 'qty', None)
-        stocks = self.get_stocks()
-        if consumer.origin not in stocks.keys():
-            raise StockException('There is no stock on "{}"'.format(
-                consumer.origin.key))
+        consumer = self.op
+        origin = consumer.flow.origin
 
-        avalaible_qty = sum([token.qty for token in stocks[consumer.origin]])
+        stocks = self.get_stocks()
+        if origin not in stocks.keys():
+            raise StockException('There is no stock on "{}"'.format(
+                consumer.flow.origin.key))
+
+        avalaible_qty = sum([token.qty for token in stocks[origin]])
         if qty is not None and avalaible_qty < qty:
             raise StockException('qty {} is not avalaible at {}'.format(
                 qty,
-                consumer.origin.key
+                origin.key
             ))
 
 
         if qty is None:
-            for token in stocks[consumer.origin]:
+            for token in stocks[origin]:
                 token.consume(consumer)
         else:
-            for token in stocks[consumer.origin]:
+            for token in stocks[origin]:
                 if qty == 0:
                     break
                 if qty >= token.qty:
@@ -263,6 +272,12 @@ class Path(Base, Abstract, WithPars):
                 )
             )
 
+    def add_step(self, method, sequence=None):
+        if sequence is None:
+            sequence = self.steps[-1].sequence + 5 if self.steps else 0
+        step = Step(method_name=method, sequence=sequence)
+        self.steps.append(step)
+
 
 class PathResource(Base):
     __tablename__ = 'path_resource'
@@ -286,15 +301,15 @@ class Token(Base):
     item_id = Column(Integer, ForeignKey('item.id'), nullable=False,
                      index=True)
     node_id = Column(Integer, ForeignKey('node.id'), index=True)
-    producer_id = Column(Integer, ForeignKey('flow.id'), index=True)
-    consumer_id = Column(Integer, ForeignKey('flow.id'), index=True)
+    producer_id = Column(Integer, ForeignKey('operation.id'), index=True)
+    consumer_id = Column(Integer, ForeignKey('operation.id'), index=True)
 
     item = relationship('Item')
     qty = Column(Float, default=1.0)
     node = relationship('Node')
 
-    producer = relationship('Flow', foreign_keys=[producer_id])
-    consumer = relationship('Flow', foreign_keys=[consumer_id])
+    producer = relationship('Operation', foreign_keys=[producer_id])
+    consumer = relationship('Operation', foreign_keys=[consumer_id])
 
     def consume(self, consumer, qty=None):
         if qty is not None:
@@ -337,7 +352,7 @@ class Flow(Base, Abstract):
                               back_populates='flow',
                               order_by='Operation.sequence')
 
-    def prepare(self):
+    def prepare(self, **kwargs):
         """Create internal fields for assuring the flow of items"""
         self.inputs = []
         self.outputs = []
@@ -348,6 +363,10 @@ class Flow(Base, Abstract):
         if self.path:
             self.origin = self.path.from_node
             self.destination = self.path.to_node
+
+    def execute(self):
+        """Basic flow execution, to be overwritten"""
+        pass
 
     def terminate(self):
         """Commit the flow, pulling inputs and pushing outputs"""
@@ -360,15 +379,15 @@ class Flow(Base, Abstract):
         self.finished_on = datetime.now()
         if self.origin:
             for _input in self.inputs:
-                _input.consume(self)
+                _input.consume()
 
         # Produce outputs
         if self.destination:
             for output in self.outputs:
-                output.produce(self)
+                output.produce()
 
     def cancel(self):
-        """Returns to origin movement of items"""
+        """Returns to origin movement of items, outputs returned to origin"""
         self.destination = self.origin
         self._move_items()
         self.state = 'cancelled'
@@ -391,27 +410,36 @@ class Operation(Abstract, Base):
     flow = relationship('Flow', back_populates='operations')
     step = relationship('Step')
 
-    def __init__(self, flow, step):
+    def __init__(self, flow, step=None):
         self.flow = flow
-        self.step = step
-        self.sequence = self.step.sequence
-        method_name = self.step.method
-        try:
-            self.method = get_component(method_name)
-        except Exception:
-            raise MethodError('Error loading method {}'.format(method_name))
+
+        self.method = None
+        if step:
+            self.sequence = step.sequence
+            method_name = step.method_name
+            self.step = step
+            try:
+                self.method = get_component(method_name)
+            except Exception:
+                raise MethodLoadError('Error loading method {}'.format(method_name))
 
     def start(self):
+        """Marks starting point of operation"""
         self.state = 'started'
         self.started_on = datetime.now()
 
     def execute(self):
-        self.method(self)
+        """Execute method"""
+        if self.method:
+            self.method(self)
 
     def finish(self):
+        """Record successfull finish state"""
+
         self.finished_on = datetime.now()
         self.state = 'done'
 
     def cancel(self):
+        """Record unsuccessfull cancel state"""
         self.finished_on = datetime.now()
         self.state = 'cancelled'

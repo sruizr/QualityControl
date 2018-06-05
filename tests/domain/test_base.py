@@ -1,4 +1,5 @@
 from tests.domain import EmptyDataTest
+from tests import TestWithPatches
 import json
 import quactrl.domain.base as base
 import pytest
@@ -118,9 +119,11 @@ class An_Item(EmptyDataTest):
 
         flow.destination = base.Node(key='destination')
         flow.origin = base.Node(key='origin')
+        operation = base.Operation(flow)
 
         self.item.qty = 2
-        self.item.produce(flow)
+        self.item.op = operation
+        self.item.produce()
 
         self.session.add(self.item)
         self.session.commit()
@@ -131,13 +134,17 @@ class An_Item(EmptyDataTest):
         assert token.qty == 2
         assert token.node == flow.destination
         assert token.consumer is None
-        assert token.producer == flow
+        assert token.producer == operation
 
     def should_consume_tokens(self):
         flow = base.Flow()
         flow.origin = base.Node(key='node_0')
         flow.destination = base.Node(key='node_1')
-        self.item.produce(flow, 3)
+        operation = base.Operation(flow)
+
+        self.item.qty = 3
+        self.item.op = operation
+        self.item.produce()
 
         assert self.item.avalaible_tokens[0].qty == 3
         # 3 units on node_1
@@ -146,27 +153,36 @@ class An_Item(EmptyDataTest):
 
         next_flow = base.Flow()
         next_flow.origin = flow.destination
-        self.item.consume(next_flow, 1)
+        next_op = base.Operation(next_flow)
+        self.item.qty = 1
+        self.item.op = next_op
+        self.item.consume()
         self.session.commit()
 
         assert len(self.item.avalaible_tokens) == 1
         assert self.item.avalaible_tokens[0].qty == 2
-
-        self.item.consume(next_flow)
+        self.item.qty = None
+        self.item.consume()
         self.session.commit()
         assert len(self.item.avalaible_tokens) == 0
 
-    def should_consume_subitems(self):
-        pass
 
     def should_get_stocks(self):
         flow_1 = base.Flow()
         flow_1.destination = node_0 = base.Node(key='node_0')
+        op_1 = base.Operation(flow_1)
+
         flow_2 = base.Flow()
         flow_2.destination = node_1 = base.Node(key='node_1')
+        op_2 = base.Operation(flow_2)
 
-        self.item.produce(flow_1, 1)
-        self.item.produce(flow_2, 2)
+        self.item.qty = 1
+        self.item.op = op_1
+        self.item.produce()
+
+        self.item.qty = 2
+        self.item.op = op_2
+        self.item.produce()
         self.session.commit()
 
         assert len(self.item.avalaible_tokens) == 2
@@ -289,3 +305,85 @@ class A_Path(EmptyDataTest):
             pytest.fail('NotImplementedError should be raised')
         except NotImplementedError:
             pass
+
+    def should_add_steps(self):
+        path = base.Path()
+        path.add_step(method='method.name')
+        path.add_step(method='other.method.name')
+        path.add_step(method='intermediate', sequence=3)
+
+        self.session.add(path)
+        self.session.commit()
+
+        assert path.steps[0].sequence == 0
+        assert path.steps[1].sequence == 3
+        assert path.steps[2].sequence == 5
+        assert path.steps[0].method_name == 'method.name'
+
+
+class A_Step(EmptyDataTest):
+    def should_persist_basic_relationships(self):
+        path = base.Path()
+        step = base.Step(path=path)
+
+        self.session.add(step)
+        self.session.commit()
+
+        assert path.steps[0].sequence == 0
+
+
+class A_Operation(EmptyDataTest, TestWithPatches):
+    def setup_method(self, method):
+        EmptyDataTest.setup_method(self, method)
+        self.create_patches([
+            'quactrl.domain.base.get_component',
+            'quactrl.domain.base.datetime'
+        ])
+
+    def teardown_method(self, method):
+        EmptyDataTest.teardown_method(self, method)
+        TestWithPatches.teardown_method(self, method)
+
+    def should_persist_basic_relationships(self):
+        flow = base.Flow()
+        step = base.Step(method_name='method.name', sequence=1)
+
+        operation = base.Operation(flow, step)
+
+        self.session.add(operation)
+        self.session.commit()
+
+        assert flow.operations[0] == operation
+        assert operation.step == step
+        assert operation.sequence == step.sequence
+        self.patch['get_component'].assert_called_with('method.name')
+        assert operation.method == self.patch['get_component'].return_value
+
+    def should_start(self):
+        step = base.Step()
+        flow = base.Flow()
+
+        operation = base.Operation(flow, step)
+        operation.start()
+
+        assert operation.started_on == self.patch['datetime'].now.return_value
+        assert operation.state == 'started'
+
+    def should_finish(self):
+        step = base.Step()
+        flow = base.Flow()
+
+        operation = base.Operation(flow, step)
+        operation.finish()
+
+        assert operation.finished_on == self.patch['datetime'].now.return_value
+        assert operation.state == 'done'
+
+    def should_execute(self):
+        step = base.Step()
+        flow = base.Flow()
+
+        operation = base.Operation(flow, step)
+        operation.execute()
+
+        self.patch['get_component'].return_value.assert_called_with(operation)
