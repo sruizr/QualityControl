@@ -8,7 +8,7 @@ Base = declarative_base()
 
 
 class Abstract:
-    id = Column(Integer, primary_key=True)
+    """Hierarthical definition on is_a column"""
     is_a = Column(String(30))
     __mapper_args__ = {
         'polymorphic_on': is_a

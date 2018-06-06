@@ -79,98 +79,6 @@ class BasicOp(Operation):
         return True
 
 
-class Check(Operation):
-    """Result a control after execution """
-    __mapper_args__ = {'polymorphic_identity': 'check'}
-
-    # def __init__(self, test, control, responsible, **kwargs):
-    #     super().__init__(path=control, responsible=responsible, test=test, **kwargs)
-
-    def prepare(self, **kwargs):
-        self.part = self.parent.inputs['part']
-        self.characteristic = self.path.consumption_plan.values()[0]
-
-    def add_measure(self, value, characteristic, tracking='', parent=None):
-        measurement = items.Measurement(resource=characteristic, tracking=tracking)
-        if parent:
-            relation = ItemRelation(relation_class='contains')
-            relation.to_node = measurement
-            parent.destinations.append(relation)
-
-        self.outputs.append((measurement, value))
-
-    def other_method(self):
-        return True
-
-    def add_defect(self, failure_mode, tracking='', parent=None):
-        self.state = 'nok'
-
-        defect = items.Defect(resource=failure_mode, tracking=tracking)
-        if parent:
-            relation = ItemRelation(relation_class='contains')
-            relation.to_node = defect
-            parent.destinations.append(relation)
-
-        self.outputs.append((defect, 1.0))
-
-    def eval_measure(self, value, characteristic,
-                     modes=['low', 'high', 'suspicious'],
-                     uncertainty=0):
-
-        limits = getattr(characteristic, 'limits', None)
-        if limits:
-            mode = None
-
-            low_limit = limits[0]
-            if low_limit is not None:
-                sure_low = low_limit + uncertainty
-                if value < sure_low:
-                    mode = '{} {}'.format(modes[2],
-                                                       modes[0])
-                if value < low_limit:
-                    mode = modes[0]
-
-            top_limit = limits[1]
-            if top_limit is not None:
-                sure_top = top_limit - uncertainty
-                if value > sure_top:
-                    mode = '{} {}'.format(modes[2],
-                                                       modes[1])
-                if value > top_limit:
-                    mode = modes[1]
-
-            if mode:
-                failure_mode = characteristic.get_failure_mode(mode)
-                return failure_mode
-
-    def terminate(self):
-        state = self.state
-        super().terminate()
-
-        if state == 'ongoing':
-            self.state = 'ok'
-        else:
-            self.state = state
-
-    def cancel(self):
-        super().terminate()
-        self.state = 'cancelled'
-
-    # @reconstructor
-    # def after_load(self):
-    #     self.defects = []
-    #     self.measures = []
-    #     for relation in self.destinations:
-    #         item = relation.to_item
-    #         if relation.relation_class == 'contains':
-    #             if item.is_a == 'measure':
-    #                 self.measures.append(item)
-    #             elif item.is_a == 'defect':
-    #                 self.defects.append(item)
-    #         elif relation.relation_class == 'for':
-    #             self.item = item
-
-
 class Test(Flow):
     """Group of checks following a control plan"""
     __mapper_args__ = {'polymorphic_identity': 'test'}
@@ -218,3 +126,104 @@ class Test(Flow):
                 state = 'suspicious'
 
         return state
+
+    from threading import Event
+from sqlalchemy.ext.hybrid import hybrid_property
+from quactrl.domain.base import Flow
+
+
+class Check(Flow):
+    """Execute a control with ok - nok result"""
+    __mapper_args__ = {'polymorphic_identity': 'check'}
+
+    @hybrid_property
+    def test(self):
+        return self.flow
+
+    @test.setter
+    def test(self, flow):
+        self.flow = flow
+        self.origin = self.flow.path.from_node
+        self.destination = self.flow.path.to_node
+
+    def run(self):
+        super().start()
+        self.test.tester.notify(self)
+
+        try:
+            super().execute()
+            if self._has_thread_alive():
+                self.state == 'ongoing'
+                self.test.tester.notify(self)
+                self.finished = Event()
+                self.finished.wait()
+        except Exception as e:
+            self.cancel()
+            raise e
+
+        super().finish()
+        if self.state == 'done':
+            self.state = 'ok'
+        self.test.tester.notify(self)
+
+    def cancel(self):
+        self.state = 'cancelled'
+        if self._has_thread_alive():
+            self.thread.cancel()
+            self.finished.set()
+
+    def _has_thread_alive(self):
+        return hasattr(self, 'thread') and self.thread.is_alive()
+
+    # def add_measure(self, value, characteristic, element_key='', parent=None):
+    #     """Helper for adding measures to part"""
+    #     self.test
+    #     measurement = items.Measurement(resource=characteristic, tracking=tracking)
+    #     if parent:
+    #         relation = ItemRelation(relation_class='contains')
+    #         relation.to_node = measurement
+    #         parent.destinations.append(relation)
+
+    #     self.outputs.append((measurement, value))
+
+    # def add_defect(self, failure_mode, tracking='', parent=None):
+    #     """Helper for adding defects to part"
+    #     self.state = 'nok'
+
+    #     defect = items.Defect(resource=failure_mode, tracking=tracking)
+    #     if parent:
+    #         relation = ItemRelation(relation_class='contains')
+    #         relation.to_node = defect
+    #         parent.destinations.append(relation)
+
+    #     self.outputs.append((defect, 1.0))
+
+    # def eval_measure(self, value, characteristic,
+    #                  modes=['low', 'high', 'suspicious'],
+    #                  uncertainty=0):
+
+    #     limits = getattr(characteristic, 'limits', None)
+    #     if limits:
+    #         mode = None
+
+    #         low_limit = limits[0]
+    #         if low_limit is not None:
+    #             sure_low = low_limit + uncertainty
+    #             if value < sure_low:
+    #                 mode = '{} {}'.format(modes[2],
+    #                                                    modes[0])
+    #             if value < low_limit:
+    #                 mode = modes[0]
+
+    #         top_limit = limits[1]
+    #         if top_limit is not None:
+    #             sure_top = top_limit - uncertainty
+    #             if value > sure_top:
+    #                 mode = '{} {}'.format(modes[2],
+    #                                                    modes[1])
+    #             if value > top_limit:
+    #                 mode = modes[1]
+
+    #         if mode:
+    #             failure_mode = characteristic.get_failure_mode(mode)
+    #             return failure_mode

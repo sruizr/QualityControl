@@ -39,73 +39,143 @@ class A_Flow(EmptyDataTest):
         flow.path = base.Path(role=base.Node(key='role'))
 
         flow.responsible = base.Node(key='responsible')
-
+        op = base.Flow()
+        flow.operations.append(op)
         self.session.add(flow)
         self.session.commit()
 
+        assert op.parent == flow
         assert flow.path.role.key == 'role'
         assert flow.responsible.key == 'responsible'
 
     @patch('quactrl.domain.base.datetime')
-    def should_prepare_flow(self, mock_datetime):
+    def should_start_(self, mock_datetime):
+        dinamic_field = Mock()
         flow = base.Flow()
 
-        flow.prepare()
+        flow.start(d_field=dinamic_field)
+
 
         assert flow.inputs == []
         assert flow.outputs == []
+        assert flow.d_field == dinamic_field
         assert not flow.origin
         assert not flow.destination
         assert flow.state == 'started'
         mock_datetime.now.assert_called_with()
+        assert flow.started_on == mock_datetime.now.return_value
 
-        path = Mock()
-        flow.path = path
+        # path = Mock()
+        # flow.path = path
 
-        flow.prepare()
-        assert flow.origin == path.from_node
-        assert flow.destination == path.to_node
+        # flow.start()
+        # assert flow.origin == path.from_node
+        # assert flow.destination == path.to_node
 
     @patch('quactrl.domain.base.datetime')
-    def should_terminate_flow(self, mock_datetime):
+    def should_finish_flow(self, mock_datetime):
         flow = base.Flow()
+        flow.state = 'started'
 
-        _input = Mock()
-        flow.inputs = [_input]
-        output = Mock()
-        flow.outputs = [output]
-        flow.destination = Mock()
-        flow.origin = Mock()
-
-        flow.terminate()
-
-        assert flow.finished_on == mock_datetime.now.return_value
+        flow.finish()
         mock_datetime.now.assert_called_with()
+        assert flow.finished_on == mock_datetime.now.return_value
         assert flow.state == 'finished'
 
-        _input.consume.assert_called_with(flow)
-        output.produce.assert_called_with(flow)
+        flow.state = 'ongoing'
+        flow.finish()
+        assert flow.state == 'finished'
+
+        flow.state = 'other'
+        flow.finish()
+        assert flow.state == 'other'
 
     @patch('quactrl.domain.base.datetime')
     def should_cancel_flow(self, mock_datetime):
         flow = base.Flow()
-
-        _input = Mock()
-        flow.inputs = [_input]
-        output = Mock()
-        flow.outputs = [output]
-        flow.destination = Mock()
-        flow.origin = origin = Mock()
 
         flow.cancel()
 
         assert flow.finished_on == mock_datetime.now.return_value
         mock_datetime.now.assert_called_with()
         assert flow.state == 'cancelled'
-        assert origin == flow.destination
 
-        _input.consume.assert_called_with(flow)
-        output.produce.assert_called_with(flow)
+    def should_execute(self):
+        flow = base.Flow()
+
+        flow.execute()
+
+        path = base.Path()
+        path.method = Mock()
+        flow.path = path
+        flow.execute()
+        path.method.assert_called_with(flow)
+
+    def should_create_operations(self):
+        path = base.Path()
+        steps = [base.Path() for _ in range(3)]
+        for step in steps:
+            path.steps.append(step)
+            step.create_flow = Mock()
+            step.create_flow.return_value = base.Flow()
+        flow = base.Flow(path=path)
+        flow.responsible = base.Node(key='resp')
+
+        calls = []
+        for step, operation in zip(steps, flow.op_creator()):
+            assert operation == step.create_flow.return_value
+            step.create_flow.assert_called_with()
+            assert operation.responsible == flow.responsible
+            assert operation.parent == flow
+
+    def should_runs(self):
+        flow = base.Flow()
+        flow.start = Mock()
+        flow.op_creator = Mock()
+        flow.op_creator.return_value = [Mock()]
+        flow.execute = Mock()
+        flow.finish = Mock()
+        flow.close = Mock()
+        field = Mock()
+
+        flow.run(field=field)
+
+        flow.start.assert_called_with(field=field)
+        flow.op_creator.return_value[0].run.assert_called_with()
+        flow.execute.assert_called_with()
+        flow.finish.assert_called_with()
+        flow.close.assert_called_with()
+
+    def setup_close(self):
+        origin = base.Node('origin')
+        # destination = base.Node('destination')
+        # inputs = [
+        #     base.Item(resource=base.Resource('res_{}'.format(index)))
+        #     for index in range(3)
+        # ]
+        # for _input in inputs:
+        #     _input.avalaible_tokens.append(Token(
+        #         node=origin,
+        #         qty=1.0))
+        #     _input.qty = 1.0
+        # outputs = [
+        #     base.Item(resource=base.Resource('res_{}'.format(index)))
+        #     for index in range(3, 6)
+        # ]
+        # for output in outputs:
+        #     pass
+        # flow = base.Flow()
+        # flow.origin = flow.destination = None
+        # flow.operations = [base.Flow()]
+
+    def should_close_after_finish(self):
+        flow = self.setup_close()
+
+        flow = self.session.query(base.Flow).first()
+
+
+    def should_close_after_cancel(self):
+        pass
 
 
 class An_Item(EmptyDataTest):
@@ -116,14 +186,11 @@ class An_Item(EmptyDataTest):
 
     def should_produce_tokens(self):
         flow = base.Flow()
-
         flow.destination = base.Node(key='destination')
         flow.origin = base.Node(key='origin')
-        operation = base.Operation(flow)
 
         self.item.qty = 2
-        self.item.op = operation
-        self.item.produce()
+        self.item.produce(flow)
 
         self.session.add(self.item)
         self.session.commit()
@@ -134,17 +201,15 @@ class An_Item(EmptyDataTest):
         assert token.qty == 2
         assert token.node == flow.destination
         assert token.consumer is None
-        assert token.producer == operation
+        assert token.producer == flow
 
     def should_consume_tokens(self):
         flow = base.Flow()
         flow.origin = base.Node(key='node_0')
         flow.destination = base.Node(key='node_1')
-        operation = base.Operation(flow)
 
         self.item.qty = 3
-        self.item.op = operation
-        self.item.produce()
+        self.item.produce(flow)
 
         assert self.item.avalaible_tokens[0].qty == 3
         # 3 units on node_1
@@ -153,36 +218,29 @@ class An_Item(EmptyDataTest):
 
         next_flow = base.Flow()
         next_flow.origin = flow.destination
-        next_op = base.Operation(next_flow)
         self.item.qty = 1
-        self.item.op = next_op
-        self.item.consume()
+        self.item.consume(next_flow)
         self.session.commit()
 
         assert len(self.item.avalaible_tokens) == 1
         assert self.item.avalaible_tokens[0].qty == 2
         self.item.qty = None
-        self.item.consume()
+        self.item.consume(next_flow)
         self.session.commit()
         assert len(self.item.avalaible_tokens) == 0
-
 
     def should_get_stocks(self):
         flow_1 = base.Flow()
         flow_1.destination = node_0 = base.Node(key='node_0')
-        op_1 = base.Operation(flow_1)
 
         flow_2 = base.Flow()
         flow_2.destination = node_1 = base.Node(key='node_1')
-        op_2 = base.Operation(flow_2)
 
         self.item.qty = 1
-        self.item.op = op_1
-        self.item.produce()
+        self.item.produce(flow_1)
 
         self.item.qty = 2
-        self.item.op = op_2
-        self.item.produce()
+        self.item.produce(flow_2)
         self.session.commit()
 
         assert len(self.item.avalaible_tokens) == 2
@@ -308,82 +366,10 @@ class A_Path(EmptyDataTest):
 
     def should_add_steps(self):
         path = base.Path()
-        path.add_step(method='method.name')
-        path.add_step(method='other.method.name')
-        path.add_step(method='intermediate', sequence=3)
+        step = base.Path()
+        path.steps.append(step)
 
         self.session.add(path)
         self.session.commit()
 
-        assert path.steps[0].sequence == 0
-        assert path.steps[1].sequence == 3
-        assert path.steps[2].sequence == 5
-        assert path.steps[0].method_name == 'method.name'
-
-
-class A_Step(EmptyDataTest):
-    def should_persist_basic_relationships(self):
-        path = base.Path()
-        step = base.Step(path=path)
-
-        self.session.add(step)
-        self.session.commit()
-
-        assert path.steps[0].sequence == 0
-
-
-class A_Operation(EmptyDataTest, TestWithPatches):
-    def setup_method(self, method):
-        EmptyDataTest.setup_method(self, method)
-        self.create_patches([
-            'quactrl.domain.base.get_component',
-            'quactrl.domain.base.datetime'
-        ])
-
-    def teardown_method(self, method):
-        EmptyDataTest.teardown_method(self, method)
-        TestWithPatches.teardown_method(self, method)
-
-    def should_persist_basic_relationships(self):
-        flow = base.Flow()
-        step = base.Step(method_name='method.name', sequence=1)
-
-        operation = base.Operation(flow, step)
-
-        self.session.add(operation)
-        self.session.commit()
-
-        assert flow.operations[0] == operation
-        assert operation.step == step
-        assert operation.sequence == step.sequence
-        self.patch['get_component'].assert_called_with('method.name')
-        assert operation.method == self.patch['get_component'].return_value
-
-    def should_start(self):
-        step = base.Step()
-        flow = base.Flow()
-
-        operation = base.Operation(flow, step)
-        operation.start()
-
-        assert operation.started_on == self.patch['datetime'].now.return_value
-        assert operation.state == 'started'
-
-    def should_finish(self):
-        step = base.Step()
-        flow = base.Flow()
-
-        operation = base.Operation(flow, step)
-        operation.finish()
-
-        assert operation.finished_on == self.patch['datetime'].now.return_value
-        assert operation.state == 'done'
-
-    def should_execute(self):
-        step = base.Step()
-        flow = base.Flow()
-
-        operation = base.Operation(flow, step)
-        operation.execute()
-
-        self.patch['get_component'].return_value.assert_called_with(operation)
+        assert step.parent == path

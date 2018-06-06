@@ -2,7 +2,7 @@ import json
 import importlib
 from datetime import datetime
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import reconstructor
+from sqlalchemy.orm import reconstructor, remote
 from sqlalchemy import ForeignKey, Column, Table
 from sqlalchemy.types import (
     String, Integer, DateTime, Float
@@ -73,6 +73,7 @@ class WithPars:
 class Resource(Base, Abstract):
     __tablename__ = 'resource'
 
+    id = Column(Integer, primary_key=True)
     key = Column(String(100), unique=True)
     name = Column(String(100), default='')
     description = Column(String(100), default='')
@@ -88,6 +89,7 @@ class Resource(Base, Abstract):
 
 class ResourceRelation(Base, WithPars):
     __tablename__ = 'resource_relation'
+
     link = Column(String(100))
     __mapper_args__ = {
         'polymorphic_on': link
@@ -114,6 +116,7 @@ NodeLink = Table('node_link', Base.metadata,
 class Node(Base, Abstract, WithPars):
     __tablename__ = 'node'
 
+    id = Column(Integer, primary_key=True)
     key = Column(String(15), unique=True)
     name = Column(String(50))
     description = Column(String(250))
@@ -134,6 +137,8 @@ class Node(Base, Abstract, WithPars):
 
 class Item(Base, Abstract, WithPars):
     __tablename__ = 'item'
+
+    id = Column(Integer, primary_key=True)
 
     resource_id = Column(ForeignKey('resource.id'))
     tracking = Column(String(100), index=True)
@@ -166,23 +171,21 @@ class Item(Base, Abstract, WithPars):
     def total_qty(self):
         return sum([token.qty for token in self.avalaible_tokens])
 
-    def produce(self):
+    def produce(self, producer):
         """Produce a qty of item at producer destination"""
         qty = getattr(self, 'qty', 1.0)
-        producer = self.op
         self.avalaible_tokens.append(Token(qty=qty, producer=producer,
-                                           node=producer.flow.destination))
+                                           node=producer.destination))
 
-    def consume(self):
+    def consume(self,consumer):
         """Cosume a qty of item at consumer origin"""
         qty = getattr(self, 'qty', None)
-        consumer = self.op
-        origin = consumer.flow.origin
+        origin = consumer.origin
 
         stocks = self.get_stocks()
         if origin not in stocks.keys():
             raise StockException('There is no stock on "{}"'.format(
-                consumer.flow.origin.key))
+                origin.key))
 
         avalaible_qty = sum([token.qty for token in stocks[origin]])
         if qty is not None and avalaible_qty < qty:
@@ -212,36 +215,38 @@ ItemLink = Table('item_link', Base.metadata,
                  Column('to_item_id', Integer, ForeignKey('item.id')))
 
 
-class Step(Base, Abstract, WithPars):
-    __tablename__ = 'step'
+# class Step(Base, Abstract, WithPars):
+#     __tablename__ = 'step'
 
-    path_id = Column(Integer, ForeignKey('path.id'))
-    created_on = Column(DateTime, default=datetime.now)
-    removed_on = Column(DateTime)
+#     path_id = Column(Integer, ForeignKey('path.id'))
+#     created_on = Column(DateTime, default=datetime.now)
+#     removed_on = Column(DateTime)
 
-    path = relationship('Path', back_populates='steps')
-    sequence = Column(Integer, default=0)
-    method_name = Column(String(100), default='')
+#     path = relationship('Path', back_populates='steps')
+#     sequence = Column(Integer, default=0)
+#     method_name = Column(String(100), default='')
 
 
-class Path(Base, Abstract, WithPars):
+class Path(Abstract, Base, WithPars):
     __tablename__ = 'path'
 
+    id = Column(Integer, primary_key=True)
+    parent_id = Column(Integer, ForeignKey('path.id'), index=True)
     from_node_id = Column(Integer, ForeignKey('node.id'), index=True)
     to_node_id = Column(Integer, ForeignKey('node.id'), index=True)
     role_id = Column(Integer, ForeignKey('node.id'))
 
+    sequence = Column(Integer, default=0)
     created_on = Column(DateTime, default=datetime.now)
     removed_on = Column(DateTime)
+    method_name = Column(String(100))
 
     from_node = relationship('Node', foreign_keys=[from_node_id])
     to_node = relationship('Node', foreign_keys=[to_node_id])
     role = relationship('Node', foreign_keys=[role_id])
-    steps = relationship(
-        'Step',
-        order_by='Step.sequence',
-        back_populates='path'
-    )
+    steps = relationship('Path',
+                         backref=backref('parent', remote_side=[id]),
+                         order_by='Path.sequence')
 
     resources = association_proxy(
         'path_resource', 'resource',
@@ -272,12 +277,6 @@ class Path(Base, Abstract, WithPars):
                 )
             )
 
-    def add_step(self, method, sequence=None):
-        if sequence is None:
-            sequence = self.steps[-1].sequence + 5 if self.steps else 0
-        step = Step(method_name=method, sequence=sequence)
-        self.steps.append(step)
-
 
 class PathResource(Base):
     __tablename__ = 'path_resource'
@@ -296,20 +295,20 @@ class PathResource(Base):
 
 class Token(Base):
     __tablename__ = 'token'
-    id = Column(Integer, primary_key=True)
 
+    id = Column(Integer, primary_key=True)
     item_id = Column(Integer, ForeignKey('item.id'), nullable=False,
                      index=True)
     node_id = Column(Integer, ForeignKey('node.id'), index=True)
-    producer_id = Column(Integer, ForeignKey('operation.id'), index=True)
-    consumer_id = Column(Integer, ForeignKey('operation.id'), index=True)
+    producer_id = Column(Integer, ForeignKey('flow.id'), index=True)
+    consumer_id = Column(Integer, ForeignKey('flow.id'), index=True)
 
     item = relationship('Item')
     qty = Column(Float, default=1.0)
     node = relationship('Node')
 
-    producer = relationship('Operation', foreign_keys=[producer_id])
-    consumer = relationship('Operation', foreign_keys=[consumer_id])
+    producer = relationship('Flow', foreign_keys=[producer_id])
+    consumer = relationship('Flow', foreign_keys=[consumer_id])
 
     def consume(self, consumer, qty=None):
         if qty is not None:
@@ -336,110 +335,100 @@ class Token(Base):
     #     }
 
 
-class Flow(Base, Abstract):
+class Flow(Abstract, Base):
     __tablename__ = 'flow'
+
+    id = Column(Integer, primary_key=True)
+    path_id = Column(Integer, ForeignKey('path.id'))
+    responsible_id = Column(Integer, ForeignKey('node.id'), index=True)
+    parent_id = Column(Integer, ForeignKey('flow.id'), index=True)
 
     started_on = Column(DateTime)
     finished_on = Column(DateTime)
     state = Column(String(15), default='open')
-
-    path_id = Column(Integer, ForeignKey('path.id'))
-    responsible_id = Column(Integer, ForeignKey('node.id'))
+    tracking = Column(String(100))
 
     path = relationship('Path')
     responsible = relationship('Node')
-    operations = relationship('Operation',
-                              back_populates='flow',
-                              order_by='Operation.sequence')
 
-    def prepare(self, **kwargs):
+    operations = relationship('Flow',
+                              backref=backref('parent', remote_side=[id]),
+                              order_by='Flow.id')
+
+    def start(self, **kwargs):
         """Create internal fields for assuring the flow of items"""
+        self.destination = self.origin = None
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
         self.inputs = []
         self.outputs = []
+
         self.started_on = datetime.now()
         self.state = 'started'
 
-        self.destination = self.origin = None
-        if self.path:
-            self.origin = self.path.from_node
-            self.destination = self.path.to_node
-
     def execute(self):
         """Basic flow execution, to be overwritten"""
-        pass
+        if self.path:
+            self.path.method(self)
 
-    def terminate(self):
-        """Commit the flow, pulling inputs and pushing outputs"""
+    def finish(self):
+        """Marks finish and result"""
+        if self.state in ('started', 'ongoing'):
+            self.state = 'finished'
+        self.finished_on = datetime.now()
 
-        self._move_items()
-        self.state = 'finished'
+    def run(self, **kwargs):
+        """Simple flow running"""
+        self.start(**kwargs)
+
+        for operation in self.op_creator():
+            if self.state == 'cancelled':
+                break
+            operation.run()
+
+        self.execute()
+        self.finish()
+        self.close()
+
+    def op_creator(self):
+        for step in self.path.steps:
+            operation = step.create_flow()
+            operation.responsible = self.responsible
+            self.operations.append(operation)
+            yield operation
 
     def _move_items(self):
         # Consume inputs
+        self.assign_nodes()
+
         self.finished_on = datetime.now()
         if self.origin:
             for _input in self.inputs:
-                _input.consume()
+                _input.consume(self)
 
         # Produce outputs
         if self.destination:
             for output in self.outputs:
-                output.produce()
+                output.produce(self)
+
+        # Move items from operations
+        for operation in self.operations:
+            operation.move_items()
+
+    def _assign_nodes(self):
+        """Flow the outputs & inputs of items"""
+        if self.origin is None and self.path:
+            self.origin = self.path.from_node
+            if self.origin is None and self.path.parent:
+                self.origin = self.path.parent.from_node
+
+        if self.destination is None and self.path:
+            self.destination = self.path.to_node
+            if self.destination is None and self.path.parent:
+                self.destination = self.path.parent.to_node
 
     def cancel(self):
         """Returns to origin movement of items, outputs returned to origin"""
-        self.destination = self.origin
-        self._move_items()
-        self.state = 'cancelled'
-
-
-class Operation(Abstract, Base):
-    """Execute a python function defined by step method"""
-    __tablename__ = 'operation'
-
-    step_id = Column(Integer, ForeignKey('step.id'))
-    flow_id = Column(Integer, ForeignKey('flow.id'))
-
-    started_on = Column(DateTime)
-    finished_on = Column(DateTime)
-
-    state = Column(String(15), default='open')
-    sequence = Column(Integer, default=0)
-    tracking = Column(String(100))
-
-    flow = relationship('Flow', back_populates='operations')
-    step = relationship('Step')
-
-    def __init__(self, flow, step=None):
-        self.flow = flow
-
-        self.method = None
-        if step:
-            self.sequence = step.sequence
-            method_name = step.method_name
-            self.step = step
-            try:
-                self.method = get_component(method_name)
-            except Exception:
-                raise MethodLoadError('Error loading method {}'.format(method_name))
-
-    def start(self):
-        """Marks starting point of operation"""
-        self.state = 'started'
-        self.started_on = datetime.now()
-
-    def execute(self):
-        """Execute method"""
-        if self.method:
-            self.method(self)
-
-    def finish(self):
-        """Record successfull finish state"""
-
-        self.finished_on = datetime.now()
-        self.state = 'done'
-
-    def cancel(self):
-        """Record unsuccessfull cancel state"""
         self.finished_on = datetime.now()
         self.state = 'cancelled'
