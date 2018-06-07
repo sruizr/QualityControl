@@ -30,6 +30,10 @@ class NoCompatibleItem(Exception):
     pass
 
 
+class FlowAllocateException(Exception):
+    pass
+
+
 class Pars(Base):
     __tablename__ = 'pars'
     id = Column(Integer, primary_key=True)
@@ -174,8 +178,9 @@ class Item(Base, Abstract, WithPars):
     def produce(self, producer):
         """Produce a qty of item at producer destination"""
         qty = getattr(self, 'qty', 1.0)
-        self.avalaible_tokens.append(Token(qty=qty, producer=producer,
-                                           node=producer.destination))
+        self.avalaible_tokens.append(
+            Token(item=self, qty=qty, producer=producer, node=producer.destination)
+        )
 
     def consume(self,consumer):
         """Cosume a qty of item at consumer origin"""
@@ -213,18 +218,6 @@ class Item(Base, Abstract, WithPars):
 ItemLink = Table('item_link', Base.metadata,
                  Column('from_item_id', Integer, ForeignKey('item.id')),
                  Column('to_item_id', Integer, ForeignKey('item.id')))
-
-
-# class Step(Base, Abstract, WithPars):
-#     __tablename__ = 'step'
-
-#     path_id = Column(Integer, ForeignKey('path.id'))
-#     created_on = Column(DateTime, default=datetime.now)
-#     removed_on = Column(DateTime)
-
-#     path = relationship('Path', back_populates='steps')
-#     sequence = Column(Integer, default=0)
-#     method_name = Column(String(100), default='')
 
 
 class Path(Abstract, Base, WithPars):
@@ -307,8 +300,8 @@ class Token(Base):
     qty = Column(Float, default=1.0)
     node = relationship('Node')
 
-    producer = relationship('Flow', foreign_keys=[producer_id])
-    consumer = relationship('Flow', foreign_keys=[consumer_id])
+    producer = relationship('Flow', foreign_keys=[producer_id], backref='production')
+    consumer = relationship('Flow', foreign_keys=[consumer_id], backref='consum')
 
     def consume(self, consumer, qty=None):
         if qty is not None:
@@ -316,23 +309,16 @@ class Token(Base):
                 raise StockException('Quanty avalible is less than consume request')
             elif qty < self.qty:
                 rest = self.qty - qty
-                self.item.avalaible_tokens.append(Token(qty=rest, producer=self.producer, node=self.node))
+
+                self.item.avalaible_tokens.append(
+                    Token(qty=rest, producer=self.producer, node=self.node)
+                )
                 self.qty = qty
 
         self.consumer = consumer
 
     def is_consumed(self):
         return self.consumer is not None
-
-
-    # def encode(self):
-    #     return {'resource_key': self.item.resource.key,
-    #             'tracking': self.item.tracking,
-    #             'qty': self.qty,
-    #             'state': self.state,
-    #             'flow_id': self.flow_id,
-    #             'id': self.id
-    #     }
 
 
 class Flow(Abstract, Base):
@@ -398,11 +384,14 @@ class Flow(Abstract, Base):
             self.operations.append(operation)
             yield operation
 
-    def _move_items(self):
-        # Consume inputs
-        self.assign_nodes()
+    def close(self):
+        self.allocate()
+        self.throw()
 
-        self.finished_on = datetime.now()
+    def throw(self):
+        """Consume inputs and subinputs and produce outputs and suboutputs"""
+
+        # Consume inputs
         if self.origin:
             for _input in self.inputs:
                 _input.consume(self)
@@ -414,19 +403,30 @@ class Flow(Abstract, Base):
 
         # Move items from operations
         for operation in self.operations:
-            operation.move_items()
+            operation.throw()
 
-    def _assign_nodes(self):
-        """Flow the outputs & inputs of items"""
+    def allocate(self):
+        """Define origins and destinations from path information and final state"""
+        if self.finished_on is None:
+            raise FlowAllocateException('Check is not properly finished')
+
         if self.origin is None and self.path:
             self.origin = self.path.from_node
             if self.origin is None and self.path.parent:
                 self.origin = self.path.parent.from_node
 
-        if self.destination is None and self.path:
-            self.destination = self.path.to_node
-            if self.destination is None and self.path.parent:
-                self.destination = self.path.parent.to_node
+        if self.state == 'cancelled':
+            self.destination = self.origin
+            for operation in self.operations:
+                operation.state = 'cancelled'
+        else:
+            if self.destination is None and self.path:
+                self.destination = self.path.to_node
+                if self.destination is None and self.path.parent:
+                    self.destination = self.path.parent.to_node
+
+        for operation in self.operations:
+            operation.allocate()
 
     def cancel(self):
         """Returns to origin movement of items, outputs returned to origin"""

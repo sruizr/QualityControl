@@ -1,13 +1,13 @@
-from unittest.mock import Mock
 from queue import Queue
+from threading import Thread, Event
 import quactrl.domain.flows as f
 import quactrl.domain.items as i
-import quactrl.domain.paths as p
 import quactrl.domain.base as b
 from tests.domain import EmptyDataTest
+from unittest.mock import Mock, call, patch
 
 
-class A_Creation:
+class A_Creation(EmptyDataTest):
     def should_create_token_on_destination(self):
         resource = b.Resource(key='resource')
         item = b.Item(resource)
@@ -19,33 +19,61 @@ class A_Creation:
         item.qty = 2.0
         creation.run(destination, item)
 
+        self.session.add(creation)
+        # self.session.add(item)
+        self.session.commit()
+
         assert item.avalaible_tokens[0].qty == 2.0
         assert item.avalaible_tokens[0].node == destination
-        assert item.avalaible_tokens[0].producer == creation.operations[0]
+        assert item.avalaible_tokens[0].producer == creation
 
-class A_Destruction:
+
+class A_Destruction(EmptyDataTest):
     def should_remove_token_on_origin(self):
         resource = b.Resource(key='resource')
         item = b.Item(resource)
         responsible = b.Node(key='responsible')
         origin = b.Node(key='origin')
-        fake_op = Operation()
-
         item.avalaible_tokens.append(
-            b.Token(node=origin, producer=fake_op, qty=2.0))
+            b.Token(item=item, node=origin, qty=2.0))
 
+        destruction = f.Destruction(responsible)
 
-        # destruction = f.Destruction(responsible)
+        item.qty = 1.0
+        destruction.run(origin, item)
 
-        # item.qty = 1.0
-        # destruction.run(origin, item)
+        self.session.add(destruction)
+        # self.session.add(item)
+        self.session.commit()
 
-        # assert item.avalaible_tokens[0].qty == 2.0
-        # assert item.avalaible_tokens[0].node == destination
-        # assert item.avalaible_tokens[0].producer == creation.operations[0]
+        assert len(item.avalaible_tokens) == 1
+        assert item.avalaible_tokens[0].qty == 1.0
+        assert item.avalaible_tokens[0].node == origin
+        assert item.avalaible_tokens[0].producer == None
+        assert item.avalaible_tokens[0].consumer == None
 
+class A_Movement(EmptyDataTest):
+    def should_move_items(self):
+        resource = b.Resource(key='resource')
+        item = b.Item(resource)
+        responsible = b.Node(key='responsible')
+        origin = b.Node(key='origin')
+        destination = b.Node(key='destination')
+        item.avalaible_tokens.append(
+            b.Token(item=item, node=origin, qty=2.0))
 
+        movement = f.Movement(responsible)
+        item.qty = 1.0
+        movement.run(origin, destination, item)
 
+        self.session.add(movement)
+        self.session.commit()
+
+        assert len(item.avalaible_tokens) == 2
+        assert item.avalaible_tokens[0].qty == 1.0
+        assert item.avalaible_tokens[0].node == destination
+        assert item.avalaible_tokens[1].qty == 1.0
+        assert item.avalaible_tokens[1].node == origin
 
 # class A_Test:
 #     def should_prepare(self):
@@ -90,3 +118,83 @@ class A_Destruction:
 #         added_test = self.session.query(f.Test).first()
 #         assert added_test.operations[0].my_method()
 #         assert added_test.operations[1].other_method()
+
+
+class CheckRunner(Thread):
+    def __init__(self, check):
+        super().__init__()
+        self.check = check
+        self.check.thread = Mock()
+
+    def run(self):
+        self.check.run()
+
+class A_Check:
+    def should_run_sync_check(self):
+        test = f.Test()
+        test.tester = Mock()
+
+        check = f.Check()
+        check.test = test
+        check.run()
+
+        assert test.tester.notify.mock_calls == [call(check)] * 2
+        assert check.state == 'ok'
+
+    def should_run_async_check(self):
+
+        test = f.Test()
+        test.tester = Mock()
+        check = f.Check()
+        check.test = test
+        check.finish = Mock()
+
+        check_runner = CheckRunner(check)
+        check_runner.start()
+
+        check.finished.set()
+        while check_runner.is_alive():
+            pass
+
+        assert check.state == 'ok'
+        assert check.finished_on
+        assert check.started_on
+        assert test.tester.notify.mock_calls == [call(check)] * 3
+
+    def should_cancel_async_check_running(self):
+        test = f.Test()
+        test.tester = Mock()
+        check = f.Check()
+        check.test = test
+        check.finish = Mock()
+
+        check_runner = CheckRunner(check)
+        check_runner.start()
+
+        check.cancel()
+        while check_runner.is_alive():
+            pass
+
+        assert check.state == 'cancelled'
+        assert test.tester.notify.mock_calls == [call(check)] * 3
+        check.thread.cancel.assert_called_with()
+
+
+class A_CheckWithHelpers(EmptyDataTest):
+    def should_add_new_measures(self):
+        pass
+
+    def should_add_old_measures(self):
+        pass
+
+    def should_add_new_defects(self):
+        pass
+
+    def should_update_old_defects(self):
+        pass
+
+    def should_clean_old_defects(self):
+        pass
+
+    def should_track_devices(self):
+        pass

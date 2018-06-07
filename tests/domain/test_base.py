@@ -146,36 +146,110 @@ class A_Flow(EmptyDataTest):
         flow.finish.assert_called_with()
         flow.close.assert_called_with()
 
-    def setup_close(self):
+    def should_close(self):
+        flow = base.Flow()
+        flow.allocate = Mock()
+        flow.throw = Mock()
+
+        flow.finished_on = Mock()
+        flow.close()
+
+        flow.allocate.assert_called_with()
+        flow.throw.assert_called_with()
+
+    def should_throw_inputs_and_outputs(self):
+        flow = base.Flow()
+        operations = [base.Flow() for _ in range(3)]
+        for op in operations:
+            op.throw = Mock()
+            flow.operations.append(op)
+
+        destination = base.Node('destination')
         origin = base.Node('origin')
-        # destination = base.Node('destination')
-        # inputs = [
-        #     base.Item(resource=base.Resource('res_{}'.format(index)))
-        #     for index in range(3)
-        # ]
-        # for _input in inputs:
-        #     _input.avalaible_tokens.append(Token(
-        #         node=origin,
-        #         qty=1.0))
-        #     _input.qty = 1.0
-        # outputs = [
-        #     base.Item(resource=base.Resource('res_{}'.format(index)))
-        #     for index in range(3, 6)
-        # ]
-        # for output in outputs:
-        #     pass
-        # flow = base.Flow()
-        # flow.origin = flow.destination = None
-        # flow.operations = [base.Flow()]
 
-    def should_close_after_finish(self):
-        flow = self.setup_close()
+        resource = base.Resource(key='res')
+        _input = base.Item(resource)
+        _input.consume = Mock()
+        output = base.Item(resource)
+        output.produce = Mock()
+        flow.origin = flow.destination = None
+        flow.inputs = [_input]
+        flow.outputs = [output]
 
-        flow = self.session.query(base.Flow).first()
+        flow.throw()
+        _input.consume.assert_not_called()
+        output.produce.assert_not_called()
+        for op in operations:
+            op.throw.assert_called_with()
 
+        flow.origin = origin
+        flow.destination = destination
 
-    def should_close_after_cancel(self):
-        pass
+        flow.throw()
+        _input.consume.asseert_called_with(flow)
+        output.produce.assert_called_with(flow)
+
+    def should_allocate_origin_and_destination(self):
+        flow = base.Flow()
+        operations = [base.Flow() for _ in range(3)]
+        for op in operations:
+            op.allocate = Mock()
+            flow.operations.append(op)
+
+        with pytest.raises(base.FlowAllocateException):
+            flow.allocate()
+
+        flow.finished_on = Mock()
+        flow.state = 'finished'
+
+        destination = base.Node('destination')
+        origin = base.Node('origin')
+        from_node = base.Node('from_node')
+        to_node = base.Node('to_node')
+
+        path = base.Path()
+        path.from_node = from_node
+        path.to_node = to_node
+
+        flow.path = path
+
+        flow.origin = origin
+        flow.destination = destination
+        flow.allocate()
+
+        for op in operations:
+            op.allocate.assert_called_with()
+
+        assert flow.origin == origin
+        assert flow.destination == destination
+
+        flow.origin = flow.destination = None
+        flow.allocate()
+
+        assert flow.origin == from_node
+        assert flow.destination == to_node
+
+        parent_path = base.Path()
+        parent_path.from_node = from_node
+        parent_path.to_node = to_node
+        path.parent = parent_path
+
+        path.from_node = path.to_node = None
+        flow.origin = flow.destination = None
+
+        flow.allocate()
+        assert flow.origin == from_node
+        assert flow.destination == to_node
+
+        flow.state = 'cancelled'
+        flow.destination = destination
+        flow.origin = origin
+
+        flow.allocate()
+
+        assert flow.destination == origin
+        for op in operations:
+            assert op.state == 'cancelled'
 
 
 class An_Item(EmptyDataTest):

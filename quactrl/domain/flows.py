@@ -1,82 +1,63 @@
+from threading import Event
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import synonym, reconstructor
 from quactrl.domain.base import (Resource, PathResource, Path, Node, Pars,
-                                 Flow, Step, Operation
+                                 Flow
                                  )
 
-import quactrl.domain.items as items
-import quactrl.domain.resources as resources
 
 
 class Creation(Flow):
     """Special flow where a item/token is inserted into node"""
-
-    __mapper_args__ = {'polymorphic_identity': 'create'}
+    __mapper_args__ = {'polymorphic_identity': 'creation'}
 
     def __init__(self, responsible, **kwargs):
         super().__init__(responsible=responsible, **kwargs)
 
+
     def run(self, to_node, *items):
-        super().prepare()
+        super().start()
+
         self.destination = to_node
-        # Silly operation for tracking purposes
-        op = Operation(self)
-        self.operations.append(op)
+        self.outputs = items
 
-        for item in items:
-            item.op = op
-            self.outputs.append(item)
-
-        super().terminate()
-
-
-    def prepare(self, *outputs):
-        super().prepare()
-        operation = Operation(self)
-        self.outputs = outputs
-        for output in outputs:
-            output.op = operation
+        super().finish()
+        super().close()
 
 
 class Destruction(Flow):
-    """Special flow where a item/token is inserted into node"""
-    __mapper_args__ = {'polymorphic_identity': 'destruct'}
+    """Special flow where a item/token is remove from node"""
+    __mapper_args__ = {'polymorphic_identity': 'destruction'}
 
-    def __init__(self, responsible, from_node, **kwargs):
+    def __init__(self, responsible, **kwargs):
         super().__init__(responsible=responsible, **kwargs)
+
+    def run(self, from_node, *items):
+        super().start()
+
         self.origin = from_node
+        self.inputs = items
 
-    def prepare(self, *inputs):
-        super().prepare()
-        self.inputs = inputs
-
-    def process(self):
-        self.operations.append(Operation())
-        super().process()
-
-
-    def terminate(self):
-        pass
+        super().finish()
+        super().close()
 
 
 class Movement(Flow):
     """Special flow where a item/token is inserted into node"""
     __mapper_args__ = {'polymorphic_identity': 'movement'}
 
-    def __init__(self, responsible, from_node, to_node, **kwargs):
+    def __init__(self, responsible, **kwargs):
         super().__init__(responsible=responsible, **kwargs)
+
+    def run(self, from_node, to_node, *items):
+        super().start()
+
+        self.inputs = self.outputs = items
         self.origin = from_node
         self.destination = to_node
 
-    def prepare(self, *items):
-        super().prepare()
-        self.inputs = self.outputs = items
-
-
-class BasicOp(Operation):
-    __mapper_args__ = {'polymorphic_identity': 'basic_op'}
-
-    def my_method(self):
-        return True
+        super().finish()
+        super().close()
 
 
 class Test(Flow):
@@ -104,7 +85,7 @@ class Test(Flow):
 
         self.state = self.eval_test_result()
 
-        if self.state != 'ok': # Return all to origin node
+        if self.state != 'ok':  # Return all to origin node
             for token in self.out_tokens:
                 token.node = self.path.from_node
 
@@ -127,10 +108,6 @@ class Test(Flow):
 
         return state
 
-    from threading import Event
-from sqlalchemy.ext.hybrid import hybrid_property
-from quactrl.domain.base import Flow
-
 
 class Check(Flow):
     """Execute a control with ok - nok result"""
@@ -143,8 +120,8 @@ class Check(Flow):
     @test.setter
     def test(self, flow):
         self.flow = flow
-        self.origin = self.flow.path.from_node
-        self.destination = self.flow.path.to_node
+        self.origin = self.flow.path.from_node if self.path else None
+        self.destination = self.flow.path.to_node if self.path else None
 
     def run(self):
         super().start()
@@ -162,7 +139,7 @@ class Check(Flow):
             raise e
 
         super().finish()
-        if self.state == 'done':
+        if self.state == 'finished':
             self.state = 'ok'
         self.test.tester.notify(self)
 
@@ -175,16 +152,29 @@ class Check(Flow):
     def _has_thread_alive(self):
         return hasattr(self, 'thread') and self.thread.is_alive()
 
-    # def add_measure(self, value, characteristic, element_key='', parent=None):
-    #     """Helper for adding measures to part"""
-    #     self.test
-    #     measurement = items.Measurement(resource=characteristic, tracking=tracking)
-    #     if parent:
-    #         relation = ItemRelation(relation_class='contains')
-    #         relation.to_node = measurement
-    #         parent.destinations.append(relation)
+    def clean_old_defects(self):
+        part = self.test.part
+        for defect in part.defects:
+            if defect.avalaible_tokens and defect.avalaible_tokens[0].producer.path == self.path:
+                defect.qty = None
+                self.inputs.append(defect)
 
-    #     self.outputs.append((measurement, value))
+    def track_devices(self, **devices):
+        dev_trackings = []
+        for device in devices:
+            dev_trackings = device.tracking
+        self.tracking = '&'.join(dev_trackings)
+
+    def add_measure(self, value, characteristic, element_key='', parent=None):
+        """Helper for adding measures to part"""
+        self.test
+        measurement = items.Measurement(resource=characteristic, tracking=tracking)
+        if parent:
+            relation = ItemRelation(relation_class='contains')
+            relation.to_node = measurement
+            parent.destinations.append(relation)
+
+        self.outputs.append((measurement, value))
 
     # def add_defect(self, failure_mode, tracking='', parent=None):
     #     """Helper for adding defects to part"
