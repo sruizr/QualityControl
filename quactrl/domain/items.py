@@ -113,10 +113,9 @@ class PartAttribute:
 class Defect(Item, PartAttribute):
     __mapper_args__ = {'polymorphic_identity': 'defect'}
 
-    def __init__(self, part, failure_mode, qty=1.0, measurement=None):
+    def __init__(self, part, failure_mode, measurement=None):
         self.part = part
         self.resource = failure_mode
-        self.qty = qty
         if measurement is not None:
             self._measuremments.append(measurement)
 
@@ -136,11 +135,23 @@ class Measurement(Item, PartAttribute):
         primaryjoin=Item.id == ItemLink.c.from_item_id,
         secondaryjoin=Defect.id == ItemLink.c.to_item_id,
         backref='measurements'
-    )
+)
+    @hybrid_property
+    def defect(self):
+        if self._defects:
+            return self._defects[0]
 
-    def __init__(self, part, characteristic, value, **kwargs):
+    @defect.setter
+    def defect(self, defect):
+        if self._defects:
+            self._defects[0] = defect
+        else:
+            self._defects.append(defect)
+
+
+    def __init__(self, part, characteristic, **kwargs):
         super().__init__(resource=characteristic, **kwargs)
-        self.qty = value
+
         self.part = part
 
 

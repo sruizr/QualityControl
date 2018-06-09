@@ -3,6 +3,8 @@ from threading import Thread, Event
 import quactrl.domain.flows as f
 import quactrl.domain.items as i
 import quactrl.domain.base as b
+import quactrl.domain.resources as r
+import quactrl.domain.paths as p
 from tests.domain import EmptyDataTest
 from unittest.mock import Mock, call, patch
 
@@ -133,6 +135,7 @@ class A_Check:
     def should_run_sync_check(self):
         test = f.Test()
         test.tester = Mock()
+        test.part = Mock()
 
         check = f.Check()
         check.test = test
@@ -144,6 +147,7 @@ class A_Check:
     def should_run_async_check(self):
 
         test = f.Test()
+        test.part = Mock()
         test.tester = Mock()
         check = f.Check()
         check.test = test
@@ -163,6 +167,7 @@ class A_Check:
 
     def should_cancel_async_check_running(self):
         test = f.Test()
+        test.part = Mock()
         test.tester = Mock()
         check = f.Check()
         check.test = test
@@ -182,19 +187,102 @@ class A_Check:
 
 class A_CheckWithHelpers(EmptyDataTest):
     def should_add_new_measures(self):
-        pass
+        part = i.Part(r.PartModel(key='partnumber'))
+        characteristic = r.Characteristic(key='char')
+        check = f.Check()
+        check.part = part
+        check.outputs = []
+
+        check.add_measure(2.0, characteristic, element_key='el_1')
+
+        assert len(part.measurements) == 1
+        measurement = part.measurements[0]
+        assert measurement.qty == 2.0
+        assert measurement.characteristic == characteristic
+        assert measurement == check.outputs[0]
+
 
     def should_add_old_measures(self):
-        pass
+        part = i.Part(r.PartModel(key='partnumber'))
+        characteristic = r.Characteristic(key='char')
+        check = f.Check()
+        check.part = part
+        check.outputs = []
+
+        i.Measurement(part, characteristic, tracking='*char[el_1]')
+
+        check.add_measure(2.0, characteristic, element_key='el_1')
+
+        assert len(part.measurements) == 1
+        measurement = part.measurements[0]
+        assert measurement.qty == 2.0
+        assert measurement.characteristic == characteristic
+        assert measurement == check.outputs[0]
+
 
     def should_add_new_defects(self):
-        pass
+        failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
+        check = f.Check()
+        part = i.Part(r.PartModel(key='partnumber'))
+        check.part = part
+        check.outputs = []
 
-    def should_update_old_defects(self):
-        pass
+        defect = check.add_defect(failure_mode, element_key='el_1', qty=2.0)
+
+        assert len(part.defects) == 1
+        assert defect == part.defects[0]
+        assert defect.qty == 2.0
+        assert defect.tracking == '*low-char[el_1]'
+        assert defect.failure_mode == failure_mode
+        assert defect == check.outputs[0]
+
+    def should_add_old_defects(self):
+        failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
+        part = i.Part(r.PartModel(key='partnumber'))
+        check = f.Check()
+        check.part = part
+        check.outputs = []
+
+        defect = i.Defect(part, failure_mode)
+        defect.tracking = '*low-char[el_1]'
+
+        new_defect = check.add_defect(failure_mode, element_key='el_1', qty=2.0)
+
+        assert len(part.defects) == 1
+        assert defect == part.defects[0]
+        assert new_defect == defect
+        assert defect.qty == 2.0
+        assert defect.tracking == '*low-char[el_1]'
+        assert defect.failure_mode == failure_mode
+        assert defect == check.outputs[0]
+
 
     def should_clean_old_defects(self):
-        pass
+        control = p.Control()
+        source_check = f.Check()
+        check = f.Check()
+        check.inputs = []
+        check.control = source_check.control = control
+        failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
+
+        part = i.Part(r.PartModel(key='partnumber'))
+        check.part = part
+        defect = i.Defect(part, failure_mode)
+        defect.avalaible_tokens.append(
+            b.Token(item=defect, qty=1.0, producer=source_check)
+            )
+
+        check.clean_old_defects()
+
+        assert defect in check.inputs
+        assert defect.qty == None
+
 
     def should_track_devices(self):
-        pass
+        devices = [Mock(tracking='{}'.format(i)) for i in range(3)]
+
+        check = f.Check()
+
+        check.track_devices(*devices)
+
+        assert check.tracking == '0&1&2'

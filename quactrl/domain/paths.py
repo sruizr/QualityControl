@@ -1,7 +1,7 @@
 from enum import Enum
 from sqlalchemy.orm import synonym, reconstructor
 from threading import Thread, Event
-from quactrl.domain.base import (Item, Resource, PathResource, Path, Node, Pars, Flow, Step)
+from quactrl.domain.base import (Item, Resource, PathResource, Path, Node, Pars, Flow)
 import quactrl.domain.flows as f
 from datetime import datetime
 
@@ -50,13 +50,10 @@ class ControlPlan(Path):
         return test
 
 
-class Control(Step):
+class Control(Path):
     __mapper_args__ = {'polymorphic_identity': 'control'}
 
     characteristic = None
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
 
     @reconstructor
     def after_load(self):
