@@ -68,7 +68,7 @@ class A_Failure(EmptyDataTest):
     def _should_stores_failure_modes_from_characteristic(self):
         char = r.Characteristic(key='char')
 
-        failure = r.Failure(char, 'low', 'lw')
+        failure = r.Failure(char, 'lw')
         self.session.add(failure)
         self.session.commit()
 
@@ -77,12 +77,12 @@ class A_Failure(EmptyDataTest):
     def should_avoid_repeat_failure_modes(self):
         char = r.Characteristic(key='char')
 
-        failure = r.Failure(char, 'low', 'lw')
+        failure = r.Failure(char, 'lw')
         self.session.add(failure)
         self.session.commit()
 
         try:
-            r.Failure(char, 'olow', 'lw')
+            r.Failure(char, 'lw')
             pytest.fail('DuplicatedFailure exception should be raised')
         except r.DuplicatedFailure:
             pass

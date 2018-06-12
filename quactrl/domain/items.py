@@ -34,14 +34,16 @@ class Part(Item):
 
     def add_defect(self, failure_mode, element_key=None):
         """Add a defect from failure_mode and returns it"""
-        tracking = self.tracking + '/' + failure_mode.key
+        tracking = self.tracking + '*' + failure_mode.key
         tracking = tracking + '_' + element_key if element_key else tracking
         for defect in self.defects:
             if defect.failure_mode and defect.tracking == tracking:
                 defect.qty = 1
                 return defect
-        new_defect = Defect()
-        self.defects.append()
+
+        new_defect = Defect(self, failure_mode)
+        new_defect.tracking = tracking
+        return new_defect
 
     def clean_defects(self, characteristic, element_key=None):
         all_failure_modes = characteristic.get_all_failure_modes()
@@ -54,7 +56,6 @@ class Part(Item):
     def add_measurement(self, characteristic, value, tracking=None):
         """Add a measurement for characteristic and returns it"""
         pass
-
 
 
 class Device(Item):
@@ -135,7 +136,8 @@ class Measurement(Item, PartAttribute):
         primaryjoin=Item.id == ItemLink.c.from_item_id,
         secondaryjoin=Defect.id == ItemLink.c.to_item_id,
         backref='measurements'
-)
+    )
+
     @hybrid_property
     def defect(self):
         if self._defects:
@@ -148,12 +150,21 @@ class Measurement(Item, PartAttribute):
         else:
             self._defects.append(defect)
 
+    @hybrid_property
+    def characteristic(self):
+        return self.resource
 
-    def __init__(self, part, characteristic, **kwargs):
+    @characteristic.setter
+    def characteristic(self, value):
+        self.resource = value
+
+
+    def __init__(self, part, characteristic, value=None, **kwargs):
         super().__init__(resource=characteristic, **kwargs)
-
         self.part = part
 
+        if value:
+            self.qty = value
 
     def evaluate(self, limits, uncertainty=0.0):
         """Evals the measurement against limits and add defect to part if NC"""
@@ -168,28 +179,13 @@ class Measurement(Item, PartAttribute):
             mode_key = 'lw' if self.qty < low_limit else 'slw'
 
         if mode_key:
-            failure_mode = self.characteristic.get_or_create_failure_mode(mode_key)
+            failure_mode = self.characteristic.get_or_create_failure_mode(
+                mode_key
+            )
             defect = self.part.add_defect(failure_mode)
             self.defect = defect
 
         return defect
-
-    @hybrid_property
-    def characteristic(self):
-        return self.resource
-
-    @hybrid_property
-    def defect(self):
-        if self._defects:
-            self._defects[0]
-
-    @defect.setter
-    def defect(self, defect):
-
-        if self._defects:
-            self._defects[0] = defect
-        else:
-            self._defects.append(defect)
 
 
 class Report(Item):

@@ -63,6 +63,10 @@ class Pars(Base):
         self._load()
         return self._dict_pars
 
+    @dict.setter
+    def dict(self, value):
+        self._dict_pars = value
+        self._dump()
 
 class WithPars:
     @declared_attr
@@ -106,8 +110,6 @@ class ResourceRelation(Base, WithPars):
 
     from_resource = relationship('Resource', foreign_keys=[from_resource_id])
     to_resource = relationship('Resource', foreign_keys=[to_resource_id])
-
-    Base
 
 
 NodeLink = Table('node_link', Base.metadata,
@@ -274,11 +276,10 @@ class Path(Abstract, Base, WithPars):
 class PathResource(Base):
     __tablename__ = 'path_resource'
 
-    id = Column(Integer, primary_key=True)
-    path_id = Column(Integer, ForeignKey('path.id'), index=True)
+    path_id = Column(Integer, ForeignKey('path.id'), index=True, primary_key=True)
+    key = Column(String(10), nullable=False, primary_key=True)
     resource_id = Column(Integer, ForeignKey('resource.id'))
 
-    key = Column(String(10), nullable=False)
     resource = relationship('Resource')
     path = relationship('Path', backref=backref(
         'path_resource',

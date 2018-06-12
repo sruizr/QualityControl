@@ -61,6 +61,14 @@ class Requirement(ResourceRelation):
     """A resource requires a characteristic"""
     __mapper_args__ = {'polymorphic_identity': 'requires'}
 
+    @hybrid_property
+    def specs(self):
+        return self.pars
+
+    @specs.setter
+    def specs(self, specs):
+        self.pars.dict  = specs
+
     def __init__(self, resource, characteristic, specs=None):
         self.from_resource = resource
         self.to_resource = characteristic
@@ -75,31 +83,39 @@ class Requirement(ResourceRelation):
     def characteristic(self, char):
         self.to_resource = char
 
+    def get_requirement_by_characteristic(self, characteristic):
+        if characteristic == self.characteristic:
+            return self
+        else:
+            for req in self.characteristic.requirements:
+                requirement = req.get_requirement()
+                if req.characteristic == characteristic:
+                    return req
+
 
 class Failure(ResourceRelation):
     """A characteristic fails with a mode"""
     __mapper_args__ = {'polymorphic_identity': 'fails'}
 
-    def __init__(self, characteristic, mode, mode_key=None):
-        m_key = mode if mode_key is None else mode_key
-
+    def __init__(self, characteristic, mode_key, mode=None):
         for failure in characteristic.failures:
-            if failure.fmode.key == '{}-{}'.format(m_key, characteristic.key):
+            if failure.failure_mode.key == '{}-{}'.format(
+                    mode_key, characteristic.key):
                 raise DuplicatedFailure(
                     'Characteristic "{}" has duplicated failures mode {}'.format(
                         characteristic.description, mode
                     ))
 
         self.from_resource = characteristic
-        self.to_resource = FailureMode(characteristic, mode, m_key)
+        self.to_resource = FailureMode(characteristic, mode_key)
 
     @hybrid_property
-    def fmode(self):
+    def failure_mode(self):
         return self.to_resource
 
-    @fmode.setter
-    def fmode(self, fmode):
-        self.to_resource = fmode
+    @failure_mode.setter
+    def failure_mode(self, value):
+        self.to_resource = value
 
 
 class WithMembers:
@@ -114,6 +130,10 @@ class WithRequirements:
         return relationship('Requirement',
                             foreign_keys=[Requirement.from_resource_id])
 
+    def get_requirement_by_characteristic(self, characteristic):
+        for req in self.requirements:
+            if req.characteristic == characteristic:
+                return req
 
 class WithComponents:
     @declared_attr
@@ -151,13 +171,12 @@ class Characteristic(Resource, WithRequirements):
         self.description = description
 
     def get_or_create_failure_mode(self, mode_key):
-        failure_mode_key = self.compose_failure_mode_key(mode_key)
+        failure_mode_key = self._compose_failure_mode_key(mode_key)
 
         for failure in self.failures:
-            if failure.fmode.key == failure_mode_key:
-                return failure.fmode
-        failure_mode = Failure(failure_mode_key)
-        self.failures.append(failure_mode)
+            if failure.failure_mode.key == failure_mode_key:
+                return failure.failure_mode
+        failure_mode = Failure(self, mode_key).failure_mode
 
         return failure_mode
 
@@ -172,14 +191,13 @@ class DuplicatedFailure(Exception):
 class FailureMode(Resource):
     __mapper_args__ = {'polymorphic_identity': 'failure_mode'}
 
-    def __init__(self, characteristic, mode, mode_key=None):
-        if mode_key is None:
-            mode_key = mode
-
+    def __init__(self, characteristic, mode_key, mode=None):
         key = '{}-{}'.format(mode_key, characteristic.key)
-        self.description = '{}, {}'.format(characteristic.description, mode)
         self.key = key
-        self.name = mode
+        self.name = key
+
+        mode = mode if mode else mode_key
+        self.description = '{}, {}'.format(characteristic.description, mode)
 
 
 class DeviceModel(Resource):
@@ -198,6 +216,7 @@ class PartModel(Resource, WithGroups, WithComponents, WithRequirements):
 
     def get_configuration(self):
         return self.get_pars_from_group('device')
+
 
 
 class Document(Resource, WithGroups):

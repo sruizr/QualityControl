@@ -1,33 +1,45 @@
-from tests.domain import SessionMockedTest
+from tests.domain import EmptyDataTest
 from tests import TestWithPatches
 import quactrl.domain.paths as p
+import quactrl.domain.resources as r
+import quactrl.domain.items as i
+import quactrl.domain.nodes as n
+import quactrl.domain.flows as f
 from unittest.mock import Mock
 
 
-
-class A_ControlPlan(TestWithPatches):
-    def setup_method(self, method):
-        self.create_patches([
-            'quactrl.domain.paths.Test',
-            'quactrl.domain.paths.Path'
-        ])
-
-        self.control_plan = p.ControlPlan()
+class A_ControlPlan:
 
     def should_create_a_test_instance(self):
-        in_part = Mock(name='part')
-        responsible = Mock(name='responsible')
+        control_plan = p.ControlPlan()
+        control_plan.validate_item = Mock()
+        control_plan.validate_responsible = Mock()
 
-        test = self.control_plan.create_test(in_part, responsible)
+        responsible = n.Person(key='sruiz')
+        part = i.Part(r.PartModel(key='partnumber'))
 
-        self.Test.assert_called_with()
-        assert test == self.Test.return_value
+        test = control_plan.create_flow(responsible, part)
 
-    def should_check_responsible_when_new_test(self):
-        pass
+        assert control_plan.validate_item.called
+        assert control_plan.validate_responsible.called
+        assert type(test) is f.Test
+        assert test.part == part
+        assert test.responsible == responsible
 
-    def should_check_part_output_when_new_test(self):
-        pass
 
-    def should_open_checks_instances(self):
-        pass
+class A_Control(EmptyDataTest):
+    def should_create_a_check_instance(self):
+        control = p.Control()
+        control.validate_responsible = Mock()
+        test = f.Test()
+        test.part = Mock()
+        test.tester = Mock()
+
+        responsible = n.Person(key='resp')
+
+        check = control.create_flow(responsible, test)
+
+        assert type(check) is f.Check
+        assert check.part == test.part
+        assert check.tester == test.tester
+        assert check.test == test

@@ -1,9 +1,12 @@
 from sqlalchemy import inspect
-from tests.domain import OnMemoryTest
+from tests.domain import EmptyDataTest
 from quactrl.domain.nodes import Person
 
 class A_DataAccessLayer:
     def should_manage_scoped_session(self):
+        pass
+
+    def should_connect(self):
         pass
 
 # def load_data(dal):

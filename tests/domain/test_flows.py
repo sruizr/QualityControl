@@ -131,24 +131,25 @@ class CheckRunner(Thread):
     def run(self):
         self.check.run()
 
+
 class A_Check:
     def should_run_sync_check(self):
         test = f.Test()
-        test.tester = Mock()
+        test.notify = Mock()
         test.part = Mock()
 
         check = f.Check()
         check.test = test
         check.run()
 
-        assert test.tester.notify.mock_calls == [call(check)] * 2
+        assert test.notify.mock_calls == [call(check)] * 2
         assert check.state == 'ok'
 
     def should_run_async_check(self):
 
         test = f.Test()
         test.part = Mock()
-        test.tester = Mock()
+        test.notify = Mock()
         check = f.Check()
         check.test = test
         check.finish = Mock()
@@ -163,12 +164,13 @@ class A_Check:
         assert check.state == 'ok'
         assert check.finished_on
         assert check.started_on
-        assert test.tester.notify.mock_calls == [call(check)] * 3
+        assert test.notify.mock_calls == [call(check)] * 3
 
     def should_cancel_async_check_running(self):
         test = f.Test()
         test.part = Mock()
-        test.tester = Mock()
+        test.notify = Mock()
+
         check = f.Check()
         check.test = test
         check.finish = Mock()
@@ -181,7 +183,7 @@ class A_Check:
             pass
 
         assert check.state == 'cancelled'
-        assert test.tester.notify.mock_calls == [call(check)] * 3
+        assert test.notify.mock_calls == [call(check)] * 3
         check.thread.cancel.assert_called_with()
 
 

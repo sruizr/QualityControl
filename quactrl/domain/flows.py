@@ -108,6 +108,10 @@ class Test(Flow):
 
         return state
 
+    def notify(self, obj, **kwargs):
+        if hasattr(self, 'tester'):
+            self.tester.notify(obj, **kawrgs)
+
 
 class Check(Flow):
     """Execute a control with ok - nok result"""
@@ -131,14 +135,14 @@ class Check(Flow):
 
     def run(self):
         super().start()
-        self.test.tester.notify(self)
+        self.test.notify(self)
 
         self.part = self.test.part
         try:
             super().execute()
             if self._has_thread_alive():
                 self.state == 'ongoing'
-                self.test.tester.notify(self)
+                self.test.notify(self)
                 self.finished = Event()
                 self.finished.wait()
         except Exception as e:
@@ -148,7 +152,7 @@ class Check(Flow):
         super().finish()
         if self.state == 'finished':
             self.state = 'ok'
-        self.test.tester.notify(self)
+        self.test.notify(self)
 
     def cancel(self):
         self.state = 'cancelled'
@@ -166,8 +170,7 @@ class Check(Flow):
         tracking = self._compose_tracking(part, characteristic, element_key)
         measurement = self._find_by_tracking(part.measurements, tracking)
         if not measurement:
-             measurement = i.Measurement(part, characteristic, tracking=tracking)
-
+            measurement = i.Measurement(part, characteristic, tracking=tracking)
         measurement.qty = value
         self.outputs.append(measurement)
         return measurement
