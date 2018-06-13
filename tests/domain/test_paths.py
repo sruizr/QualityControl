@@ -9,7 +9,6 @@ from unittest.mock import Mock
 
 
 class A_ControlPlan:
-
     def should_create_a_test_instance(self):
         control_plan = p.ControlPlan()
         control_plan.validate_item = Mock()
@@ -30,16 +29,17 @@ class A_ControlPlan:
 class A_Control(EmptyDataTest):
     def should_create_a_check_instance(self):
         control = p.Control()
-        control.validate_responsible = Mock()
         test = f.Test()
         test.part = Mock()
         test.tester = Mock()
 
         responsible = n.Person(key='resp')
+        test.responsible = responsible
 
-        check = control.create_flow(responsible, test)
+        check = control.create_flow(test)
 
         assert type(check) is f.Check
         assert check.part == test.part
         assert check.tester == test.tester
         assert check.test == test
+        assert check.responsible == responsible

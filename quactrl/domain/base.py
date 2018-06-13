@@ -3,7 +3,7 @@ import importlib
 from datetime import datetime
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import reconstructor, remote
-from sqlalchemy import ForeignKey, Column, Table
+from sqlalchemy import ForeignKey, Column, Table, UniqueConstraint
 from sqlalchemy.types import (
     String, Integer, DateTime, Float
     )
@@ -68,6 +68,7 @@ class Pars(Base):
         self._dict_pars = value
         self._dump()
 
+
 class WithPars:
     @declared_attr
     def pars_id(cls):
@@ -82,9 +83,11 @@ class Resource(Base, Abstract):
     __tablename__ = 'resource'
 
     id = Column(Integer, primary_key=True)
-    key = Column(String(100), unique=True)
+    key = Column(String(100))
     name = Column(String(100), default='')
     description = Column(String(100), default='')
+
+    UniqueConstraint(key, Abstract.is_a, name='i_key')
 
     def __init__(self, **kwargs):
         key = kwargs.pop('key')
@@ -103,9 +106,8 @@ class ResourceRelation(Base, WithPars):
         'polymorphic_on': link
     }
 
-    id = Column(Integer, primary_key=True)
-    from_resource_id = Column(Integer, ForeignKey('resource.id'))
-    to_resource_id = Column(Integer, ForeignKey('resource.id'))
+    from_resource_id = Column(Integer, ForeignKey('resource.id'), primary_key=True)
+    to_resource_id = Column(Integer, ForeignKey('resource.id'), primary_key=True)
     qty = Column(Float, default=1.0)
 
     from_resource = relationship('Resource', foreign_keys=[from_resource_id])
@@ -126,6 +128,8 @@ class Node(Base, Abstract, WithPars):
     key = Column(String(15), unique=True)
     name = Column(String(50))
     description = Column(String(250))
+
+    UniqueConstraint(key, Abstract.is_a, name='i_key')
 
     def __init__(self, key,  **kwargs):
         self.key = key
@@ -184,7 +188,7 @@ class Item(Base, Abstract, WithPars):
             Token(item=self, qty=qty, producer=producer, node=producer.destination)
         )
 
-    def consume(self,consumer):
+    def consume(self, consumer):
         """Cosume a qty of item at consumer origin"""
         qty = getattr(self, 'qty', None)
         origin = consumer.origin
@@ -200,7 +204,6 @@ class Item(Base, Abstract, WithPars):
                 qty,
                 origin.key
             ))
-
 
         if qty is None:
             for token in stocks[origin]:
@@ -320,7 +323,6 @@ class Token(Base):
 
     def is_consumed(self):
         return self.consumer is not None
-
 
 class Flow(Abstract, Base):
     __tablename__ = 'flow'

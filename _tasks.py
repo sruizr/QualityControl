@@ -42,6 +42,7 @@ def start(cntx, environment='production', config_fn=None):
     apps[environment] = app
     app.run()
 
+
 @task
 def stop(cntx, environment='production'):
     if environment in apps.keys():
@@ -60,8 +61,3 @@ def start_fake_api_rest():
     }
 
     return api.run_fake(config)
-
-
-def get_api_rest(config=None):
-
-    return  api.App()

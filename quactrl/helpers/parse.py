@@ -89,3 +89,35 @@ def from_defect(defect, level=1):
             'description': defect.description.capitalize(),
             'char_key': defect.characteristic.key
             }
+
+def from_person(person, level=1):
+    result = from_node(person)
+    roles = [role.key for role in person.roles]
+    result['roles'] = roles
+
+    return result
+
+def from_role(role, level=1):
+    result = from_node(role)
+    result['members'] = [member.key for member in role.members]
+    return result
+
+
+def from_node(node, level=1):
+    return {'id': node.id, 'key': node.key, 'description': node.description,
+            'name': node.name}
+
+
+def from_resource(resource, level=1):
+    return {'id': resource.id, 'key': resource.key,
+            'description': resource.description, 'name': resource.name}
+
+
+def from_location(location, level=1):
+    result = from_node(location)
+    result['site'] = location.site.key
+    result['parcels'] = [parcel.key for parcel in location.parcels]
+
+
+def from_path(path, level=1):
+    pass

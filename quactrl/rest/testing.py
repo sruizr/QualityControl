@@ -1,6 +1,6 @@
 import cherrypy
-from quactrl.managers.testing import TestManager
 import quactrl.helpers.parse as parse
+from quactrl.managers.testing import TestManager
 
 
 @cherrypy.expose

@@ -6,6 +6,7 @@ import quactrl.domain.flows as f
 
 
 class ControlPlan(Path):
+    """Control plan for generating controls on parts or processes"""
     __mapper_args__ = {'polymorphic_identity': 'control_plan'}
 
     def create_flow(self, responsible, part):
@@ -27,7 +28,6 @@ class Control(Path):
     def create_flow(self, test):
         """Create Check instance from test information"""
         responsible = test.responsible
-        self.validate_responsible(responsible)
 
         check = f.Check()
 
