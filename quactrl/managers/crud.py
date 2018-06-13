@@ -20,7 +20,6 @@ CLASSES = {
 RELATIONSHIPS = {
     'roles': n.Role,
     'members': n.Person
-
 }
 class Crud(Manager):
     """CRUD basic operations on domain """
@@ -49,7 +48,10 @@ class Crud(Manager):
     def read(self, class_name, **filters):
         session = self.dal.Session()
         results = session.query(CLASSES[class_name]).filter_by(**filters).all()
-        return results
+        if len(results) == 1:
+            return results[0]
+        else:
+            return results
 
     def update(self, class_name, id,  **fields):
         session = self.dal.Session()
@@ -59,22 +61,38 @@ class Crud(Manager):
         session.commit()
 
     def _update_fields(self, obj, fields):
+        session = self.dal.Session()
         for att, value in fields.items():
             if att in RELATIONSHIPS.keys():  #  Fields with domain objects
+                ChildClass = RELATIONSHIPS[att]
+                obj_att = getattr(obj, att)
                 if type(value) is list: # Association proxy
                     if type(value[0]) is str: # List of already existing domain objects by  keys
-                        pass
-                    if type(value[0]) is int: # List of already existing domain objects by  ids
-                        pass
+
+                        children = session.query(ChildClass).filter(ChildClass.key.in_(value)).all()
+                    elif type(value[0]) is int: # List of already existing domain objects by  ids
+                        children = session.query(ChildClass).filter(ChildClass.id.in_(value)).all()
+
                     elif type(value[0]) is dict: # New child object
-                        pass
+                            pass
+                    for child in children:
+                        obj_att.append(child)
                 elif type(value) is dict:  # A dict proxy
                     pass
                 elif type(value) is str:  #  Key access for obj
-                    pass
-            else:
-                # Primitive
+                    obj_field = session.query(ChildClass).filter(ChildClass.key == value).one_or_none()
+                    setattr(obj, att, obj_field)
+                elif type(value) is int:
+                    obj_field = session.query(ChildClass).filter(ChildClass.id == value).one_or_none()
+                    setattr(obj, att, obj_field)
+            elif att == 'pars':
+                if obj.pars is None:
+                    obj.pars = b.Pars()
+                for key, _value in value.items():
+                    obj.pars[key] = _value
+
+            else:  # Primitive field
                 if hasattr(obj, att):
-                    obj.att = value
+                    setattr(obj, att, value)
                 else:
                     raise Exception('Not correct field')

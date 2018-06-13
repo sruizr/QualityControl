@@ -89,13 +89,13 @@ class Resource(Base, Abstract):
 
     UniqueConstraint(key, Abstract.is_a, name='i_key')
 
-    def __init__(self, **kwargs):
-        key = kwargs.pop('key')
-        name = kwargs.pop('name', '')
-        description = kwargs.pop('description', '')
-        Base.__init__(self, key=key, name=name, description=description)
-        if kwargs:
-            self.pars = Pars(**kwargs)
+    # def __init__(self, **kwargs):
+    #     key = kwargs.pop('key')
+    #     name = kwargs.pop('name', '')
+    #     description = kwargs.pop('description', '')
+    #     Base.__init__(self, key=key, name=name, description=description)
+    #     if kwargs:
+    #         self.pars = Pars(**kwargs)
 
 
 class ResourceRelation(Base, WithPars):
@@ -131,13 +131,11 @@ class Node(Base, Abstract, WithPars):
 
     UniqueConstraint(key, Abstract.is_a, name='i_key')
 
-    def __init__(self, key,  **kwargs):
-        self.key = key
-        self.name = kwargs.pop('name', None)
-        self.description = kwargs.pop('description', None)
-        if kwargs:
-            self.pars = Pars(**kwargs)
-
+    # def __init__(self, **kwargs):
+    #     pars = kwargs.pop('pars')
+    #     if pars:
+    #         self.pars = Pars(**pars)
+    #     Base
     # def add_item(self, item, qty=1.0, path=None, responsible=None):
     #     pass #TODO
 
