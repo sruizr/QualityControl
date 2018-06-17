@@ -9,6 +9,22 @@ class ControlPlan(Path):
     """Control plan for generating controls on parts or processes"""
     __mapper_args__ = {'polymorphic_identity': 'control_plan'}
 
+    @property
+    def part_model(self):
+        return self.resources['part_model']
+
+    @part_model.setter
+    def part_model(self, part_model):
+        self.resources['part_model'] = part_model
+
+    @property
+    def process(self):
+        return self.resources['process']
+
+    @process.setter
+    def process(self, process):
+        self.resources['process'] = process
+
     def create_flow(self, responsible, part):
         self.validate_responsible(responsible)
         self.validate_item(part)
@@ -37,3 +53,7 @@ class Control(Path):
         check.responsible = responsible
 
         return check
+
+
+class Operation(Path):
+    __mapper_args__ = {'polymorphic_identity': 'Operation'}

@@ -1,9 +1,9 @@
 from sqlalchemy.exc import IntegrityError
+import quactrl.domain.base as b
 import quactrl.domain.nodes as n
-import quactrl.domain.resources as resources
-import quactrl.domain.paths as paths
-import quactrl.domain.items as items
-import quactrl.domain.flows as flows
+import quactrl.domain.resources as r
+import quactrl.domain.paths as p
+import quactrl.domain.items as i
 from quactrl.managers import Manager
 
 """Class mapping for crud operations"""
@@ -11,16 +11,30 @@ CLASSES = {
     'person': n.Person,
     'role': n.Role,
     'location': n.Location,
-    'part': items.Part,
-    'part_model': resources.PartModel,
-    'control_plan': paths.ControlPlan,
-    'control': paths.Control
+    'part': i.Part,
+    'part_model': r.PartModel,
+    'control_plan': p.ControlPlan,
+    'control': p.Control,
+    'operation': p.Operation,
+    'characteristic': r.Characteristic,
+    'requirement': r.Requirement,
+    'part_group': r.PartGroup,
+    'failure': r.Failure,
+    'failure_mode': r.FailureMode
 }
+
 
 RELATIONSHIPS = {
     'roles': n.Role,
-    'members': n.Person
+    'members': n.Person,
+    'failures': r.Failure,
+    'requirements': r.Requirement,
+    'components': r.Composition,
+    'groups': r.IsA,
+    'members': r.IsA
 }
+
+
 class Crud(Manager):
     """CRUD basic operations on domain """
     def __init__(self):
@@ -61,38 +75,61 @@ class Crud(Manager):
         session.commit()
 
     def _update_fields(self, obj, fields):
-        session = self.dal.Session()
-        for att, value in fields.items():
-            if att in RELATIONSHIPS.keys():  #  Fields with domain objects
-                ChildClass = RELATIONSHIPS[att]
-                obj_att = getattr(obj, att)
-                if type(value) is list: # Association proxy
-                    if type(value[0]) is str: # List of already existing domain objects by  keys
+        for attr, value in fields.items():
+            if attr in RELATIONSHIPS.keys():  #  Fields with domain objects
+                self._update_domain_field(obj, attr, value)
 
-                        children = session.query(ChildClass).filter(ChildClass.key.in_(value)).all()
-                    elif type(value[0]) is int: # List of already existing domain objects by  ids
-                        children = session.query(ChildClass).filter(ChildClass.id.in_(value)).all()
-
-                    elif type(value[0]) is dict: # New child object
-                            pass
-                    for child in children:
-                        obj_att.append(child)
-                elif type(value) is dict:  # A dict proxy
-                    pass
-                elif type(value) is str:  #  Key access for obj
-                    obj_field = session.query(ChildClass).filter(ChildClass.key == value).one_or_none()
-                    setattr(obj, att, obj_field)
-                elif type(value) is int:
-                    obj_field = session.query(ChildClass).filter(ChildClass.id == value).one_or_none()
-                    setattr(obj, att, obj_field)
-            elif att == 'pars':
+            elif attr == 'pars':  # pars field
                 if obj.pars is None:
                     obj.pars = b.Pars()
                 for key, _value in value.items():
                     obj.pars[key] = _value
-
             else:  # Primitive field
-                if hasattr(obj, att):
-                    setattr(obj, att, value)
+                if hasattr(obj, attr):
+                    setattr(obj, attr, value)
                 else:
                     raise Exception('Not correct field')
+
+    def _update_domain_field(self, obj, attr, value):
+        DomainClass = RELATIONSHIPS[attr]
+
+        query = self.dal.Session().query(DomainClass)
+
+        if self._is_multiple_object_field(value):  # Mapping to several domain objects
+            attr_field = getattr(obj, attr)
+            if type(value) is list:
+                children = []
+
+                for value_ in value:
+                    if type(value_) is str:  # Objects by key
+                        child = query.filter(DomainClass.key==value_).one()
+                    elif type(value_) is int:  # Objects by id
+                        child = query.filter(DomainClass.id==value_).one()
+                    elif type(value_) is dict:  # Object definitions
+                        type_ = value_.pop('type')
+                        if type_:
+                            ObjClass = CLASSES[type_]
+                        else:
+                            ObjClass = DomainClass
+                        child = ObjClass()
+                        self._update_fields(child, value_)
+                    children.append(child)
+
+                for child in children:
+                    attr_field.append(child)
+        else:  # Mapping to one object
+            if type(value) is str:  #  Defined by key
+                value = query.filter(DomainClass.key == value).one_or_none()
+            elif type(value) is int:   # One to one by id
+                value = query.filter(DomainClass.id == value).one_or_none()
+            elif type(value) is dict:  # Create a new one
+                type_ = value.pop('type')
+                value = self.create(type_, **value)
+
+            setattr(obj, attr, value)
+
+
+    def _is_multiple_object_field(self, value):
+        return type(value) is list or (
+            type(value) is dict and 'type' not in value.keys()
+        )

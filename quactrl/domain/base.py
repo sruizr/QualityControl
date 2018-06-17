@@ -89,14 +89,6 @@ class Resource(Base, Abstract):
 
     UniqueConstraint(key, Abstract.is_a, name='i_key')
 
-    # def __init__(self, **kwargs):
-    #     key = kwargs.pop('key')
-    #     name = kwargs.pop('name', '')
-    #     description = kwargs.pop('description', '')
-    #     Base.__init__(self, key=key, name=name, description=description)
-    #     if kwargs:
-    #         self.pars = Pars(**kwargs)
-
 
 class ResourceRelation(Base, WithPars):
     __tablename__ = 'resource_relation'
@@ -106,12 +98,16 @@ class ResourceRelation(Base, WithPars):
         'polymorphic_on': link
     }
 
+    id = Column(Integer, primary_key=True)
+
     from_resource_id = Column(Integer, ForeignKey('resource.id'), primary_key=True)
     to_resource_id = Column(Integer, ForeignKey('resource.id'), primary_key=True)
     qty = Column(Float, default=1.0)
 
     from_resource = relationship('Resource', foreign_keys=[from_resource_id])
     to_resource = relationship('Resource', foreign_keys=[to_resource_id])
+
+    UniqueConstraint(from_resource_id, to_resource_id)
 
 
 NodeLink = Table('node_link', Base.metadata,

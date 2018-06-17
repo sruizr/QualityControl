@@ -1,6 +1,6 @@
 from tests.domain import EmptyDataTest
 from quactrl.managers.crud import Crud
-from quactrl.domain.nodes import Person, Role
+import quactrl.domain.nodes as n
 
 
 class A_Crud(EmptyDataTest):
@@ -9,7 +9,7 @@ class A_Crud(EmptyDataTest):
         self.manager = Crud()
 
     def _create_bond(self):
-        person = Person(key='007', description='Bond, James')
+        person = n.Person(key='007', description='Bond, James')
         self.session.add(person)
         self.session.commit()
         id = person.id
@@ -31,29 +31,29 @@ class A_Crud(EmptyDataTest):
 
         self.manager.update('person', id, description='Ruiz, Salvador')
 
-        person = self.session.query(Person).filter_by(id=id).one()
+        person = self.session.query(n.Person).filter_by(id=id).one()
         assert person.description == 'Ruiz, Salvador'
 
     def should_update_domain_object_assotiations_by_keys(self):
         id = self._create_bond()
 
-        role = Role(key='admin')
+        role = n.Role(key='admin')
         self.session.add(role)
         self.session.commit()
 
         self.manager.update('person', id, roles=['admin'])
-        person = self.session.query(Person).filter_by(id=id).one()
+        person = self.session.query(n.Person).filter_by(id=id).one()
         assert person.roles[0] == role
 
     def should_update_domain_object_assotiations_by_ids(self):
         id = self._create_bond()
 
-        role = Role(key='admin')
+        role = n.Role(key='admin')
         self.session.add(role)
         self.session.commit()
 
         self.manager.update('person', id, roles=[role.id])
-        person = self.session.query(Person).filter_by(id=id).one()
+        person = self.session.query(n.Person).filter_by(id=id).one()
         assert person.roles[0] == role
 
 
@@ -62,5 +62,21 @@ class A_Crud(EmptyDataTest):
 
         self.manager.delete('person', id)
 
-        res = self.dal.Session().query(Person).filter_by(id=id).one_or_none()
+        res = self.dal.Session().query(n.Person).filter_by(id=id).one_or_none()
         assert res is None
+
+    def should_insert_person(self):
+
+        person = self.manager.create('person', **{'key': '007', 'name':'bond', 'description': 'Bond, James'})
+
+        stored_person = self.session.query(n.Person).filter(n.Person.key=='007').one_or_none()
+
+        assert stored_person == person
+        assert person.id
+
+    def should_create_domain_object_with_pars(self):
+        self.manager.create('person', **{'key': '007', 'pars': {'password':'licence to kill'}})
+
+        stored_person = self.session.query(n.Person).filter(n.Person.key=='007').one_or_none()
+
+        assert stored_person.pars['password'] == 'licence to kill'
