@@ -15,5 +15,7 @@ class Manager:
     def __init__(self):
         self.dal = dal
 
-    def connect(self, *args, **kwargs):
-        self.dal.connect(*args, **kwargs)
+    def connect(self, kwargs):
+        connection_string = kwargs.pop('connection_string')
+        self.dal.connect(connection_string, **kwargs)
+        return True

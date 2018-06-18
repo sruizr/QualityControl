@@ -13,16 +13,14 @@ class DataAccessLayer:
         self.Session = None
         self._connected = False
 
-    def connect(self, connection_string):
-        args = connection_string.split(';')
-        conn_string = args[0]
+    def connect(self, conn_string, **kwargs):
 
-        connect_args = {}
-        for index in range(1, len(args)):
-            key, value = args.split('=')
-            connect_args[key] = value
-        echo = connect_args.pop('echo', False)
-        self.engine = create_engine(conn_string, connect_args=connect_args,
+        # connect_args = {}
+        # for index in range(1, len(args)):
+        #     key, value = args.split('=')
+        #     connect_args[key] = value
+        echo = kwargs.pop('echo', False)
+        self.engine = create_engine(conn_string, connect_args=kwargs['connect_args'],
                                     echo=echo)
         self.metadata = Base.metadata
         try:

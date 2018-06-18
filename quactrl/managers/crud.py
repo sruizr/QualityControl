@@ -12,6 +12,7 @@ CLASSES = {
     'role': n.Role,
     'location': n.Location,
     'part': i.Part,
+    'form': r.Form,
     'part_model': r.PartModel,
     'control_plan': p.ControlPlan,
     'control': p.Control,
@@ -20,7 +21,8 @@ CLASSES = {
     'requirement': r.Requirement,
     'part_group': r.PartGroup,
     'failure': r.Failure,
-    'failure_mode': r.FailureMode
+    'failure_mode': r.FailureMode,
+    'device_group': r.DeviceGroup
 }
 
 
@@ -30,8 +32,6 @@ RELATIONSHIPS = {
     'failures': r.Failure,
     'requirements': r.Requirement,
     'components': r.Composition,
-    'groups': r.IsA,
-    'members': r.IsA
 }
 
 
@@ -42,7 +42,13 @@ class Crud(Manager):
 
     def create(self, class_name, **fields):
         session = self.dal.Session()
-        ObjClass = CLASSES[class_name]
+        if 'type' in fields.keys():
+            type_ = fields.pop('type')
+        else:
+            type_ = class_name
+
+        ObjClass = CLASSES[type_]
+
 
         obj = ObjClass()
         self._update_fields(obj, fields)

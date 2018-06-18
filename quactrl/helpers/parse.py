@@ -16,6 +16,10 @@ def from_obj(obj, level=1):
 
     return from_method(obj, level)
 
+def from_form(form, level=1):
+    form_data = from_resource(form)
+    return form_data
+
 
 def from_event(event, level=1):
     event_data = {

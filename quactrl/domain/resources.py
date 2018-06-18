@@ -206,10 +206,15 @@ class DeviceModel(Resource):
     def get_configuration(self):
         return self.get_pars_from_group('device')
 
+class Form(Resource):
+    __mapper_args__ = {'polymorphic_identity': 'form'}
+
 
 class PartGroup(Resource, WithMembers, WithGroups, WithRequirements):
     __mapper_args__ = {'polymorphic_identity': 'part_group'}
 
+class DeviceGroup(Resource, WithMembers, WithGroups):
+    __mapper_args__ = {'polymorphic_identity': 'device_group'}
 
 class PartModel(Resource, WithGroups, WithComponents, WithRequirements):
     __mapper_args__ = {'polymorphic_identity': 'part_model'}

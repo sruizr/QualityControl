@@ -14,7 +14,7 @@ class Person(Node):
     roles = relationship('Role', secondary=NodeLink,
                          primaryjoin=Node.id==NodeLink.c.to_node_id,
                          secondaryjoin=Role.id==NodeLink.c.from_node_id,
-                         backref='members')
+                         backref='persons')
     reports_to = None
     in_charge_of = None
 
