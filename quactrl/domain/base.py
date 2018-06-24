@@ -89,7 +89,6 @@ class Resource(Base, Abstract):
 
     UniqueConstraint(key, Abstract.is_a, name='i_key')
 
-
 class ResourceRelation(Base, WithPars):
     __tablename__ = 'resource_relation'
 
@@ -100,14 +99,14 @@ class ResourceRelation(Base, WithPars):
 
     id = Column(Integer, primary_key=True)
 
-    from_resource_id = Column(Integer, ForeignKey('resource.id'), primary_key=True)
-    to_resource_id = Column(Integer, ForeignKey('resource.id'), primary_key=True)
+    from_resource_id = Column(Integer, ForeignKey('resource.id'))
+    to_resource_id = Column(Integer, ForeignKey('resource.id'))
     qty = Column(Float, default=1.0)
 
     from_resource = relationship('Resource', foreign_keys=[from_resource_id])
     to_resource = relationship('Resource', foreign_keys=[to_resource_id])
 
-    UniqueConstraint(from_resource_id, to_resource_id)
+    # UniqueConstraint(from_resource_id, to_resource_id)
 
 
 NodeLink = Table('node_link', Base.metadata,
@@ -146,19 +145,19 @@ class Item(Base, Abstract, WithPars):
 
     resource_id = Column(ForeignKey('resource.id'))
     tracking = Column(String(100), index=True)
-    state = Column(String(100), index=True, default='active')
+    state = Column(String(100), index=True, default='open')
 
     resource = relationship("Resource")
     avalaible_tokens = relationship(
         'Token',
         primaryjoin="and_(Item.id==Token.item_id, Token.consumer_id == None)")
 
-    def __init__(self, resource, tracking='', state='open', pars=None):
-        self.resource = resource
-        self.tracking = tracking
-        self.state = state
-        if pars:
-            self.pars = Pars(**pars)
+    # def __init__(self, resource, tracking='', state='open', pars=None):
+    #     self.resource = resource
+    #     self.tracking = tracking
+    #     self.state = state
+    #     if pars:
+    #         self.pars = Pars(**pars)
 
     def get_stocks(self):
         """Group avalaible tokens by nodes"""

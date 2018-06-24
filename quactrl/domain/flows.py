@@ -63,7 +63,6 @@ class Movement(Flow):
 class Test(Flow):
     """Group of checks following a control plan"""
     __mapper_args__ = {'polymorphic_identity': 'test'}
-    control_plan = synonym('path')
 
     # def __init__(self, control_plan, responsible, controller=None):
     #     Flow.__init__(self, path=control_plan,
@@ -75,8 +74,18 @@ class Test(Flow):
     #                                    controller=controller)
     #         self.children.append(check)
 
-    def prepare(self):
-        super().prepare()
+    @property
+    def part(self):
+        return self
+        if self.inputs:
+            return self.inputs[0]
+    @part.setter
+    def part(self, value):
+        self._part = value
+
+
+    def start(self):
+        super().start()
         self.part = self.in_tokens[0].item
         self.devices = self.path.devices
 

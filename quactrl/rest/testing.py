@@ -1,26 +1,27 @@
 import cherrypy
-import quactrl.helpers.parse as parse
+import quactrl.helpers.parsing as parsing
 from quactrl.managers.testing import TestManager
 
 
 @cherrypy.expose
 class AuTestResource:
-    runner = TestManager()
+    def __init__(self):
+        self.manager = TestManager()
 
     @cherrypy.tools.json_out()
     @cherrypy.popargs('filter')
     def GET(self, filter=None):
         if filter is None:
             json_res = []
-            for test in self.runner.tests:
-                json_res.append(parse.from_obj(test))
+            for test in self.manager.tests:
+                json_res.append(parsing.parse(test))
             return json_res
         elif filter == 'events':
             return self._parse_events()
         elif self._is_num(filter):
             index = int(filter) - 1
-            test = self.runner.tests[index]
-            return parse.from_obj(test)
+            test = self.manager.tests[index]
+            return parsing.parse(test)
 
     def _is_num(self, value):
         try:
@@ -30,11 +31,11 @@ class AuTestResource:
             return False
 
     def _parse_events(self):
-        events = self.runner.events
+        events = self.manager.events
         res = []
         for _ in range(events.qsize()):
             event = events.get()
-            res.append(parse.from_obj(event))
+            res.append(parsing.parse(event))
 
         return res
 
@@ -53,32 +54,39 @@ class AuTestResource:
             else:
                 test_pars[key] = value
 
-        self.runner.start_test(part, responsible_key, **test_pars)
+        self.manager.start_test(part, responsible_key, **test_pars)
 
         index = int(test_pars.get('cavity', 1)) - 1
 
-        json_res = parse.from_obj(self.runner.tests[index])
+        json_res = parsing.parse(self.manager.tests[index])
         return json_res
 
-    @cherrypy.popargs('location')
+    @cherrypy.popargs('command')
     @cherrypy.tools.json_out()
-    def PUT(self, location):
+    @cherrypy.tools.json_in()
+    def PUT(self, command):
+        data = cherrypy.request.json
         try:
-            self.runner.set_location(location)
+            if command == 'database':
+                answer = self.manager.connect(data)
+            elif command == 'setup':
+                answer = self.manager.setup(**data)
         except Exception:
             cherrypy.response.status_code = 404
             raise
-
-        return {'status': 'done', 'location': location}
-
+        return answer
 
     @cherrypy.popargs('filter')
     @cherrypy.tools.json_out()
     def DELETE(self, filter=None):
 
         if filter is None:
-            pending_parts = self.runner.stop()
+            pending_parts = self.manager.stop()
         else:
-            pending_parts = self.runner.stop(int(filter) - 1)
+            pending_parts = self.manager.stop(int(filter) - 1)
 
         return pending_parts
+
+
+    def _parse_event(self, event):
+        pass

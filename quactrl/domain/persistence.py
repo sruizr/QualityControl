@@ -20,8 +20,7 @@ class DataAccessLayer:
         #     key, value = args.split('=')
         #     connect_args[key] = value
         echo = kwargs.pop('echo', False)
-        self.engine = create_engine(conn_string, connect_args=kwargs['connect_args'],
-                                    echo=echo)
+        self.engine = create_engine(conn_string, **kwargs)
         self.metadata = Base.metadata
         try:
             self.connection = self.engine.connect()
@@ -55,7 +54,6 @@ class DataAccessLayer:
 
         for table in reversed(self.metadata.sorted_tables):
             session.execute(table.delete())
-
         session.commit()
 
 

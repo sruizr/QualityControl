@@ -3,14 +3,21 @@ from queue import Queue
 from quactrl.domain.persistence import dal
 import quactrl.domain.queries as qry
 from quactrl.managers.devices import DeviceManager
-from quactrl.managers import Event
+from quactrl.managers import Event, Manager
 from quactrl.domain.flows import Creation
 from quactrl.domain.flows import Test, Check
+from quactrl.domain.items import Part
+from quactrl.domain.resources import PartModel
 
 
-class TestManager:
+class NotFoundPart(Exception):
+    pass
+
+
+class TestManager(Manager):
     """Create and manage tests"""
     def __init__(self):
+        Manager.__init__(self)
         self.events = Queue()
         self.testers = []
         self.dev_manager = DeviceManager()
@@ -23,12 +30,8 @@ class TestManager:
                 else tester.test
                 for tester in self.testers]
 
-    def set_database(self, connection_string):
-        """Connects database"""
-        dal.connect(connection_string)
-
-    def go_to(self, location):
-        """Load all devices from location"""
+    def setup(self, **kwargs):
+        """Load parameters at init"""
         self._location = location
         self.dev_manager.load_devs_from(location)
 
@@ -86,7 +89,7 @@ class Feedback(threading.Event):
 class Tester(threading.Thread):
     def __init__(self, manager, cavity=1):
         super().__init__()
-        self.location = manager.location
+        self.loc_key = manager.location_key
         self.dev_manager = manager.dev_manager
         self.events = manager.events
         self.orders = Queue()
@@ -121,8 +124,12 @@ class Tester(threading.Thread):
             self.open_check.result = 'cancelled'
             self.open_check.finished.set()
 
-    def _get_or_create_part(self, part_info, location):
-        pass
+    def _get_or_create_part(self, part_info):
+        session = dal.Session()
+        part_number = part_info['part_number']
+        serial_number = part_info['serial_number']
+
+        part = session.query(Part).join(PartModel).filter(Part.)
 
     def process(self, order):
         session = dal.Session()
@@ -132,10 +139,10 @@ class Tester(threading.Thread):
         part = self._get_or_create_part(part_info, self.location)
 
         self.set_responsible_by(responsible_key)
-        self.set_control_plan_for(part)
+        self.set_control_plan_for(part, process)
 
-        test = Test(self.control_plan, self.responsible)
-        test.set_input('part', part)
+        test = self.control_plan.create_flow(self.responsible)
+        test.start(part=part)
         session.add(test)
         self.events.put(Event('start', test, cavity=self.cavity))
 

@@ -1,41 +1,27 @@
 from unittest.mock import Mock
-import quactrl.helpers.parse as parse
+import quactrl.helpers.parsing as parsing
 import pytest
-
-
-
-# Pending to test levels presentation
-def test_from_obj_call_suitable_function():
-    parse.from_mock = Mock()
-    mock = Mock()
-    mock.__class__.__name__ = 'Mock'
-
-    result = parse.from_obj(mock, 3)
-
-    parse.from_mock.assert_called_with(mock, 3)
-    assert result == parse.from_mock.return_value
-
-    mock.__class__.__name__ = 'NoExist'
-    try:
-        result = parse.from_obj(mock, 3)
-        pytest.fail('NO exception launched with lack of parse function')
-    except Exception as e:
-        pass
+import quactrl.domain.resources as r
+import quactrl.domain.nodes as n
+import quactrl.domain.items as i
+import quactrl.domain.paths as p
 
 
 def test_parse_part():
     part = Mock()
     part.tracking = '123456789'
-    part.resource.name = 'part_name'
+    part.part_model.name = 'part_name'
     part.resource.key = 'part_number'
     part.resource.description = 'part description'
-    result = parse.from_part(part)
+    result = parsing.parse(part)
     expected = {
-        'class_name': 'part',
+        'type': 'part',
         'tracking': '123456789',
-        'name': 'part_name',
-        'key': 'part_number',
-        'description': 'part description'
+        'part_model': {
+            'name': 'part_name',
+            'key': 'part_number',
+            'description': 'part description'
+            }
     }
     assert result == expected
 
@@ -128,7 +114,7 @@ def test_parse_characteristic():
     characteristic = Mock()
     characteristic.description = 'char description'
     characteristic.key = 'char_key'
-    char_data = parse.from_characteristic(characteristic)
+    char_data = parsing.parse(characteristic)
 
     expected = {'class_name': 'characteristic',
                 'description': 'Char description',
@@ -141,8 +127,7 @@ def test_parse_defect():
     defect = Mock()
     defect.description = 'defect description'
     defect.characteristic.key = 'char'
-
-    defect_data = parse.from_defect(defect)
+    defect_data = parsing.parse(defect)
     expected = {
         'class_name': 'defect',
         'description': 'Defect description',
