@@ -11,6 +11,12 @@ class AuTestResource:
     @cherrypy.tools.json_out()
     @cherrypy.popargs('filter')
     def GET(self, filter=None):
+        """ Retrieve status of testing processes:
+        - /events: List all events of all cavities
+        - /events/last: List last events since last query
+        - /{cavity}: Show state of tester
+        - /: Show state of all testers"""
+
         if filter is None:
             json_res = []
             for test in self.manager.tests:
@@ -42,6 +48,10 @@ class AuTestResource:
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
     def POST(self):
+        """Send part for testing
+        - /: Send part to tester 1
+        - /{cavity}: send part to tester of /cavity/"""
+
         data = cherrypy.request.json
         part = {}
         responsible_key = None
@@ -65,12 +75,15 @@ class AuTestResource:
     @cherrypy.tools.json_out()
     @cherrypy.tools.json_in()
     def PUT(self, command):
+        """Config testing process:
+        - /database: Setups database layer
+        - /setup: Setups testing process """
         data = cherrypy.request.json
         try:
             if command == 'database':
                 answer = self.manager.connect(data)
             elif command == 'setup':
-                answer = self.manager.setup(**data)
+                answer = self.manager.setup(data)
         except Exception:
             cherrypy.response.status_code = 404
             raise
@@ -79,6 +92,9 @@ class AuTestResource:
     @cherrypy.popargs('filter')
     @cherrypy.tools.json_out()
     def DELETE(self, filter=None):
+        """ Stops testers:
+        - /: Stops all testers
+        - /{cavity}: Stop tester of cavity /cavity/"""
 
         if filter is None:
             pending_parts = self.manager.stop()

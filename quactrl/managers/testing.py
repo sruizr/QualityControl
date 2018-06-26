@@ -35,6 +35,7 @@ class TestManager(Manager):
         self._location = location
         self.dev_manager.load_devs_from(location)
 
+
     def start_test(self, part_info, responsible, **test_pars):
         """Start test from part_information, responsible and other process parameters"""
         cavity = test_pars.pop('cavity', 1)
