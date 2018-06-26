@@ -56,4 +56,18 @@ class Control(Path):
 
 
 class Operation(Path):
-    __mapper_args__ = {'polymorphic_identity': 'Operation'}
+    __mapper_args__ = {'polymorphic_identity': 'operation'}
+    def create_flow(self, responsible):
+        pass
+
+class Reporting(Path):
+    __mapper_args__ = {'polymorphic_identity': 'report'}
+
+    @property
+    def form(self):
+        if 'form' in self.resources.keys():
+            return self.resources['form']
+
+    @form.setter
+    def form(self, form):
+        self.resources['form'] = form

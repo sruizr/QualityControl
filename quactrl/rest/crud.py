@@ -1,5 +1,5 @@
 import cherrypy
-import quactrl.helpers.parse as parse
+import quactrl.helpers.parsing as parsing
 from quactrl.managers.crud import Crud
 
 
@@ -16,14 +16,13 @@ class CrudResource:
             results = self.manager.read(class_name, **kwargs)
             json_results = []
             for obj in results:
-                obj_data = parse.from_obj(obj)
+                obj_data = parsing.parse(obj)
                 json_results.append(obj_data)
 
             if len(json_results) == 1:
                 return json_results[0]
             else:
                 return json_results
-
 
     @cherrypy.tools.json_in()
     def PUT(self):
@@ -47,7 +46,7 @@ class CrudResource:
             cherrypy.response.status = 409
         else:
             cherrypy.response.status = 201
-            return parse.from_obj(obj)
+            return parsing.parse(obj)
 
     @cherrypy.popargs('class_name', 'id')
     @cherrypy.tools.json_in()
@@ -62,7 +61,7 @@ class CrudResource:
             cherrypy.response.status = 409
         else:
             cherrypy.response.status = 201
-            return parse.from_obj(obj)
+            return parsing.parse(obj)
 
     @cherrypy.popargs('class_name', 'id')
     def DELETE(self, class_name, id):
@@ -71,3 +70,6 @@ class CrudResource:
         success = self.manager.delete(class_name, id)
         if not success:
             cherrypy.response.status = 409
+
+    def _parse_event(self, event):
+        pass

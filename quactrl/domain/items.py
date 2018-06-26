@@ -17,10 +17,19 @@ class Part(Item):
         secondaryjoin=Item.id == ItemLink.c.to_item_id,
         backref='_parts')
 
-    def __init__(self, part_model, **kwargs):
-        Item.__init__(self, resource=part_model, **kwargs)
-        self._bh = None
-        self._decorator = None
+    @hybrid_property
+    def part_model(self):
+        return Item.resource
+
+    @part_model.setter
+    def part_model(self, part_model):
+        self.resource = part_model
+
+    # def __init__(self, part_model, **kwargs):
+    #     Item.__init__(self, resource=part_model, **kwargs)
+    #     self._bh = None
+    #     self._decorator = None
+
 
     def decorate(self):
         self._decorator = None  # TODO
@@ -61,10 +70,18 @@ class Part(Item):
 class Device(Item):
     __mapper_args__ = {'polymorphic_identity': 'device'}
 
-    def __init__(self, device_model, tracking, **kwargs):
-        Item.__init__(self,
-                      resource=device_model, tracking=tracking, **kwargs)
-        self.bh = None
+    # def __init__(self, device_model, tracking, **kwargs):
+    #     Item.__init__(self,
+    #                   resource=device_model, tracking=tracking, **kwargs)
+    #     self.bh = None
+
+    @hybrid_property
+    def device_model(self):
+        return Item.resource
+
+    @device_model.setter
+    def device_model(self, device_model):
+        self.resource = device_model
 
     def setup(self):
         if not self.resource.pars:
