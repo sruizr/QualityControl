@@ -17,10 +17,19 @@ class Part(Item):
         secondaryjoin=Item.id == ItemLink.c.to_item_id,
         backref='_parts')
 
-    def __init__(self, part_model, **kwargs):
-        Item.__init__(self, resource=part_model, **kwargs)
-        self._bh = None
-        self._decorator = None
+    @hybrid_property
+    def part_model(self):
+        return Item.resource
+
+    @part_model.setter
+    def part_model(self, part_model):
+        self.resource = part_model
+
+    # def __init__(self, part_model, **kwargs):
+    #     Item.__init__(self, resource=part_model, **kwargs)
+    #     self._bh = None
+    #     self._decorator = None
+
 
     def decorate(self):
         self._decorator = None  # TODO
@@ -34,14 +43,16 @@ class Part(Item):
 
     def add_defect(self, failure_mode, element_key=None):
         """Add a defect from failure_mode and returns it"""
-        tracking = self.tracking + '/' + failure_mode.key
+        tracking = self.tracking + '*' + failure_mode.key
         tracking = tracking + '_' + element_key if element_key else tracking
         for defect in self.defects:
             if defect.failure_mode and defect.tracking == tracking:
                 defect.qty = 1
                 return defect
-        new_defect = Defect()
-        self.defects.append()
+
+        new_defect = Defect(self, failure_mode)
+        new_defect.tracking = tracking
+        return new_defect
 
     def clean_defects(self, characteristic, element_key=None):
         all_failure_modes = characteristic.get_all_failure_modes()
@@ -56,14 +67,21 @@ class Part(Item):
         pass
 
 
-
 class Device(Item):
     __mapper_args__ = {'polymorphic_identity': 'device'}
 
-    def __init__(self, device_model, tracking, **kwargs):
-        Item.__init__(self,
-                      resource=device_model, tracking=tracking, **kwargs)
-        self.bh = None
+    # def __init__(self, device_model, tracking, **kwargs):
+    #     Item.__init__(self,
+    #                   resource=device_model, tracking=tracking, **kwargs)
+    #     self.bh = None
+
+    @hybrid_property
+    def device_model(self):
+        return Item.resource
+
+    @device_model.setter
+    def device_model(self, device_model):
+        self.resource = device_model
 
     def setup(self):
         if not self.resource.pars:
@@ -113,10 +131,9 @@ class PartAttribute:
 class Defect(Item, PartAttribute):
     __mapper_args__ = {'polymorphic_identity': 'defect'}
 
-    def __init__(self, part, failure_mode, qty=1.0, measurement=None):
+    def __init__(self, part, failure_mode, measurement=None):
         self.part = part
         self.resource = failure_mode
-        self.qty = qty
         if measurement is not None:
             self._measuremments.append(measurement)
 
@@ -138,11 +155,33 @@ class Measurement(Item, PartAttribute):
         backref='measurements'
     )
 
-    def __init__(self, part, characteristic, value, **kwargs):
+    @hybrid_property
+    def defect(self):
+        if self._defects:
+            return self._defects[0]
+
+    @defect.setter
+    def defect(self, defect):
+        if self._defects:
+            self._defects[0] = defect
+        else:
+            self._defects.append(defect)
+
+    @hybrid_property
+    def characteristic(self):
+        return self.resource
+
+    @characteristic.setter
+    def characteristic(self, value):
+        self.resource = value
+
+
+    def __init__(self, part, characteristic, value=None, **kwargs):
         super().__init__(resource=characteristic, **kwargs)
-        self.qty = value
         self.part = part
 
+        if value:
+            self.qty = value
 
     def evaluate(self, limits, uncertainty=0.0):
         """Evals the measurement against limits and add defect to part if NC"""
@@ -157,28 +196,13 @@ class Measurement(Item, PartAttribute):
             mode_key = 'lw' if self.qty < low_limit else 'slw'
 
         if mode_key:
-            failure_mode = self.characteristic.get_or_create_failure_mode(mode_key)
+            failure_mode = self.characteristic.get_or_create_failure_mode(
+                mode_key
+            )
             defect = self.part.add_defect(failure_mode)
             self.defect = defect
 
         return defect
-
-    @hybrid_property
-    def characteristic(self):
-        return self.resource
-
-    @hybrid_property
-    def defect(self):
-        if self._defects:
-            self._defects[0]
-
-    @defect.setter
-    def defect(self, defect):
-
-        if self._defects:
-            self._defects[0] = defect
-        else:
-            self._defects.append(defect)
 
 
 class Report(Item):

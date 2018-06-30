@@ -4,15 +4,15 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
 
 
-class IsA(ResourceRelation):
+class Clasification(ResourceRelation):
     """A member is a group"""
     __mapper_args__ = {'polymorphic_identity': 'is_a'}
 
-    def __init__(self, member, group, pars=None):
-        self.from_resource = member
-        self.to_resource = group
-        if pars:
-            self.pars = Pars(pars)
+    # def __init__(self, member, group, pars=None):
+    #     self.from_resource = member
+    #     self.to_resource = group
+    #     if pars:
+    #         self.pars = Pars(pars)
 
     @hybrid_property
     def group(self):
@@ -35,10 +35,10 @@ class Composition(ResourceRelation):
     """A system contains a component"""
     __mapper_args__ = {'polymorphic_identity': 'contains'}
 
-    def __init__(self, system, component, qty=1.0):
-        self.from_resource = system
-        self.to_resource = component
-        self.qty = qty
+    # def __init__(self, system, component, qty=1.0):
+    #     self.from_resource = system
+    #     self.to_resource = component
+    #     self.qty = qty
 
     @hybrid_property
     def component(self):
@@ -61,11 +61,11 @@ class Requirement(ResourceRelation):
     """A resource requires a characteristic"""
     __mapper_args__ = {'polymorphic_identity': 'requires'}
 
-    def __init__(self, resource, characteristic, specs=None):
-        self.from_resource = resource
-        self.to_resource = characteristic
-        if specs:
-            self.pars = Pars(**specs)
+    # def __init__(self, resource, characteristic, specs=None):
+    #     self.from_resource = resource
+    #     self.to_resource = characteristic
+    #     if specs:
+    #         self.pars = Pars(**specs)
 
     @hybrid_property
     def characteristic(self):
@@ -75,37 +75,46 @@ class Requirement(ResourceRelation):
     def characteristic(self, char):
         self.to_resource = char
 
+    def get_requirement_by_characteristic(self, characteristic):
+        if characteristic == self.characteristic:
+            return self
+        else:
+            for req in self.characteristic.requirements:
+                requirement = req.get_requirement()
+                if req.characteristic == characteristic:
+                    return req
+
 
 class Failure(ResourceRelation):
     """A characteristic fails with a mode"""
     __mapper_args__ = {'polymorphic_identity': 'fails'}
 
-    def __init__(self, characteristic, mode, mode_key=None):
-        m_key = mode if mode_key is None else mode_key
-
+    def __init__(self, characteristic, mode_key, mode=None):
         for failure in characteristic.failures:
-            if failure.fmode.key == '{}-{}'.format(m_key, characteristic.key):
+            if failure.failure_mode.key == '{}-{}'.format(
+                    mode_key, characteristic.key):
                 raise DuplicatedFailure(
                     'Characteristic "{}" has duplicated failures mode {}'.format(
                         characteristic.description, mode
                     ))
 
         self.from_resource = characteristic
-        self.to_resource = FailureMode(characteristic, mode, m_key)
+        self.to_resource = FailureMode(characteristic, mode_key)
 
     @hybrid_property
-    def fmode(self):
+    def failure_mode(self):
         return self.to_resource
 
-    @fmode.setter
-    def fmode(self, fmode):
-        self.to_resource = fmode
+    @failure_mode.setter
+    def failure_mode(self, value):
+        self.to_resource = value
 
 
 class WithMembers:
     @declared_attr
     def members(cls):
-        return relationship('IsA', foreign_keys=[IsA.to_resource_id])
+        return relationship('Clasification',
+                            foreign_keys=[Clasification.to_resource_id])
 
 
 class WithRequirements:
@@ -113,6 +122,11 @@ class WithRequirements:
     def requirements(cls):
         return relationship('Requirement',
                             foreign_keys=[Requirement.from_resource_id])
+
+    def get_requirement_by_characteristic(self, characteristic):
+        for req in self.requirements:
+            if req.characteristic == characteristic:
+                return req
 
 
 class WithComponents:
@@ -130,7 +144,8 @@ class WithComponents:
 class WithGroups:
     @declared_attr
     def groups(cls):
-        return relationship('IsA', foreign_keys=[IsA.from_resource_id])
+        return relationship('Clasification',
+                            foreign_keys=[Clasification.from_resource_id])
 
     def get_pars_from_group(self, name):
         pars = None
@@ -146,24 +161,22 @@ class Characteristic(Resource, WithRequirements):
     failures = relationship('Failure',
                             foreign_keys=[Failure.from_resource_id])
 
-    def __init__(self, key, description=''):
-        self.key = key
-        self.description = description
+    # def __init__(self, key, description=''):
+    #     self.key = key
+    #     self.description = description
 
     def get_or_create_failure_mode(self, mode_key):
-        failure_mode_key = self.compose_failure_mode_key(mode_key)
+        failure_mode_key = self._compose_failure_mode_key(mode_key)
 
         for failure in self.failures:
-            if failure.fmode.key == failure_mode_key:
-                return failure.fmode
-        failure_mode = Failure(failure_mode_key)
-        self.failures.append(failure_mode)
+            if failure.failure_mode.key == failure_mode_key:
+                return failure.failure_mode
+        failure_mode = Failure(self, mode_key).failure_mode
 
         return failure_mode
 
     def _compose_failure_mode_key(self, mode_key):
         return '{}-{}'.format(mode_key, self.key)
-
 
 class DuplicatedFailure(Exception):
     pass
@@ -172,25 +185,27 @@ class DuplicatedFailure(Exception):
 class FailureMode(Resource):
     __mapper_args__ = {'polymorphic_identity': 'failure_mode'}
 
-    def __init__(self, characteristic, mode, mode_key=None):
-        if mode_key is None:
-            mode_key = mode
-
+    def __init__(self, characteristic, mode_key, mode=None):
         key = '{}-{}'.format(mode_key, characteristic.key)
-        self.description = '{}, {}'.format(characteristic.description, mode)
         self.key = key
-        self.name = mode
+        self.name = key
+
+        mode = mode if mode else mode_key
+        self.description = '{}, {}'.format(characteristic.description, mode)
 
 
-class DeviceModel(Resource):
+class DeviceModel(Resource, WithGroups):
     __mapper_args__ = {'polymorphic_identity': 'device_model'}
 
     def get_configuration(self):
         return self.get_pars_from_group('device')
 
+class Form(Resource):
+    __mapper_args__ = {'polymorphic_identity': 'form'}
 
-class PartGroup(Resource, WithMembers, WithGroups, WithRequirements):
-    __mapper_args__ = {'polymorphic_identity': 'part_group'}
+
+class Group(Resource, WithMembers, WithGroups, WithRequirements):
+    __mapper_args__ = {'polymorphic_identity': 'group'}
 
 
 class PartModel(Resource, WithGroups, WithComponents, WithRequirements):
@@ -198,6 +213,10 @@ class PartModel(Resource, WithGroups, WithComponents, WithRequirements):
 
     def get_configuration(self):
         return self.get_pars_from_group('device')
+
+
+class Process(Resource, WithRequirements):
+    __mapper_args__ = {'polymorphic_identity': 'process'}
 
 
 class Document(Resource, WithGroups):

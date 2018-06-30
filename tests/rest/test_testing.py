@@ -10,11 +10,12 @@ class An_AuTestResource(TestResource):
         # Patch runner
         cls.create_patches([
             'quactrl.rest.testing.AuTestResource.runner',
-            'quactrl.rest.testing.parse'
+            'quactrl.rest.testing.parsing'
         ])
         TestResource.setup_class(AuTestResource)
 
     def setup_method(self, method):
+        self.resource = AutoTest
         self.parse.from_obj = lambda obj: {'key': obj.key}
 
     def should_return_open_tests(self):

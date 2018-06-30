@@ -4,11 +4,11 @@ from sqlalchemy.orm import synonym, reconstructor
 from quactrl.domain.base import (Resource, PathResource, Path, Node, Pars,
                                  Flow
                                  )
-
+import quactrl.domain.items as i
 
 
 class Creation(Flow):
-    """Special flow where a item/token is inserted into node"""
+    """Special parent where a item/token is inserted into node"""
     __mapper_args__ = {'polymorphic_identity': 'creation'}
 
     def __init__(self, responsible, **kwargs):
@@ -25,7 +25,7 @@ class Creation(Flow):
 
 
 class Destruction(Flow):
-    """Special flow where a item/token is remove from node"""
+    """Special parent where a item/token is remove from node"""
     __mapper_args__ = {'polymorphic_identity': 'destruction'}
 
     def __init__(self, responsible, **kwargs):
@@ -42,7 +42,7 @@ class Destruction(Flow):
 
 
 class Movement(Flow):
-    """Special flow where a item/token is inserted into node"""
+    """Special parent where a item/token is inserted into node"""
     __mapper_args__ = {'polymorphic_identity': 'movement'}
 
     def __init__(self, responsible, **kwargs):
@@ -62,7 +62,6 @@ class Movement(Flow):
 class Test(Flow):
     """Group of checks following a control plan"""
     __mapper_args__ = {'polymorphic_identity': 'test'}
-    control_plan = synonym('path')
 
     # def __init__(self, control_plan, responsible, controller=None):
     #     Flow.__init__(self, path=control_plan,
@@ -74,8 +73,18 @@ class Test(Flow):
     #                                    controller=controller)
     #         self.children.append(check)
 
-    def prepare(self):
-        super().prepare()
+    @property
+    def part(self):
+        return self
+        if self.inputs:
+            return self.inputs[0]
+    @part.setter
+    def part(self, value):
+        self._part = value
+
+
+    def start(self):
+        super().start()
         self.part = self.in_tokens[0].item
         self.devices = self.path.devices
 
@@ -107,6 +116,10 @@ class Test(Flow):
 
         return state
 
+    def notify(self, obj, **kwargs):
+        if hasattr(self, 'tester'):
+            self.tester.notify(obj, **kawrgs)
+
 
 class Check(Flow):
     """Execute a control with ok - nok result"""
@@ -114,23 +127,30 @@ class Check(Flow):
 
     @hybrid_property
     def test(self):
-        return self.flow
+        return self.parent
 
     @test.setter
-    def test(self, flow):
-        self.flow = flow
-        self.origin = self.flow.path.from_node if self.path else None
-        self.destination = self.flow.path.to_node if self.path else None
+    def test(self, test):
+        self.parent = test
+
+    @hybrid_property
+    def control(self):
+        return self.path
+
+    @control.setter
+    def control(self, control):
+        return self.path
 
     def run(self):
         super().start()
-        self.test.tester.notify(self)
+        self.test.notify(self)
 
+        self.part = self.test.part
         try:
             super().execute()
             if self._has_thread_alive():
                 self.state == 'ongoing'
-                self.test.tester.notify(self)
+                self.test.notify(self)
                 self.finished = Event()
                 self.finished.wait()
         except Exception as e:
@@ -140,7 +160,7 @@ class Check(Flow):
         super().finish()
         if self.state == 'finished':
             self.state = 'ok'
-        self.test.tester.notify(self)
+        self.test.notify(self)
 
     def cancel(self):
         self.state = 'cancelled'
@@ -151,67 +171,52 @@ class Check(Flow):
     def _has_thread_alive(self):
         return hasattr(self, 'thread') and self.thread.is_alive()
 
-    def clean_all_defects(self):
-        part = self.test.part
-        for defect in part.defects:
+    def add_measure(self, value, characteristic, element_key=None):
+        """Helper for adding measures to part"""
+        part = self.part
+
+        tracking = self._compose_tracking(part, characteristic, element_key)
+        measurement = self._find_by_tracking(part.measurements, tracking)
+        if not measurement:
+            measurement = i.Measurement(part, characteristic, tracking=tracking)
+        measurement.qty = value
+        self.outputs.append(measurement)
+        return measurement
+
+    def add_defect(self, failure_mode, element_key=None, qty=1.0):
+        part = self.part
+        tracking = self._compose_tracking(part, failure_mode, element_key)
+        defect = self._find_by_tracking(part.defects, tracking)
+        if not defect:
+            defect = i.Defect(part, failure_mode)
+            defect.tracking = tracking
+
+        defect.qty = qty
+        self.outputs.append(defect)
+
+        return defect
+
+    def _find_by_tracking(self, items, tracking):
+        if tracking not in [item.tracking for item in items]:
+            return
+        else:
+            for item in items:
+                if item.tracking == tracking:
+                    return item
+
+    def _compose_tracking(self, part, resource, element_key):
+        tracking = '{}*{}'.format(part.tracking, resource.key)
+        tracking = '{}[{}]'.format(tracking, element_key) if element_key else tracking
+        return tracking
+
+    def clean_old_defects(self):
+        for defect in self.part.defects:
             if defect.avalaible_tokens and defect.avalaible_tokens[0].producer.path == self.path:
                 defect.qty = None
                 self.inputs.append(defect)
 
-    def track_devices(self, **devices):
+    def track_devices(self, *devices):
         dev_trackings = []
         for device in devices:
-            dev_trackings = device.tracking
+            dev_trackings.append(device.tracking)
         self.tracking = '&'.join(dev_trackings)
-    def add_measure(self, value, characteristic, element_key='', parent=None):
-        """Helper for adding measures to part"""
-        self.test
-        measurement = items.Measurement(resource=characteristic, tracking=tracking)
-        if parent:
-            relation = ItemRelation(relation_class='contains')
-            relation.to_node = measurement
-            parent.destinations.append(relation)
-
-        self.outputs.append((measurement, value))
-
-    # def add_defect(self, failure_mode, tracking='', parent=None):
-    #     """Helper for adding defects to part"
-    #     self.state = 'nok'
-
-    #     defect = items.Defect(resource=failure_mode, tracking=tracking)
-    #     if parent:
-    #         relation = ItemRelation(relation_class='contains')
-    #         relation.to_node = defect
-    #         parent.destinations.append(relation)
-
-    #     self.outputs.append((defect, 1.0))
-
-    # def eval_measure(self, value, characteristic,
-    #                  modes=['low', 'high', 'suspicious'],
-    #                  uncertainty=0):
-
-    #     limits = getattr(characteristic, 'limits', None)
-    #     if limits:
-    #         mode = None
-
-    #         low_limit = limits[0]
-    #         if low_limit is not None:
-    #             sure_low = low_limit + uncertainty
-    #             if value < sure_low:
-    #                 mode = '{} {}'.format(modes[2],
-    #                                                    modes[0])
-    #             if value < low_limit:
-    #                 mode = modes[0]
-
-    #         top_limit = limits[1]
-    #         if top_limit is not None:
-    #             sure_top = top_limit - uncertainty
-    #             if value > sure_top:
-    #                 mode = '{} {}'.format(modes[2],
-    #                                                    modes[1])
-    #             if value > top_limit:
-    #                 mode = modes[1]
-
-    #         if mode:
-    #             failure_mode = characteristic.get_failure_mode(mode)
-    #             return failure_mode

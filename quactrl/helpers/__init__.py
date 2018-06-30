@@ -1,4 +1,8 @@
 import importlib
+from ruamel.yaml import YAML
+
+
+yaml = YAML(typ='safe')
 
 
 def get_class(full_class_name):
@@ -8,4 +12,3 @@ def get_class(full_class_name):
     module = importlib.import_module('.'.join(packages))
 
     return getattr(module, class_name)
-#

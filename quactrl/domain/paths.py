@@ -1,86 +1,73 @@
-from enum import Enum
 from sqlalchemy.orm import synonym, reconstructor
-from threading import Thread, Event
-from quactrl.domain.base import (Item, Resource, PathResource, Path, Node, Pars, Flow, Step)
+from sqlalchemy.ext.hybrid import hybrid_property
+from quactrl.domain.base import (Item, Resource, PathResource, Path, Node,
+                                 Pars, Flow)
 import quactrl.domain.flows as f
-from datetime import datetime
-
-
-
-class NotAutorizedResponsible(Exception):
-    # duplicated!!
-    pass
-
-
-class IncorrectOutResource(Exception):
-    pass
 
 
 class ControlPlan(Path):
+    """Control plan for generating controls on parts or processes"""
     __mapper_args__ = {'polymorphic_identity': 'control_plan'}
 
-    def __init__(self, name='Plan for testing 100% pars', method_name='quactrl.methods.by_pass', pars=None, **kwargs):
-        super().__init__(**kwargs)
-        self.method_name = method_name
-        self.name = name
-        if pars:
-            self.pars = Pars(pars)
+    @property
+    def part_model(self):
+        return self.resources['part_model']
 
-    @reconstructor
-    def after_load(self):
-        pass
+    @part_model.setter
+    def part_model(self, part_model):
+        self.resources['part_model'] = part_model
 
-    def create_flow(self, in_part, responsible):
-        if self.role not in responsible.roles:
-            raise NotAutorizedResponsible(
-                'Responsible {} can not access to the flow'.format(
-                    responsible.name)
-            )
+    @property
+    def process(self):
+        return self.resources['process']
 
-        if in_part.resource not in self.resources.values():
-            raise IncorrectOutResource(
-                'Resource {} is not allowed for the current control plan'.format(
-                    in_part.resource.name)
-            )
+    @process.setter
+    def process(self, process):
+        self.resources['process'] = process
 
-        test = f.Test(self, in_part, responsible)
-        for step in self.steps:
-            test.steps.append(step.create_flow())
+    def create_flow(self, responsible, part):
+        self.validate_responsible(responsible)
+        self.validate_item(part)
+
+        test = f.Test(
+            path=self,
+            responsible=responsible
+        )
+        test.part = part
 
         return test
 
 
-class Control(Step):
+class Control(Path):
     __mapper_args__ = {'polymorphic_identity': 'control'}
 
-    characteristic = None
+    def create_flow(self, test):
+        """Create Check instance from test information"""
+        responsible = test.responsible
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        check = f.Check()
 
-    @reconstructor
-    def after_load(self):
+        check.part = test.part
+        check.test = test
+        check.tester = test.tester
+        check.responsible = responsible
+
+        return check
+
+
+class Operation(Path):
+    __mapper_args__ = {'polymorphic_identity': 'operation'}
+    def create_flow(self, responsible):
         pass
 
-    def add_characteristic(self, characteristic, **pars):
+class Reporting(Path):
+    __mapper_args__ = {'polymorphic_identity': 'report'}
 
-        path_resource = PathResource(self, characteristic, 'out', pars=pars)
-        self.resource_list.append(path_resource)
+    @property
+    def form(self):
+        if 'form' in self.resources.keys():
+            return self.resources['form']
 
-    def create_flow(self, test, responsible):
-        return f.Check(self, test, responsible, self.controller)
-
-    def create_operation(self, test):
-        return Check(
-            test=test,
-            step=self)
-
-    def set_pars(self, pars):
-        if self.pars:
-            self.pars.set(pars)
-        else:
-            self.pars = Pars(pars)
-
-    def get_pars(self):
-        if self.pars:
-            return self.pars.get()
+    @form.setter
+    def form(self, form):
+        self.resources['form'] = form

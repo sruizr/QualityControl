@@ -3,7 +3,7 @@ import importlib
 from datetime import datetime
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import reconstructor, remote
-from sqlalchemy import ForeignKey, Column, Table
+from sqlalchemy import ForeignKey, Column, Table, UniqueConstraint
 from sqlalchemy.types import (
     String, Integer, DateTime, Float
     )
@@ -63,6 +63,11 @@ class Pars(Base):
         self._load()
         return self._dict_pars
 
+    @dict.setter
+    def dict(self, value):
+        self._dict_pars = value
+        self._dump()
+
 
 class WithPars:
     @declared_attr
@@ -78,18 +83,11 @@ class Resource(Base, Abstract):
     __tablename__ = 'resource'
 
     id = Column(Integer, primary_key=True)
-    key = Column(String(100), unique=True)
+    key = Column(String(100))
     name = Column(String(100), default='')
     description = Column(String(100), default='')
 
-    def __init__(self, **kwargs):
-        key = kwargs.pop('key')
-        name = kwargs.pop('name', '')
-        description = kwargs.pop('description', '')
-        Base.__init__(self, key=key, name=name, description=description)
-        if kwargs:
-            self.pars = Pars(**kwargs)
-
+    UniqueConstraint(key, Abstract.is_a, name='i_key')
 
 class ResourceRelation(Base, WithPars):
     __tablename__ = 'resource_relation'
@@ -100,6 +98,7 @@ class ResourceRelation(Base, WithPars):
     }
 
     id = Column(Integer, primary_key=True)
+
     from_resource_id = Column(Integer, ForeignKey('resource.id'))
     to_resource_id = Column(Integer, ForeignKey('resource.id'))
     qty = Column(Float, default=1.0)
@@ -107,7 +106,7 @@ class ResourceRelation(Base, WithPars):
     from_resource = relationship('Resource', foreign_keys=[from_resource_id])
     to_resource = relationship('Resource', foreign_keys=[to_resource_id])
 
-    Base
+    # UniqueConstraint(from_resource_id, to_resource_id)
 
 
 NodeLink = Table('node_link', Base.metadata,
@@ -125,13 +124,13 @@ class Node(Base, Abstract, WithPars):
     name = Column(String(50))
     description = Column(String(250))
 
-    def __init__(self, key,  **kwargs):
-        self.key = key
-        self.name = kwargs.pop('name', None)
-        self.description = kwargs.pop('description', None)
-        if kwargs:
-            self.pars = Pars(**kwargs)
+    UniqueConstraint(key, Abstract.is_a, name='i_key')
 
+    # def __init__(self, **kwargs):
+    #     pars = kwargs.pop('pars')
+    #     if pars:
+    #         self.pars = Pars(**pars)
+    #     Base
     # def add_item(self, item, qty=1.0, path=None, responsible=None):
     #     pass #TODO
 
@@ -146,19 +145,19 @@ class Item(Base, Abstract, WithPars):
 
     resource_id = Column(ForeignKey('resource.id'))
     tracking = Column(String(100), index=True)
-    state = Column(String(100), index=True, default='active')
+    state = Column(String(100), index=True, default='open')
 
     resource = relationship("Resource")
     avalaible_tokens = relationship(
         'Token',
         primaryjoin="and_(Item.id==Token.item_id, Token.consumer_id == None)")
 
-    def __init__(self, resource, tracking='', state='open', pars=None):
-        self.resource = resource
-        self.tracking = tracking
-        self.state = state
-        if pars:
-            self.pars = Pars(**pars)
+    # def __init__(self, resource, tracking='', state='open', pars=None):
+    #     self.resource = resource
+    #     self.tracking = tracking
+    #     self.state = state
+    #     if pars:
+    #         self.pars = Pars(**pars)
 
     def get_stocks(self):
         """Group avalaible tokens by nodes"""
@@ -182,7 +181,7 @@ class Item(Base, Abstract, WithPars):
             Token(item=self, qty=qty, producer=producer, node=producer.destination)
         )
 
-    def consume(self,consumer):
+    def consume(self, consumer):
         """Cosume a qty of item at consumer origin"""
         qty = getattr(self, 'qty', None)
         origin = consumer.origin
@@ -198,7 +197,6 @@ class Item(Base, Abstract, WithPars):
                 qty,
                 origin.key
             ))
-
 
         if qty is None:
             for token in stocks[origin]:
@@ -274,11 +272,10 @@ class Path(Abstract, Base, WithPars):
 class PathResource(Base):
     __tablename__ = 'path_resource'
 
-    id = Column(Integer, primary_key=True)
-    path_id = Column(Integer, ForeignKey('path.id'), index=True)
+    path_id = Column(Integer, ForeignKey('path.id'), index=True, primary_key=True)
+    key = Column(String(10), nullable=False, primary_key=True)
     resource_id = Column(Integer, ForeignKey('resource.id'))
 
-    key = Column(String(10), nullable=False)
     resource = relationship('Resource')
     path = relationship('Path', backref=backref(
         'path_resource',
@@ -319,7 +316,6 @@ class Token(Base):
 
     def is_consumed(self):
         return self.consumer is not None
-
 
 class Flow(Abstract, Base):
     __tablename__ = 'flow'

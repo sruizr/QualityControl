@@ -1,26 +1,51 @@
 import cherrypy
+import quactrl.helpers.parsing as parsing
 from quactrl.managers.testing import TestManager
-import quactrl.helpers.parse as parse
 
 
 @cherrypy.expose
 class AuTestResource:
-    runner = TestManager()
+    def __init__(self):
+        self.manager = TestManager()
 
     @cherrypy.tools.json_out()
-    @cherrypy.popargs('filter')
-    def GET(self, filter=None):
-        if filter is None:
-            json_res = []
-            for test in self.runner.tests:
-                json_res.append(parse.from_obj(test))
-            return json_res
-        elif filter == 'events':
-            return self._parse_events()
-        elif self._is_num(filter):
-            index = int(filter) - 1
-            test = self.runner.tests[index]
-            return parse.from_obj(test)
+    @cherrypy.popargs('arg_1', 'arg_2')
+    def GET(self, arg_1=None, arg_2=None, command=None):
+        """ Retrieve status of testing processes:
+        - /events: List all events of all cavities
+        - /events/{cavity}: List all events of /cavity/
+        - /events/{cavity}?last: List last events since last query
+        - /{cavity}: Show state of test at cavity 1
+        - /: Show state of all tests"""
+
+        if arg_1 is None:  # /
+            cavity = 1 if self.managers.cavities == 1 else None
+            return self.handle_get_tests(cavity)
+        elif self._is_num(arg_1):  # /{cavity}
+            cavity = int(arg_1)
+            return self.handle_get_tests(cavity)
+        elif arg_1 == 'events':
+            cavity = None
+            if arg_2 is None and self.manager.cavities == 1:
+                cavity = 1
+            elif self._is_num(arg_2):
+                cavity = int(arg_2)
+            only_last = command == 'last'
+            return self.handle_get_events(cavity, only_last)
+
+    def handle_get_events(self, cavity, only_last):
+        events = self.manager.load_events(cavity)
+        if only_last:
+            return parsing.parse(events)
+        else:
+            if cavity is None:
+                return parsing.parse(events)
+            else:
+                return parsing.parse(self.manager.events[cavity])
+
+    def handle_get_tests(self, cavity):
+        result = self.manager.tests if self.manager.cavities > 1 else self.manager.tests[0]
+        return parsing.parse(result)
 
     def _is_num(self, value):
         try:
@@ -29,19 +54,25 @@ class AuTestResource:
         except ValueError:
             return False
 
-    def _parse_events(self):
-        events = self.runner.events
+    def _parse_events(self, only_last=True):
+        events = self.manager.events
         res = []
         for _ in range(events.qsize()):
             event = events.get()
-            res.append(parse.from_obj(event))
+            res.append(parsing.parse(event))
 
         return res
 
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
-    def POST(self):
+    @cherrypy.popargs('cavity')
+    def POST(self, cavity=1):
+        """Send part for testing
+        - /: Send part to tester 1
+        - /{cavity}: send part to tester of /cavity/"""
+
         data = cherrypy.request.json
+
         part = {}
         responsible_key = None
         test_pars = {}
@@ -53,32 +84,42 @@ class AuTestResource:
             else:
                 test_pars[key] = value
 
-        self.runner.start_test(part, responsible_key, **test_pars)
+        self.manager.start_test(part, responsible_key, test_pars)
+        json_res = parsing.parse(self.manager.tests[cavity - 1])
 
-        index = int(test_pars.get('cavity', 1)) - 1
-
-        json_res = parse.from_obj(self.runner.tests[index])
         return json_res
 
-    @cherrypy.popargs('location')
+    @cherrypy.popargs('command')
     @cherrypy.tools.json_out()
-    def PUT(self, location):
+    @cherrypy.tools.json_in()
+    def PUT(self, command):
+        """Config testing process:
+        - /database: Setups database layer
+        - /setup: Setups testing process """
+        data = cherrypy.request.json
         try:
-            self.runner.set_location(location)
+            if command == 'database':
+                answer = self.manager.connect(data)
+            elif command == 'setup':
+                answer = self.manager.setup(data)
         except Exception:
             cherrypy.response.status_code = 404
             raise
-
-        return {'status': 'done', 'location': location}
-
+        return answer
 
     @cherrypy.popargs('filter')
     @cherrypy.tools.json_out()
     def DELETE(self, filter=None):
+        """ Stops testers:
+        - /: Stops all testers
+        - /{cavity}: Stop tester of cavity /cavity/"""
 
         if filter is None:
-            pending_parts = self.runner.stop()
+            pending_orders = self.manager.stop()
         else:
-            pending_parts = self.runner.stop(int(filter) - 1)
+            pending_orders  = self.manager.stop(int(filter) - 1)
 
-        return pending_parts
+        return pending_orders
+
+    def _parse_event(self, event):
+        pass
