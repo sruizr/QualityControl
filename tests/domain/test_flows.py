@@ -182,7 +182,17 @@ class A_Check:
 
 class A_CheckWithHelpers(EmptyDataTest):
     def should_add_new_measures(self):
-        pass
+        check = f.Check()
+        part = i.Part(resourc)
+
+
+        value =2.0
+        characteristic = r.Characteristic('characteristic')
+        element_key = 'e_key'
+        check.add_measure(value, characteristic, element_key)
+
+        part = check.test.part
+        assert part
 
     def should_add_old_measures(self):
         pass

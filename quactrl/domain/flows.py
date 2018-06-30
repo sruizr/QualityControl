@@ -14,7 +14,6 @@ class Creation(Flow):
     def __init__(self, responsible, **kwargs):
         super().__init__(responsible=responsible, **kwargs)
 
-
     def run(self, to_node, *items):
         super().start()
 
@@ -152,7 +151,7 @@ class Check(Flow):
     def _has_thread_alive(self):
         return hasattr(self, 'thread') and self.thread.is_alive()
 
-    def clean_old_defects(self):
+    def clean_all_defects(self):
         part = self.test.part
         for defect in part.defects:
             if defect.avalaible_tokens and defect.avalaible_tokens[0].producer.path == self.path:
@@ -164,7 +163,6 @@ class Check(Flow):
         for device in devices:
             dev_trackings = device.tracking
         self.tracking = '&'.join(dev_trackings)
-
     def add_measure(self, value, characteristic, element_key='', parent=None):
         """Helper for adding measures to part"""
         self.test
