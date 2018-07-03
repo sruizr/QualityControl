@@ -39,13 +39,14 @@ class AuTestResource:
             return parsing.parse(events)
         else:
             if cavity is None:
-                return parsing.parse(events)
+                return parsing.parse(events, 4)
             else:
-                return parsing.parse(self.manager.events[cavity])
+                return parsing.parse(self.manager.events[cavity], 4)
 
     def handle_get_tests(self, cavity):
-        result = self.manager.tests if self.manager.cavities > 1 else self.manager.tests[0]
-        return parsing.parse(result)
+        result = self.manager.tests if self.manager.cavities > 1 \
+                 else self.manager.tests[0]
+        return parsing.parse(result, 4)
 
     def _is_num(self, value):
         try:
@@ -64,30 +65,17 @@ class AuTestResource:
         return res
 
     @cherrypy.tools.json_in()
-    @cherrypy.tools.json_out()
     @cherrypy.popargs('cavity')
     def POST(self, cavity=1):
         """Send part for testing
         - /: Send part to tester 1
         - /{cavity}: send part to tester of /cavity/"""
 
-        data = cherrypy.request.json
+        order = cherrypy.request.json
 
-        part = {}
-        responsible_key = None
-        test_pars = {}
-        for key, value in data.items():
-            if key.startswith('part_') or key == 'tracking':
-                part[key] = value
-            elif key == 'responsible_key':
-                responsible_key = value
-            else:
-                test_pars[key] = value
+        part_info, responsible_key, test_pars = order
 
-        self.manager.start_test(part, responsible_key, test_pars)
-        json_res = parsing.parse(self.manager.tests[cavity - 1])
-
-        return json_res
+        self.manager.tester[cavity - 1].start_test(part, responsible_key, test_pars)
 
     @cherrypy.popargs('command')
     @cherrypy.tools.json_out()
