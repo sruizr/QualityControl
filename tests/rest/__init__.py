@@ -10,8 +10,8 @@ class TestResource:
             'tools.sessions.on': True,
             'tools.response_headers.on': True
         }}
-
-        cherrypy.tree.mount(Resource(), '/', conf)
+        cls.resource = Resource()
+        cherrypy.tree.mount(cls.resource, '/', conf)
         cls.url = 'http://127.0.0.1:8080'
         cherrypy.engine.start()
 

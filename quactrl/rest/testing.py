@@ -15,8 +15,8 @@ class AuTestResource:
         - /events: List all events of all cavities
         - /events/{cavity}: List all events of /cavity/
         - /events/{cavity}?last: List last events since last query
-        - /{cavity}: Show state of test at cavity 1
-        - /: Show state of all tests"""
+        - /{cavity}: Show test at cavity
+        - /: Show all tests on each cavity"""
 
         if arg_1 is None:  # /
             cavity = 1 if self.managers.cavities == 1 else None
@@ -70,42 +70,43 @@ class AuTestResource:
         """Send part for testing
         - /: Send part to tester 1
         - /{cavity}: send part to tester of /cavity/"""
-
+        cavity = int(cavity)
         order = cherrypy.request.json
-
         part_info, responsible_key, test_pars = order
-
-        self.manager.tester[cavity - 1].start_test(part, responsible_key, test_pars)
+        self.manager.testers[cavity - 1].start_test(
+            part_info, responsible_key, test_pars)
 
     @cherrypy.popargs('command')
-    @cherrypy.tools.json_out()
     @cherrypy.tools.json_in()
     def PUT(self, command):
         """Config testing process:
         - /database: Setups database layer
         - /setup: Setups testing process """
         data = cherrypy.request.json
-        try:
-            if command == 'database':
-                answer = self.manager.connect(data)
-            elif command == 'setup':
-                answer = self.manager.setup(data)
-        except Exception:
-            cherrypy.response.status_code = 404
-            raise
-        return answer
+        if command == 'database':
+            self.manager.connect(**data)
+        elif command == 'setup':
+            self.manager.setup(**data)
+        else:
+            cherrypy.response.status = 404
 
-    @cherrypy.popargs('filter')
+    @cherrypy.popargs('cavity')
     @cherrypy.tools.json_out()
-    def DELETE(self, filter=None):
+    def DELETE(self, cavity=None):
         """ Stops testers:
         - /: Stops all testers
         - /{cavity}: Stop tester of cavity /cavity/"""
 
-        if filter is None:
-            pending_orders = self.manager.stop()
+        if cavity is None:
+            if self.manager.cavities == 1:
+                pending_orders = self.manager.testers[0].stop()
+            else:
+                pending_orders = [None] * self.manager.cavities
+                for index, tester in enumerate(self.manager.testers):
+                    pending_orders[index] = self.manager.testers[index].stop()
         else:
-            pending_orders  = self.manager.stop(int(filter) - 1)
+            cavity = int(cavity)
+            pending_orders = self.manager.testers[cavity - 1].stop()
 
         return pending_orders
 
