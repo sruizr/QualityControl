@@ -10,7 +10,7 @@ class AuTestResource:
 
     @cherrypy.tools.json_out()
     @cherrypy.popargs('arg_1', 'arg_2')
-    def GET(self, arg_1=None, arg_2=None, command=None):
+    def GET(self, arg_1=None, arg_2=None, last=False):
         """ Retrieve status of testing processes:
         - /events: List all events of all cavities
         - /events/{cavity}: List all events of /cavity/
@@ -19,7 +19,7 @@ class AuTestResource:
         - /: Show all tests on each cavity"""
 
         if arg_1 is None:  # /
-            cavity = 1 if self.managers.cavities == 1 else None
+            cavity = 1 if self.manager.cavities == 1 else None
             return self.handle_get_tests(cavity)
         elif self._is_num(arg_1):  # /{cavity}
             cavity = int(arg_1)
@@ -30,39 +30,44 @@ class AuTestResource:
                 cavity = 1
             elif self._is_num(arg_2):
                 cavity = int(arg_2)
-            only_last = command == 'last'
-            return self.handle_get_events(cavity, only_last)
+            last = last == ''
+            return self.handle_get_events(cavity, last)
 
     def handle_get_events(self, cavity, only_last):
         events = self.manager.load_events(cavity)
         if only_last:
-            return parsing.parse(events)
+            return parsing.parse(events, 4)
         else:
             if cavity is None:
-                return parsing.parse(events, 4)
+                return parsing.parse(self.manager.events, 4)
             else:
-                return parsing.parse(self.manager.events[cavity], 4)
+                return parsing.parse(self.manager.events[cavity - 1], 4)
 
     def handle_get_tests(self, cavity):
-        result = self.manager.tests if self.manager.cavities > 1 \
-                 else self.manager.tests[0]
-        return parsing.parse(result, 4)
+
+        if cavity is None:
+            result = [tester.test for tester in self.manager.testers] \
+                     if self.manager.cavities > 1 else \
+                     self.manager.testers[0].test
+        else:
+            result = self.manager.testers[cavity - 1].test
+        return parsing.parse(result, 3)
 
     def _is_num(self, value):
         try:
             int(value)
             return True
-        except ValueError:
+        except Exception:
             return False
 
-    def _parse_events(self, only_last=True):
-        events = self.manager.events
-        res = []
-        for _ in range(events.qsize()):
-            event = events.get()
-            res.append(parsing.parse(event))
+    # def _parse_events(self, only_last=True):
+    #     events = self.manager.events
+    #     res = []
+    #     for _ in range(events.qsize()):
+    #         event = events.get()
+    #         res.append(parsing.parse(event))
 
-        return res
+    #     return res
 
     @cherrypy.tools.json_in()
     @cherrypy.popargs('cavity')
@@ -109,6 +114,3 @@ class AuTestResource:
             pending_orders = self.manager.testers[cavity - 1].stop()
 
         return pending_orders
-
-    def _parse_event(self, event):
-        pass

@@ -19,79 +19,117 @@ class A_TestManager(TestWithPatches):
         self.manager = TestManager()
         self.dev_manager = self.DeviceManager()
 
-    def should_set_database(self):
-        self.manager.set_database('connection_string')
-        self.dal.connect.assert_called_with('connection_string')
+        self.manager.testers = [Mock() for _ in range(3)]
+        self.manager.events = [[] for _ in range(3)]
 
-    def should_go_to_location(self):
-        self.manager.go_to('loc')
+    def should_connect(self):
+        pars = {'connection_string': 'conn'}
+        self.manager.connect(**pars)
+        self.dal.connect.assert_called_with(**pars)
+
+    def should_setup(self):
+        pars = {'location_key': 'loc',
+                'process_key': 'p_key',
+                'cavities': 3,
+                'till_first_failure': False,
+                'create_part': False
+        }
+        self.manager.setup(**pars)
+
+        assert self.manager.cavities == 3
+        assert len(self.manager.testers) == 3
+        assert not self.manager.tff
+        assert self.manager.location_key == 'loc'
+        assert self.manager.process_key == 'p_key'
+
         self.dev_manager.load_devs_from.assert_called_with('loc')
 
-    def should_lazy_loading_testers(self):
+    def should_start_tests(self):
         part_info = {'tracking': '123456789',
                      'part_name': 'part_name'}
         responsible_key = 'sruiz'
-        mock_tester = self.Tester.return_value
 
-        self.manager.start_test(part_info, responsible_key)
-        assert self.manager.testers[0] == mock_tester
-        self.Tester.assert_called_with(self.manager)
-        mock_tester.orders.put.assert_called_with(
-            (part_info, responsible_key, {})
-        )
+        self.manager.start_test(part_info, responsible_key, 2)
 
-        self.manager.start_test(part_info, responsible_key, cavity=7, other=0)
-        assert self.manager.testers[5] is None
-        self.manager.testers[6] == mock_tester
-        mock_tester.orders.put.assert_called_with(
-            (part_info, responsible_key, {'other': 0})
-        )
+        self.manager.testers[2].orders.put((part_info, responsible_key))
 
-        test = mock_tester.test
-        assert (self.manager.tests ==
-                [test, None, None, None, None, None, test]
-        )
+    def should_notify_to_tester(self):
+        self.manager.notify('info', 2)
+
+        self.manager.testers[2].notify.assert_called_with('info')
+
+    def should_download_events_from_cavity(self):
+
+        cavity_events = self.manager.testers[2].empty_events.return_value = [Mock()]
+
+        events = self.manager.download_events(2)
+
+        assert events == cavity_events
+        assert self.manager.events[2] == cavity_events
+
+    def should_download_all_events(self):
+        expected_events = []
+        for tester in self.manager.testers:
+            events = tester.empty_events.return_value = [Mock()]
+            expected_events.append(events)
+
+        events = self.manager.download_events(None)
+
+        assert expected_events == events
+        assert expected_events == self.manager.events
 
     def should_stop_all_tests(self):
-        tester_1 = Mock()
-        tester_3 = Mock()
-        self.manager.testers = [tester_1, None, tester_3]
-        tester_1.stop.return_value = [None]
-        tester_3.stop.return_value = [None]
+        self.manager.testers = [Mock() for _ in range(3)]
+        testers = [tester for tester in self.manager.testers]
+        for index, tester in enumerate(testers):
+            tester.stop.return_value = [index]
 
-        result = self.manager.stop()
-        tester_1.stop.assert_called_with()
-        tester_3.stop.assert_called_with()
-        assert result == [None, None]
-
+        result  = self.manager.stop()
+        for tester in testers:
+            tester.stop.assert_called_with()
+        assert result == [0, 1, 2]
+        assert self.Tester.call_count == 3
 
     def should_stop_only_one_tester(self):
-        tester_1 = Mock()
-        tester_3 = Mock()
-        self.manager.testers = [tester_1, None, tester_3]
-        tester_1.stop.return_value = ['tester1']
-        tester_3.stop.return_value = ['tester3']
+        testers = [Mock() for _ in range(3)]
+        self.manager.testers = [tester for tester in testers]
+        for index, tester in enumerate(testers):
+            tester.stop.return_value = [index]
+
         result = self.manager.stop(1)
-        assert not tester_3.stop.called
-        tester_1.stop.assert_called_with()
-        assert result == ['tester1']
+
+        testers[1].stop.assert_called_with()
+        assert result == [1]
+
+        assert self.Tester.call_count == 1
+
 
 class A_Tester(TestWithPatches):
-
     def setup_method(self, method):
         patches = [
             'quactrl.managers.testing.dal',
+            'quactrl.managers.testing.qry',
             'quactrl.managers.testing.Event',
             'quactrl.managers.testing.Feedback'
             ]
         self.create_patches(patches)
         self.manager = Mock()
-        self.events = self.manager.events = Queue()
-        self.tester = Tester(self.manager, cavity=2)
+        self.events = Queue()
+        self.tester = Tester(self.manager)
 
     def teardown_method(self, method):
         if self.tester.is_alive():
             self.tester.stop()
+
+    def should_get_process_pars_from_manager(self):
+        assert self.tester.ttf == self.manager.ttf
+        assert self.tester.create_part == self.manager.create_part
+
+        assert self.tester.process == self.qry.get_process.return_value
+        self.qry.get_process.assert_called_with(self.manager.process_key)
+        assert self.tester.location == self.qry.get_location.return_value
+        self.qry.get_location.assert_called_with(self.manager.location_key)
+        assert self.tester.dev_manager == self.manager.dev_manager
 
     def should_run_till_stops(self):
         self.tester.process = Mock()
@@ -105,17 +143,21 @@ class A_Tester(TestWithPatches):
         order = (
             {
                 'tracking': '123456789',
-                'part_number': '0000000'
+                'part_number': '00000000'
             },
-            'sruiz',
-            {}
+            'sruiz'
         )
+
         self.tester.set_responsible_by = Mock()
         self.tester.responsible = Mock()
         self.tester.set_control_plan_for = Mock()
         self.tester.control_plan = Mock()
+        self.control_plan.steps = [Mock() for _ in range(2)]
+        self.tester.get_or_create_part = Mock()
+
         part = self.dal.get_or_create_part.return_value
         test = self.tester.control_plan.get_test.return_value
+
         test.checks = [Mock(name='Check_{}'.format(index))
                        for index in range(2)]
 
@@ -123,13 +165,15 @@ class A_Tester(TestWithPatches):
 
         return order, test, part, session
 
+    @pytest.mark.current
     def should_process_order(self):
         order, test, part, session = self.prepare_process_order()
 
-        self.tester.process(order)
+        self.tester.process_test(order)
 
         self.tester.set_responsible_by.assert_called_with('sruiz')
         self.tester.set_control_plan_for.assert_called_with(part)
+
         assert self.tester.events.qsize() == 6
         session.add.assert_called_with(test)
         session.commit.assert_called_with()

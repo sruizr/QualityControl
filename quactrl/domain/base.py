@@ -317,7 +317,20 @@ class Token(Base):
     def is_consumed(self):
         return self.consumer is not None
 
-class Flow(Abstract, Base):
+
+class Observable:
+    def __init__(self):
+        self._observers = []
+
+    def registry_observer(self, observer):
+        self._observers.append(observer)
+
+    def notify_observers(self):
+        for observer in self._observers:
+            observer.notify(self)
+
+
+class Flow(Abstract, Base, Observable):
     __tablename__ = 'flow'
 
     id = Column(Integer, primary_key=True)

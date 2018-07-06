@@ -19,10 +19,14 @@ class TestManager(Manager):
     """Create and manage tests"""
     def __init__(self):
         Manager.__init__(self)
-        self.events = Queue()
+        self.events = []
         self.testers = []
         self.dev_manager = DeviceManager()
-        self.location = None
+        self.location_key = None
+
+    @property
+    def cavities(self):
+        return len(self.testers)
 
     @property
     def tests(self):
@@ -38,37 +42,25 @@ class TestManager(Manager):
     def setup(self, location_key, process_key, cavities=1,
               create_part=False, till_first_failure=True):
         """Setup Manager with running variables"""
-        self.testers = [None] * cavities
-        self._tff = till_first_failure
+        self.tff = till_first_failure
         self.location_key = location_key
         self.process_key = process_key
         self.location_key = location_key
-        self.dev_manager.load_devs_from(location)
 
-    def go_to(self, location):
-        """Load all devices from location"""
+        self.dev_manager.load_devs_from(location_key)
 
-    def start_test(self, part_info, responsible, **test_pars):
+        for tester in self.testers:
+            if tester.is_alive():
+                tester.stop()
+
+        self.testers = [Tester(self) for _ in range(cavities)]
+        self.events = [[] for _ in range(cavities)]
+
+
+    def start_test(self, part_info, responsible_key, cavity=0):
         """Start test from part_information, responsible and other process parameters"""
-        cavity = test_pars.pop('cavity', 1)
-        # Amplified testers from cavity information
-
-        tester = self._get_tester(cavity)
-        tester.orders.put((part_info, responsible, test_pars))
-
-    def _get_tester(self, cavity):
-        """Lazy loading of testers"""
-        if cavity > len(self.testers):
-            for _ in range(cavity - len(self.testers)):
-                self.testers.append(None)
-
-        index = cavity - 1
-        if self.testers[index] is None:
-            tester = Tester(self, till_first_failure=self._tff)
-            tester.start()
-            self.testers[index] = tester
-
-        return tester
+        tester = self.testers[cavity]
+        tester.orders.put((part_info, responsible_key))
 
     def stop(self, cavity=None):
         pending_orders = []
@@ -77,11 +69,29 @@ class TestManager(Manager):
             for tester in self.testers:
                 if tester:
                     pending_orders.extend(tester.stop())
+
+            self.testers = [Tester(self) for _ in range(self.cavities)]
         else:
-            tester = self.testers[cavity-1]
+            tester = self.testers[cavity]
             if tester:
                 pending_orders.extend(tester.stop())
+            self.testers[cavity] = Tester(self)
         return pending_orders
+
+    def notify(self, info, cavity=0):
+        """Transfer notification from client to tester"""
+        self.testers[cavity].notify(info)
+
+    def download_events(self, cavity=None):
+        """Get events from tester and store them to manager.events"""
+        events = []
+        if cavity is None:
+            for _cavity in range(self.cavities):
+                events.append(self.download_events(_cavity))
+        elif self.testers[cavity]:
+                events = self.testers[cavity].empty_events()
+                self.events[cavity].extend(events)
+        return events
 
 
 class Feedback(threading.Event):
@@ -105,6 +115,7 @@ class Tester(StoppableThread):
 
         # Inherited properties from manager
         self.location = qry.get_location(manager.location_key)
+        self.process = qry.get_process(manager.process_key)
         self.dev_manager = manager.dev_manager
         self.ttf = manager.ttf
         self.create_part = manager.create_part
@@ -113,28 +124,28 @@ class Tester(StoppableThread):
 
         self.events = Queue()
         self.orders = Queue()
+
         self.responsible = None
+        self.open_check = None
         self.cancel_signal = False
         self.control_plan = None
-        self.open_check = None
 
     def loop(self):
         """One cycle loop for tester"""
         order = self.orders.get()
         if order is not None:
-            self.process(order)
+            self.process_test(order)
 
     def stop(self):
         """Stop thread and return unprocessed orders"""
         pending_orders = []
 
-        if self.orders.qsize() == 0:
-            self.orders.put(None)
-        else:
+        if self.orders.qsize() != 0:
             while not self.orders.empty():
                 pending_orders.append(self.orders.get())
+        self.stop_event.set()
+        self.orders.put(None)
 
-        super().stop()
         return pending_orders
 
     def cancel_test(self):
@@ -144,7 +155,7 @@ class Tester(StoppableThread):
             self.open_check.finished.set()
 
     def _get_or_create_part(self, part_info):
-        part_number = part_info.get('part_number')
+        part_number = part_info.gent('part_number')
         serial_number = part_info['serial_number']
         part = qry.get_part(part_number=part_number, location=self.location,
                             serial_number=serial_number)
@@ -153,33 +164,34 @@ class Tester(StoppableThread):
 
         return part
 
-    def process(self, order):
+    def process_test(self, order):
         self.session = session = dal.Session()
 
-        part_info, responsible_key, test_pars = order
+        part_info, responsible_key = order
 
-        part = self._get_or_create_part(part_info, self.location)
+        part = self.get_or_create_part(part_info, self.location)
 
         self.set_responsible_by(responsible_key)
-        self.set_control_plan_for(part, process)
+        self.set_control_plan_for(part, self.process)
 
         test = self.control_plan.create_flow(self.responsible)
         test.start(part=part)
         session.add(test)
-        self.events.put(Event('start_test', test, cavity=self.cavity))
+        self.events.put(Event('test_started', testy))
 
         for control in self.control_plan.steps:
-            check = Check(test, control, self.responsible)
+            check = control.create_flow(test, self.responsible)
             session.add(check)
-            self.events.put(Event('start_check', check, cavity=self.cavity))
+
+            self.events.put(Event('check_started', check, cavity=self.cavity))
 
             check.prepare()
             check.dev_manager = self.dev_manager
             check.tester = self
 
             if self.cancel_signal:
-                self.events.put(Event('cancel_test', check, cavity=self.cavity))
-                check.result = 'cancelled'
+                check.state = 'cancelled'
+                self.events.put(Event('test_finished', check, cavity=self.cavity))
             else:
                 try:
                     check.execute()
@@ -241,3 +253,8 @@ class Tester(StoppableThread):
 
     def cancel(self):
         self.cancel_signal = True
+
+
+    def notify(self):
+        """Recieve notifications from observables and records it as events"""
+        pass

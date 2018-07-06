@@ -59,7 +59,7 @@ class Movement(Flow):
         super().close()
 
 
-class Test(Flow):
+class Test(Flow, Observable):
     """Group of checks following a control plan"""
     __mapper_args__ = {'polymorphic_identity': 'test'}
 
@@ -143,14 +143,14 @@ class Check(Flow):
 
     def run(self):
         super().start()
-        self.test.notify(self)
+        self.notify_observers()
 
         self.part = self.test.part
         try:
             super().execute()
             if self._has_thread_alive():
                 self.state == 'ongoing'
-                self.test.notify(self)
+                self.notify_observers()
                 self.finished = Event()
                 self.finished.wait()
         except Exception as e:
@@ -160,7 +160,7 @@ class Check(Flow):
         super().finish()
         if self.state == 'finished':
             self.state = 'ok'
-        self.test.notify(self)
+        self.notify_observers()
 
     def cancel(self):
         self.state = 'cancelled'
