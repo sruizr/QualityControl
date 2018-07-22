@@ -1,6 +1,7 @@
 import sys
 
 FIELDS = {
+    'Feedback': [['signal'], ['object'], []],
     'Event': [['signal', 'pars'], ['obj'], []],
     'Test': [['status', 'index'], ['responsible', 'part'], []],
     'Check': [['result'], ['measures', 'defects'], []],
@@ -31,9 +32,12 @@ FIELDS = {
 
 
 def parse(obj, level=1):
-    """Convert domain object into dict"""
+    """Convert domain object into dict with primitives"""
     if level == 0:
         return getattr(obj, 'id', None)
+
+    if type(obj) is list:
+        return [parse(element, level) for element in obj]
 
     class_name = obj.__class__.__name__
     primitives, simples, associations = FIELDS[class_name]

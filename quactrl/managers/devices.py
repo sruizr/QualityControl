@@ -2,6 +2,7 @@ import types
 from threading import Lock
 from quactrl.helpers import get_class
 from quactrl.domain.persistence import dal
+import quactrl.domain.queries as queries
 
 
 class DeviceManager:
@@ -27,18 +28,22 @@ class DeviceManager:
         del self.devices[key]
 
     def load_devs_from(self, location_key):
-
-        devices = dal.get_devices_by(location_key=location_key)
+        """Load devices into manager from a location"""
+        devices = queries.get_devices_by_location(key=location_key)
 
         # Load proxies
-        dev_proxies = [
-            DeviceProxy(dev.resource.name, dev.tracking, dev.pars.get(), self)
-            for dev in devices
-        ]
+        dev_proxies = []
+        for dev in devices:
+            try:
+                dev_proxy = DeviceProxy(dev.resource.name, dev.tracking, dev.config_pars)
+            except Exception:
+                dev_proxy = None
+            dev_proxies.append(dev_proxy)
 
         # for dev_proxy in dev_proxies:
         for dev_proxy in dev_proxies:
-            self.devices[dev_proxy.name] = dev_proxy
+            if dev_proxy:
+                self.devices[dev_proxy.name] = dev_proxy
 
     def assembly_all(self):
         devices_by_tracking = {}
@@ -63,6 +68,7 @@ class DeviceProxy:
 
     def _create_device(self, pars):
         class_name = pars.pop('class_name')
+
         Device = get_class(class_name)
         return Device(**pars)
 

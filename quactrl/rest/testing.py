@@ -34,7 +34,9 @@ class AuTestResource:
             return self.handle_get_events(cavity, last)
 
     def handle_get_events(self, cavity, only_last):
-        events = self.manager.load_events(cavity)
+        import pdb; pdb.set_trace()
+
+        events = self.manager.download_events(cavity)
         if only_last:
             return parsing.parse(events, 4)
         else:
@@ -44,13 +46,16 @@ class AuTestResource:
                 return parsing.parse(self.manager.events[cavity - 1], 4)
 
     def handle_get_tests(self, cavity):
-
+        if not self.manager.testers:
+            return
         if cavity is None:
             result = [tester.test for tester in self.manager.testers] \
                      if self.manager.cavities > 1 else \
                      self.manager.testers[0].test
         else:
             result = self.manager.testers[cavity - 1].test
+        if result is None:
+            return
         return parsing.parse(result, 3)
 
     def _is_num(self, value):
@@ -70,6 +75,12 @@ class AuTestResource:
     #     return res
 
     @cherrypy.tools.json_in()
+    def PATCH(self, cavity=1):
+        """Send responsible feedback to cavity tester"""
+        feedback = cherrypy.request.json
+        self.manager.testers[cavity - 1].set_feedback(feedback)
+
+    @cherrypy.tools.json_in()
     @cherrypy.popargs('cavity')
     def POST(self, cavity=1):
         """Send part for testing
@@ -77,9 +88,9 @@ class AuTestResource:
         - /{cavity}: send part to tester of /cavity/"""
         cavity = int(cavity)
         order = cherrypy.request.json
-        part_info, responsible_key, test_pars = order
-        self.manager.testers[cavity - 1].start_test(
-            part_info, responsible_key, test_pars)
+        part_info, responsible_key = order
+        self.manager.start_test(
+            part_info, responsible_key, cavity)
 
     @cherrypy.popargs('command')
     @cherrypy.tools.json_in()

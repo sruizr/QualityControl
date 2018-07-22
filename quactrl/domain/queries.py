@@ -61,10 +61,23 @@ def get_or_create_part(part_info, location_key):
         return part
 
 
-def get_devices_by_location(location_key):
-    pass
+def get_devices_by_location(key):
+    session = dal.Session()
+    Device, Token, Node = (items.Device, base.Token, base.Node)
+    query = session.query(Device).join(Token).join(Node).filter(
+        Node.key == key,
+        Token.consumer == None
+    ).order_by(Device.tracking)
 
-   # def get_item_by_sn(self, serial_number):
+    return query.all()
+
+def get_process_by(key):
+    session = dal.Session()
+    qry = session.query(resources.Process).filter(resources.Process.key == key)
+
+    return qry.one()
+
+    # def get_item_by_sn(self, serial_number):
     #     if not self.session:
     #         self.open_session()
 

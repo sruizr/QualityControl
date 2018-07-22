@@ -59,7 +59,24 @@ class Movement(Flow):
         super().close()
 
 
-class Test(Flow, Observable):
+class WithTester:
+    """Mixin with tester property"""
+    @property
+    def tester(self):
+        if hasattr(self, '_test'):
+            return self._test
+        else:
+            return None
+    @tester.setter
+    def tester(self, value):
+        self._tester = value
+
+    def notify(self):
+        if self._tester:
+            self.tester.update(self)
+
+
+class Test(Flow, WithTester):
     """Group of checks following a control plan"""
     __mapper_args__ = {'polymorphic_identity': 'test'}
 
@@ -78,15 +95,16 @@ class Test(Flow, Observable):
         return self
         if self.inputs:
             return self.inputs[0]
+
     @part.setter
     def part(self, value):
         self._part = value
-
 
     def start(self):
         super().start()
         self.part = self.in_tokens[0].item
         self.devices = self.path.devices
+        self.notify()
 
     def terminate(self):
         super().terminate()
@@ -96,6 +114,8 @@ class Test(Flow, Observable):
         if self.state != 'ok':  # Return all to origin node
             for token in self.out_tokens:
                 token.node = self.path.from_node
+
+        self.notify()
 
     def op_creator(self):
         for step in self.path.steps:
@@ -116,12 +136,8 @@ class Test(Flow, Observable):
 
         return state
 
-    def notify(self, obj, **kwargs):
-        if hasattr(self, 'tester'):
-            self.tester.notify(obj, **kawrgs)
 
-
-class Check(Flow):
+class Check(Flow, WithTester):
     """Execute a control with ok - nok result"""
     __mapper_args__ = {'polymorphic_identity': 'check'}
 
@@ -143,18 +159,19 @@ class Check(Flow):
 
     def run(self):
         super().start()
-        self.notify_observers()
+        self.notify()
 
         self.part = self.test.part
         try:
             super().execute()
             if self._has_thread_alive():
                 self.state == 'ongoing'
-                self.notify_observers()
+                self.notify()
                 self.finished = Event()
                 self.finished.wait()
         except Exception as e:
             self.cancel()
+            self.notify()
             raise e
 
         super().finish()

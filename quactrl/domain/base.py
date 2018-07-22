@@ -268,6 +268,16 @@ class Path(Abstract, Base, WithPars):
                 )
             )
 
+    def validate_resource(self, resource):
+        if resource in self.resources.values():
+            return True
+        else:
+            for group in resource.groups:
+                if group in self.resources.values():
+                    return True
+
+        return False
+
 
 class PathResource(Base):
     __tablename__ = 'path_resource'
@@ -318,19 +328,7 @@ class Token(Base):
         return self.consumer is not None
 
 
-class Observable:
-    def __init__(self):
-        self._observers = []
-
-    def registry_observer(self, observer):
-        self._observers.append(observer)
-
-    def notify_observers(self):
-        for observer in self._observers:
-            observer.notify(self)
-
-
-class Flow(Abstract, Base, Observable):
+class Flow(Abstract, Base):
     __tablename__ = 'flow'
 
     id = Column(Integer, primary_key=True)

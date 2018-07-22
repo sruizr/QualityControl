@@ -70,14 +70,19 @@ class Part(Item):
 class Device(Item):
     __mapper_args__ = {'polymorphic_identity': 'device'}
 
-    # def __init__(self, device_model, tracking, **kwargs):
-    #     Item.__init__(self,
-    #                   resource=device_model, tracking=tracking, **kwargs)
-    #     self.bh = None
-
     @hybrid_property
     def device_model(self):
-        return Item.resource
+        return self.resource
+
+    @property
+    def config_pars(self):
+        pars = self.pars.dict.copy()
+        device_keys = ('ams', 'adev')
+
+        for clasification in self.resource.groups:
+            if clasification.group.key in device_keys:
+                pars.update(clasification.pars.dict)
+        return parsg
 
     @device_model.setter
     def device_model(self, device_model):
