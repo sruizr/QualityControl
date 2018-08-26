@@ -28,8 +28,10 @@ class CrudResource:
     def PUT(self):
         """Set connection string for persistence layer"""
         pars = cherrypy.request.json
+
         success = self.manager.connect(pars)
         if success:
+            cherrypy.response.status = 202
             return
         else:
             cherrypy.response.status = 404

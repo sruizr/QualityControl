@@ -7,14 +7,14 @@ from quactrl.domain.persistence import dal
 class DeviceResource:
     """Server devices as repository using API REST"""
     def __init__(self):
-        self.device_manager = DeviceManager()
+        self.manager = DeviceManager()
 
     @cherrypy.tools.json_out()
     @cherrypy.popargs('key')
     def GET(self, key=None):
         """Get device status"""
-        if key in self.device_manager.devices.keys():
-            device = self.device_manager.devices[key]
+        if key in self.manager.devices.keys():
+            device = self.manager.devices[key]
             if type(device) is dict:
                 result = {}
                 for key, _device in device.items():
@@ -26,7 +26,7 @@ class DeviceResource:
 
                 return result
             else:
-                status = ('iddle' if self.device_manager.devices[key].is_bussy()
+                status = ('iddle' if self.manager.devices[key].is_bussy()
                           else 'waiting')
                 return {'status': status}
         else:
@@ -38,7 +38,7 @@ class DeviceResource:
     @cherrypy.tools.json_out()
     def POST(self, device_key, action, tracking=None):
         """Send command to device and return result"""
-        device = self.device_manager.devices[device_key]
+        device = self.manager.devices[device_key]
         if type(device) is dict:  # Many devices with the same key
             if tracking is None:  # None concrete device!
                 cherrypy.response.status = 405
@@ -69,12 +69,13 @@ class DeviceResource:
         """Loads  devices onto repository"""
         pars = cherrypy.request.json
         if pars.get('class_name'):  # Device pars for loading
-            self.device_manager[pars['name']] = DeviceProxy(
+            self.manager[pars['name']] = DeviceProxy(
                 pars['name'],
                 pars['tracking'],
                 pars
             )
         else:
+
             if location is None:  # Connection to database
                 success = dal.connect(pars['connection_string'])
                 if success:
@@ -83,7 +84,7 @@ class DeviceResource:
                     cherrypy.response.status = 406
             else:
                 if dal.is_connected():
-                    self.device_manager.load_devs_from(location)
+                    self.manager.load_devs_from(location)
                 else:
                     cherrypy.response.status = 500
 
@@ -91,11 +92,11 @@ class DeviceResource:
     def DELETE(self, key=None):
         """Remove devices from repository"""
         if key is None:
-            keys = list(self.device_manager.devices.keys())
+            keys = list(self.manager.devices.keys())
             for key in keys:
-                del self.device_manager.devices[key]
+                del self.manager.devices[key]
         else:
-            if key in self.device_manager.devices.keys():
-                del self.device_manager.devices[key]
+            if key in self.manager.devices.keys():
+                del self.manager.devices[key]
             else:
                 cherrypy.response.status = 404

@@ -17,11 +17,10 @@ class An_AuTestResource(TestResource):
             'quactrl.rest.testing.TestManager',
             'quactrl.rest.testing.parsing'
         ])
-        super().setup_method(method)
+        self.manager = self.resource.manager = self.TestManager.return_value
 
-        self.manager = self.resource.manager
         self.manager.testers = [Mock() for _ in range(3)]  # 3 cavities
-        self.parsing.from_obj = lambda obj: {'key': obj.key}
+        self.parsing.parse.return_value = lambda obj: {'key': obj.key}
 
     @pytest.mark.current
     def should_setup_from_PUT_request(self):
@@ -146,6 +145,7 @@ class An_AuTestResource(TestResource):
     def should_handle_get_events(self):
         self.manager.events = [_ for _ in range(3)]
         self.manager.download_events.return_value = 'events'
+        import pdb; pdb.set_trace()
 
         events = self.resource.handle_get_events(1, True)
         self.manager.download_events.assert_called_with(1)
