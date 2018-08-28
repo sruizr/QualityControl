@@ -11,8 +11,9 @@ class A_TestManager(TestWithPatches):
         patches = [
             'quactrl.managers.testing.dal',
             'quactrl.managers.testing.DeviceManager',
-            'quactrl.managers.testing.Tester'
-            ]
+            'quactrl.managers.testing.Tester',
+            'quactrl.managers.testing.qry'
+        ]
         self.create_patches(patches)
         # self.control = Mock()
         # self.inspector = Mock()
@@ -125,8 +126,8 @@ class A_Tester(TestWithPatches):
         assert self.tester.tff == self.manager.tff
         assert self.tester.create_part == self.manager.create_part
 
-        assert self.tester.process == self.qry.get_process.return_value
-        self.qry.get_process.assert_called_with(self.manager.process_key)
+        assert self.tester.process == self.qry.get_process_by.return_value
+        self.qry.get_process_by.assert_called_with(self.manager.process_key)
         assert self.tester.location == self.qry.get_location.return_value
         self.qry.get_location.assert_called_with(self.manager.location_key)
         assert self.tester.dev_manager == self.manager.dev_manager
@@ -220,7 +221,7 @@ class A_Tester(TestWithPatches):
     def should_set_responsible(self):
         responsible = Mock()
         responsible.key = 'sruiz'
-        self.dal.get_responsible_by.return_value = responsible
+        self.qry.get_responsible_by.return_value = responsible
         self.tester.set_responsible_by('sruiz')
 
         self.qry.get_responsible_by.assert_called_with(key='sruiz')

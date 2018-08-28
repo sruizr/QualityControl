@@ -2,7 +2,7 @@ import types
 from threading import Lock
 from quactrl.helpers import get_class
 from quactrl.domain.persistence import dal
-import quactrl.domain.queries as queries
+import quactrl.domain.queries as qry
 
 
 class DeviceManager:
@@ -29,7 +29,7 @@ class DeviceManager:
 
     def load_devs_from(self, location_key):
         """Load devices into manager from a location"""
-        devices = queries.get_devices_by_location(key=location_key)
+        devices = qry.get_devices_by(location_key=location_key)
 
         # Load proxies
         dev_proxies = []

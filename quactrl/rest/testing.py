@@ -34,7 +34,6 @@ class AuTestResource:
             return self.handle_get_events(cavity, last)
 
     def handle_get_events(self, cavity, only_last):
-        import pdb; pdb.set_trace()
 
         events = self.manager.download_events(cavity)
         if only_last:

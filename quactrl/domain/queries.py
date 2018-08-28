@@ -11,11 +11,19 @@ def get_location(key):
     session = dal.Session()
     return session.query(nodes.Location).filter_by(key=key).one_or_none()
 
+
 def get_resource(**kargs):
     pass
 
+
+def get_process_by(key):
+    pass
+
+def get_devices_by(location_key):
+    pass
+
 # Generated from managers.Tester
-def get_control_plan_by(location_key, part_model_key):
+def get_control_plan_by(location, process, part_model):
     session = dal.Session()
 
     session.query(paths.ControlPlan).join()

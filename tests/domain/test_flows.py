@@ -189,19 +189,19 @@ class A_Check:
 
 class A_CheckWithHelpers(EmptyDataTest):
     def should_add_new_measures(self):
-<<<<<<< HEAD
-        check = f.Check()
-        part = i.Part(resourc)
+# <<<<<<< HEAD
+#         check = f.Check()
+#         part = i.Part(resourc)
 
 
-        value =2.0
-        characteristic = r.Characteristic('characteristic')
-        element_key = 'e_key'
-        check.add_measure(value, characteristic, element_key)
+#         value =2.0
+#         characteristic = r.Characteristic('characteristic')
+#         element_key = 'e_key'
+#         check.add_measure(value, characteristic, element_key)
 
-        part = check.test.part
-        assert part
-=======
+#         part = check.test.part
+#         assert part
+# =======
         part = i.Part(r.PartModel(key='partnumber'))
         characteristic = r.Characteristic(key='char')
         check = f.Check()
@@ -216,7 +216,7 @@ class A_CheckWithHelpers(EmptyDataTest):
         assert measurement.characteristic == characteristic
         assert measurement == check.outputs[0]
 
->>>>>>> 6ca63ab1be90bcb96a3efab5df7e3116d40225f5
+# >>>>>>> 6ca63ab1be90bcb96a3efab5df7e3116d40225f5
 
     def should_add_old_measures(self):
         part = i.Part(r.PartModel(key='partnumber'))

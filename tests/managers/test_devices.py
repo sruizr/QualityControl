@@ -11,6 +11,7 @@ class A_DeviceManager(TestWithPatches):
         patchers = [
             'quactrl.managers.devices.dal',
             'quactrl.managers.devices.DeviceProxy',
+            'quactrl.managers.devices.qry'
         ]
         self.create_patches(patchers)
         self.dev_manager = DeviceManager()
@@ -32,7 +33,7 @@ class A_DeviceManager(TestWithPatches):
 
     def should_load_devs_from_location(self):
         devices = [Mock() for i in range(3)]
-        self.dal.get_devices_by.return_value = devices
+        self.qry.get_devices_by.return_value = devices
 
         device_proxies = []
         for i in range(3):
@@ -44,7 +45,7 @@ class A_DeviceManager(TestWithPatches):
         dev_manager = DeviceManager()
         dev_manager.load_devs_from('location_key')
 
-        self.dal.get_devices_by.assert_called_with(location_key='location_key')
+        self.qry.get_devices_by.assert_called_with(location_key='location_key')
         assert len(dev_manager.devices) == 3
         assert dev_manager[0] == device_proxies[0]
 

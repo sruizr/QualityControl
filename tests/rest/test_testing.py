@@ -84,6 +84,7 @@ class An_AuTestResource(TestResource):
         assert response.json() == 'foo'
 
     def should_list_all_events_of_all_cavities(self):
+        backup = self.resource.handle_get_events
         self.resource.handle_get_events = Mock()
         self.manager.cavities = 3
         self.resource.handle_get_events.return_value = 'response'
@@ -94,26 +95,28 @@ class An_AuTestResource(TestResource):
         assert response.json() == 'response'
         self.resource.handle_get_events.assert_called_with(None, False)
 
-
         self.manager.cavities = 1
         response = requests.get(self.url + '/events')
 
         assert response.status_code == 200
         self.resource.handle_get_events.assert_called_with(1, False)
+        self.resource.handle_get_events = backup
 
     def should_list_all_events_of_a_cavity(self):
+        backup = self.resource.handle_get_events
         self.resource.handle_get_events = Mock()
         self.manager.cavities = 3
         self.resource.handle_get_events.return_value = 'response'
 
         response = requests.get(self.url + '/events/2')
 
+        self.resource.handle_get_events.assert_called_with(2, False)
         assert response.status_code == 200
         assert response.json() == 'response'
-        self.resource.handle_get_events.assert_called_with(2, False)
-
+        self.resource.handle_get_events = backup
 
     def should_list_last_events(self):
+        backup = self.resource.handle_get_events
         self.resource.handle_get_events = Mock()
         self.resource.handle_get_events.return_value = 'response'
         self.manager.cavities = 3
@@ -122,8 +125,10 @@ class An_AuTestResource(TestResource):
 
         assert response.status_code == 200
         self.resource.handle_get_events.assert_called_with(None, True)
+        self.resource.handle_get_events = backup
 
     def should_report_test_status(self):
+        backup = self.resource.handle_get_tests
         self.resource.handle_get_tests = Mock()
         self.resource.handle_get_tests.return_value = 'response'
         self.manager.cavities = 3
@@ -142,10 +147,11 @@ class An_AuTestResource(TestResource):
         response = requests.get(self.url + '/2')
         self.resource.handle_get_tests.assert_called_with(2)
 
+        self.resource.handle_get_tests = backup
+
     def should_handle_get_events(self):
         self.manager.events = [_ for _ in range(3)]
         self.manager.download_events.return_value = 'events'
-        import pdb; pdb.set_trace()
 
         events = self.resource.handle_get_events(1, True)
         self.manager.download_events.assert_called_with(1)
