@@ -6,6 +6,7 @@ class Device:
                 setattr(self, key, value)
 
     def assembly(self, devices):
+        """Assembly devices to other devices as subsystesms """
         if hasattr(self, 'connected_to'):
             for key, value in self.connected_to.items():
                 if type(value) is list:
