@@ -67,6 +67,7 @@ class WithTester:
             return self._test
         else:
             return None
+
     @tester.setter
     def tester(self, value):
         self._tester = value
@@ -90,19 +91,11 @@ class Test(Flow, WithTester):
     #                                    controller=controller)
     #         self.children.append(check)
 
-    @property
-    def part(self):
-        return self
-        if self.inputs:
-            return self.inputs[0]
 
-    @part.setter
-    def part(self, value):
-        self._part = value
-
-    def start(self):
+    def start(self, part):
         super().start()
-        self.part = self.in_tokens[0].item
+        self.inputs.append(part.avalaible_tokens[0])
+        self.part = self.inputs[0].item
         self.devices = self.path.devices
         self.notify()
 
@@ -133,7 +126,6 @@ class Test(Flow, WithTester):
                 break
             elif check.state == 'suspicious':
                 state = 'suspicious'
-
         return state
 
 

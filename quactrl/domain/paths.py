@@ -29,10 +29,9 @@ class ControlPlan(Path):
         self.validate_responsible(responsible)
         self.validate_item(part)
 
-        test = f.Test(
-            path=self,
-            responsible=responsible
-        )
+        test = f.Test()
+        test.path = self
+        test.responsible = responsible
         test.part = part
 
         return test

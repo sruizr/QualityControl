@@ -11,10 +11,11 @@ from unittest.mock import Mock, call, patch
 
 class A_Creation(EmptyDataTest):
     def should_create_token_on_destination(self):
-        resource = b.Resource(key='resource')
-        item = b.Item(resource)
-        responsible = b.Node(key='responsible')
-        destination = b.Node(key='destination')
+        resource = b.Resource()
+        item = b.Item()
+        item.resource = resource
+        responsible = b.Node()
+        destination = b.Node()
 
         creation = f.Creation(responsible)
 
@@ -32,10 +33,11 @@ class A_Creation(EmptyDataTest):
 
 class A_Destruction(EmptyDataTest):
     def should_remove_token_on_origin(self):
-        resource = b.Resource(key='resource')
-        item = b.Item(resource)
-        responsible = b.Node(key='responsible')
-        origin = b.Node(key='origin')
+        resource = b.Resource()
+        item = b.Item()
+        item.resource = resource
+        responsible = b.Node()
+        origin = b.Node()
         item.avalaible_tokens.append(
             b.Token(item=item, node=origin, qty=2.0))
 
@@ -56,11 +58,12 @@ class A_Destruction(EmptyDataTest):
 
 class A_Movement(EmptyDataTest):
     def should_move_items(self):
-        resource = b.Resource(key='resource')
-        item = b.Item(resource)
-        responsible = b.Node(key='responsible')
-        origin = b.Node(key='origin')
-        destination = b.Node(key='destination')
+        resource = b.Resource()
+        item = b.Item()
+        item.resource = resource
+        responsible = b.Node()
+        origin = b.Node()
+        destination = b.Node()
         item.avalaible_tokens.append(
             b.Token(item=item, node=origin, qty=2.0))
 
@@ -202,8 +205,10 @@ class A_CheckWithHelpers(EmptyDataTest):
 #         part = check.test.part
 #         assert part
 # =======
-        part = i.Part(r.PartModel(key='partnumber'))
-        characteristic = r.Characteristic(key='char')
+        model = r.PartModel()
+        part = i.Part()
+        part.part_model = model
+        characteristic = r.Characteristic()
         check = f.Check()
         check.part = part
         check.outputs = []
@@ -218,14 +223,15 @@ class A_CheckWithHelpers(EmptyDataTest):
 
 # >>>>>>> 6ca63ab1be90bcb96a3efab5df7e3116d40225f5
 
-    def should_add_old_measures(self):
-        part = i.Part(r.PartModel(key='partnumber'))
+    def should_replace_old_measures(self):
+        part = i.Part()
         characteristic = r.Characteristic(key='char')
         check = f.Check()
         check.part = part
+        part.tracking = '1234'
         check.outputs = []
 
-        i.Measurement(part, characteristic, tracking='*char[el_1]')
+        i.Measurement(part, characteristic, tracking='1234*char[el_1]')
 
         check.add_measure(2.0, characteristic, element_key='el_1')
 
@@ -239,7 +245,8 @@ class A_CheckWithHelpers(EmptyDataTest):
     def should_add_new_defects(self):
         failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
         check = f.Check()
-        part = i.Part(r.PartModel(key='partnumber'))
+        part = i.Part()
+        part.tracking = '1234'
         check.part = part
         check.outputs = []
 
@@ -248,19 +255,20 @@ class A_CheckWithHelpers(EmptyDataTest):
         assert len(part.defects) == 1
         assert defect == part.defects[0]
         assert defect.qty == 2.0
-        assert defect.tracking == '*low-char[el_1]'
+        assert defect.tracking == '1234*low-char[el_1]'
         assert defect.failure_mode == failure_mode
         assert defect == check.outputs[0]
 
     def should_add_old_defects(self):
         failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
-        part = i.Part(r.PartModel(key='partnumber'))
+        part = i.Part()
+        part.tracking = '1234'
         check = f.Check()
         check.part = part
         check.outputs = []
 
         defect = i.Defect(part, failure_mode)
-        defect.tracking = '*low-char[el_1]'
+        defect.tracking = '1234*low-char[el_1]'
 
         new_defect = check.add_defect(failure_mode, element_key='el_1', qty=2.0)
 
@@ -268,7 +276,7 @@ class A_CheckWithHelpers(EmptyDataTest):
         assert defect == part.defects[0]
         assert new_defect == defect
         assert defect.qty == 2.0
-        assert defect.tracking == '*low-char[el_1]'
+        assert defect.tracking == '1234*low-char[el_1]'
         assert defect.failure_mode == failure_mode
         assert defect == check.outputs[0]
 
@@ -281,7 +289,7 @@ class A_CheckWithHelpers(EmptyDataTest):
         check.control = source_check.control = control
         failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
 
-        part = i.Part(r.PartModel(key='partnumber'))
+        part = i.Part()
         check.part = part
         defect = i.Defect(part, failure_mode)
         defect.avalaible_tokens.append(

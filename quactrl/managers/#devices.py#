@@ -14,8 +14,17 @@ _providers = {
 
 
 class DevicesConstructor:
-    def __init__(self, definitions)
+    
+    def __init__(self, definitions):
+        pass
 
+
+    def inspect_dependencies(self):
+        pass
+
+    def create(self):
+        pass
+    
 def construct_device_container(dev_definitions):
     devices = DynamicContainer()
     for definition in dev_definitions:

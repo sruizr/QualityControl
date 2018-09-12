@@ -14,8 +14,8 @@ class A_ControlPlan:
         control_plan.validate_item = Mock()
         control_plan.validate_responsible = Mock()
 
-        responsible = n.Person(key='sruiz')
-        part = i.Part(r.PartModel(key='partnumber'))
+        responsible = n.Person()
+        part = i.Part()
 
         test = control_plan.create_flow(responsible, part)
 
@@ -33,7 +33,7 @@ class A_Control(EmptyDataTest):
         test.part = Mock()
         test.tester = Mock()
 
-        responsible = n.Person(key='resp')
+        responsible = n.Person()
         test.responsible = responsible
 
         check = control.create_flow(test)

@@ -3,6 +3,7 @@ from queue import Queue
 import threading
 from tests import TestWithPatches
 from quactrl.managers.testing import TestManager, Tester, Feedback
+from quactrl.domain.flows import Test, Check
 import pytest
 
 
@@ -157,7 +158,7 @@ class A_Tester(TestWithPatches):
         for control in controls:
             control.pars = {}
         control_plan.steps = controls
-        test = control_plan.create_flow.return_value
+        control_plan.create_flow.return_value = Mock(spec=Test)
         self.tester.control_plan = control_plan
 
         self.tester.get_or_create_part = Mock()

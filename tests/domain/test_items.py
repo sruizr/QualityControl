@@ -8,9 +8,12 @@ from unittest.mock import Mock
 class A_Part(EmptyDataTest):
     def setup_method(self, method):
         super().setup_method(method)
-        part_model = r.PartModel(key='partnumber')
-        self.part = i.Part(part_model, tracking='1234')
-        self.characteristic = r.Characteristic('char')
+        self.part = i.Part()
+        self.part.tracking = '1234'
+        self.part_model = r.PartModel()
+        self.part_model.key = 'partnumber'
+        self.part.part_model = self.part_model
+        self.characteristic = r.Characteristic()
 
     def should_start_with_part_model(self):
         self.session.add(self.part)
@@ -33,10 +36,9 @@ class A_Part(EmptyDataTest):
 class A_Defect(EmptyDataTest):
     def setup_method(self, method):
         super().setup_method(method)
-        self.part_model = r.PartModel(key='partnumber')
-        self.part = i.Part(self.part_model, tracking='1234')
+        self.part = i.Part()
 
-        characteristic = r.Characteristic('char')
+        characteristic = r.Characteristic()
         self.failure_mode = r.FailureMode(characteristic, 'lw')
 
     def should_keep_part(self):
@@ -50,7 +52,8 @@ class A_Defect(EmptyDataTest):
         assert self.part.defects[0] == defect
 
     def should_have_only_one_part_linked(self):
-        other_part = i.Part(self.part_model, tracking='4321')
+        other_part = i.Part()
+        other_part.tracking = '4321'
 
         defect = i.Defect(self.part, self.failure_mode)
         self.session.add(defect)
@@ -68,10 +71,9 @@ class A_Measurement(EmptyDataTest):
 
     def setup_method(self, method):
         super().setup_method(method)
-        self.part_model = r.PartModel(key='partnumber')
-        self.part = i.Part(self.part_model, tracking='1234')
+        self.part = i.Part()
 
-        self.characteristic = r.Characteristic('char')
+        self.characteristic = r.Characteristic()
 
     def should_keep_part(self):
         measurement = i.Measurement(self.part, self.characteristic, 1.0)
@@ -84,7 +86,7 @@ class A_Measurement(EmptyDataTest):
 
 
     def should_have_only_one_part_linked(self):
-        other_part = i.Part(self.part_model, tracking='4321')
+        other_part = i.Part()
 
         measurement = i.Measurement(self.part, self.characteristic, value=1.0)
         self.session.add(measurement)
@@ -119,8 +121,9 @@ class A_Measurement(EmptyDataTest):
         assert len(defect.measurements) == 0
 
     def should_eval_ok_from_limits(self):
-        characteristic = r.Characteristic(key='char')
-        part = i.Part(r.PartModel(key='partnumber'))
+        characteristic = r.Characteristic()
+        characteristic.key = 'char'
+        part = i.Part()
         part.tracking = 'tr'
 
         measurement = i.Measurement(part, characteristic, 2.0)

@@ -5,10 +5,10 @@ from tests.domain import EmptyDataTest
 class A_Person(EmptyDataTest):
     def should_have_roles(self):
 
-        role_1 = n.Role('role_1')
-        role_2 = n.Role('role_2')
+        role_1 = n.Role()
+        role_2 = n.Role()
 
-        person = n.Person('person')
+        person = n.Person()
 
         person.roles.append(role_1)
         person.roles.append(role_2)
@@ -17,17 +17,17 @@ class A_Person(EmptyDataTest):
         self.session.commit()
 
         assert len(person.roles) == 2
-        assert role_1.members[0] == person
+        assert role_1.persons[0] == person
 
 
 class A_Role(EmptyDataTest):
     def should_have_members(self):
-        person_1 = n.Person('person1')
-        person_2 = n.Person('person 2')
+        person_1 = n.Person()
+        person_2 = n.Person()
 
-        role = n.Role('role')
+        role = n.Role()
 
-        role.members.extend([person_1, person_2])
+        role.persons.extend([person_1, person_2])
 
         self.session.add(role)
         self.session.commit()
@@ -37,7 +37,7 @@ class A_Role(EmptyDataTest):
 
 class A_Location(EmptyDataTest):
     def should_have_parcels(self):
-        locations = [n.Location('{}'.format(_)) for _ in range(3)]
+        locations = [n.Location() for _ in range(3)]
 
         location = locations[2]
         location.parcels.extend(locations[1:])
@@ -49,7 +49,7 @@ class A_Location(EmptyDataTest):
         assert location.parcels[0].site == location
 
     def should_have_one_site(self):
-        locations = [n.Location('{}'.format(_)) for _ in range(3)]
+        locations = [n.Location() for _ in range(3)]
 
         site = locations[0]
         locations[1].site = site
@@ -66,8 +66,8 @@ class A_Location(EmptyDataTest):
         assert len(site.parcels) == 1
 
     def should_have_owners(self):
-        owner = n.Role('role')
-        location = n.Location('loc')
+        owner = n.Role()
+        location = n.Location()
 
         location.owners.append(owner)
 
@@ -77,7 +77,7 @@ class A_Location(EmptyDataTest):
         assert location.owners[0] == owner
         assert len(location.parcels) == 0
 
-        parcel = n.Location('parcel')
+        parcel = n.Location()
         location.parcels.append(parcel)
         self.session.flush()
 

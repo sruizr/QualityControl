@@ -8,37 +8,48 @@ from unittest.mock import Mock, patch
 
 class A_ParsMixin(EmptyDataTest):
     def should_load_other_attributes_in_pars(self):
-        resource = base.Resource(key='key', name='name', description='description', other=1)
-        assert resource.pars['other'] == 1
+        node = base.Node()
+        node.key = 'key'
+        node.name = 'name'
+        node.description = 'description'
+        node.other = 1
+        assert node.pars['other'] == 1
 
-        resource.pars['another'] = 'value'
+        node.pars['another'] = 'value'
 
-        assert resource.pars['another'] == 'value'
-        self.session.add(resource)
+        assert node.pars['another'] == 'value'
+        self.session.add(node)
         self.session.commit()
 
-        assert resource.pars._dict_pars == {'another': 'value', 'other': 1}
+        assert node.pars._dict_pars == {'another': 'value', 'other': 1}
+        other = self.session.query(base.Node).filter_by(key='key').one()
 
-        other = self.session.query(base.Resource).filter_by(key='key').one()
-
-        assert json.loads(resource.pars._pars)['other'] == 1
+        assert json.loads(node.pars._pars)['other'] == 1
 
     def should_modify_pars_one_by_one(self):
-        resource = base.Resource(key='key', name='name', description='description', other=1)
-        assert resource.pars['other'] == 1
+        node = base.Node()
+        node.key = 'key'
+        node.name = 'name'
+        node.description = 'description'
+        node.other = 1
+        assert node.pars['other'] == 1
 
-        resource.pars['other'] = 2
+        node.pars['other'] = 2
 
-        assert resource.pars['other'] == 2
-        assert json.loads(resource.pars._pars)['other'] == 2
+        assert node.pars['other'] == 2
+        assert json.loads(node.pars._pars)['other'] == 2
 
 
 class A_Flow(EmptyDataTest):
     def should_persist_basic_relationships(self):
         flow = base.Flow()
-        flow.path = base.Path(role=base.Node(key='role'))
+        role = base.Node()
+        role.key = 'role'
+        flow.path = base.Path(role=role)
 
-        flow.responsible = base.Node(key='responsible')
+        responsible = base.Node()
+        responsible.key = 'responsible'
+        flow.responsible = responsible
         op = base.Flow()
         flow.operations.append(op)
         self.session.add(flow)
@@ -164,13 +175,15 @@ class A_Flow(EmptyDataTest):
             op.throw = Mock()
             flow.operations.append(op)
 
-        destination = base.Node('destination')
-        origin = base.Node('origin')
+        destination = base.Node()
+        origin = base.Node()
 
-        resource = base.Resource(key='res')
-        _input = base.Item(resource)
+        _input = base.Item()
+        output = base.Item()
+        resource = base.Resource()
+        output.resource = _input.resource = resource
+
         _input.consume = Mock()
-        output = base.Item(resource)
         output.produce = Mock()
         flow.origin = flow.destination = None
         flow.inputs = [_input]
@@ -202,10 +215,10 @@ class A_Flow(EmptyDataTest):
         flow.finished_on = Mock()
         flow.state = 'finished'
 
-        destination = base.Node('destination')
-        origin = base.Node('origin')
-        from_node = base.Node('from_node')
-        to_node = base.Node('to_node')
+        destination = base.Node()
+        origin = base.Node()
+        from_node = base.Node()
+        to_node = base.Node()
 
         path = base.Path()
         path.from_node = from_node
@@ -256,7 +269,9 @@ class An_Item(EmptyDataTest):
     def setup_method(self, method):
         super().setup_method(method)
         resource = base.Resource(key='resource_key')
-        self.item = base.Item(resource, tracking='123456789')
+        self.item = base.Item()
+        self.item.resource = resource
+        self.item.tracking = '123456789'
 
     def should_produce_tokens(self):
         flow = base.Flow()
@@ -330,9 +345,12 @@ class An_Item(EmptyDataTest):
 class A_Token(EmptyDataTest):
     def setup_method(self, method):
         super().setup_method(method)
-        resource = base.Resource(key='resource')
-        item = base.Item(resource, tracking='123456789')
-        node = base.Node(key='node')
+        resource = base.Resource()
+        resource.key = 'resource'
+        item = base.Item()
+        item.resource = resource
+        item.tracking = '123456789'
+        node = base.Node()
         flow = base.Flow()
         self.token = base.Token(item=item, node=node, qty=10, producer=flow )
 

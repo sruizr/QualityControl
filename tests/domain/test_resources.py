@@ -1,14 +1,17 @@
 import quactrl.domain.resources as r
+import quactrl.domain.base as b
 from tests.domain import EmptyDataTest
 import pytest
 
 
 class A_IsARelation(EmptyDataTest):
     def should_stores_part_grouping(self):
-        part_model = r.PartModel(key='part')
-        part_group = r.PartGroup(key='group_part')
+        part_model = r.PartModel()
+        part_group = r.Group()
 
-        is_a = r.IsA(part_model, part_group)
+        is_a = r.Clasification()
+        is_a.group = part_group
+        is_a.member = part_model
         self.session.add(is_a)
         self.session.commit()
 
@@ -18,10 +21,12 @@ class A_IsARelation(EmptyDataTest):
 
 class A_CompositionRelation(EmptyDataTest):
     def should_stores_part_compositions(self):
-        part = r.PartModel(key='part')
-        component = r.PartModel(key='component')
+        part = r.PartModel()
+        component = r.PartModel()
 
-        composition = r.Composition(part, component)
+        composition = r.Composition()
+        composition.component = component
+        composition.system = part
         self.session.add(composition)
         self.session.commit()
 
@@ -31,10 +36,14 @@ class A_CompositionRelation(EmptyDataTest):
 
 class A_Requirement(EmptyDataTest):
     def should_stores_requirements_for_part(self):
-        part = r.PartModel(key='part')
-        char = r.Characteristic(key='char')
+        part = r.PartModel()
+        char = r.Characteristic()
 
-        requirement = r.Requirement(part, char, {'limits': [1, 2]})
+        requirement = r.Requirement()
+        requirement.characteristic = char
+        requirement.from_resource = part
+        requirement.pars = b.Pars()
+        requirement.pars.dict = {'limits': [1, 2]}
         self.session.add(requirement)
         self.session.commit()
 
@@ -42,10 +51,14 @@ class A_Requirement(EmptyDataTest):
         assert part.requirements[0].pars['limits'] == [1, 2]
 
     def should_stores_requirements_for_characteristic(self):
-        main = r.Characteristic(key='main')
-        char = r.Characteristic(key='char')
+        main = r.Characteristic()
+        char = r.Characteristic()
 
-        requirement = r.Requirement(main, char, {'limits': [1, 2]})
+        requirement = r.Requirement()
+        requirement.characteristic = char
+        requirement.from_resource = main
+        requirement.pars = b.Pars()
+        requirement.pars.dict = {'limits': [1, 2]}
         self.session.add(requirement)
         self.session.commit()
 
@@ -53,10 +66,15 @@ class A_Requirement(EmptyDataTest):
         assert main.requirements[0].pars['limits'] == [1, 2]
 
     def should_stores_requirements_for_part_group(self):
-        group = r.Characteristic(key='group')
-        char = r.Characteristic(key='char')
+        group = r.Characteristic()
+        char = r.Characteristic()
 
-        requirement = r.Requirement(group, char, {'limits': [1, 2]})
+        requirement = r.Requirement()
+        requirement.characteristic = char
+        requirement.from_resource = group
+        requirement.pars = b.Pars()
+        requirement.pars.dict = {'limits': [1, 2]}
+
         self.session.add(requirement)
         self.session.commit()
 
@@ -66,7 +84,7 @@ class A_Requirement(EmptyDataTest):
 
 class A_Failure(EmptyDataTest):
     def _should_stores_failure_modes_from_characteristic(self):
-        char = r.Characteristic(key='char')
+        char = r.Characteristic()
 
         failure = r.Failure(char, 'lw')
         self.session.add(failure)
@@ -75,7 +93,7 @@ class A_Failure(EmptyDataTest):
         assert char.failures[0] == failure
 
     def should_avoid_repeat_failure_modes(self):
-        char = r.Characteristic(key='char')
+        char = r.Characteristic()
 
         failure = r.Failure(char, 'lw')
         self.session.add(failure)
