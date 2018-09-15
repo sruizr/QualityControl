@@ -82,7 +82,7 @@ class Device(Item):
         for clasification in self.resource.groups:
             if clasification.group.key in device_keys:
                 pars.update(clasification.pars.dict)
-        return parsg
+        return pars
 
     @device_model.setter
     def device_model(self, device_model):
