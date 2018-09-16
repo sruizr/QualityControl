@@ -3,35 +3,56 @@ from quactrl.domain.devices import DeviceContainer
 
 
 class FakeDevice:
-    def __init__(self, par_1, par_2, ):
-        self.part_1 = part_1
-        self.part_2 = part_2
+    def __init__(self, par_1, par_2, **kwargs):
+        self.par_1 = par_1
+        self.par_2 = par_2
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
 
 class OtherFakeDevice:
     def __init__(self, par_1):
-        self.part_1
-
-
+        self.par_1 = par_1
 
 
 class A_DeviceContainer:
-
-
-    @patch('quactrl.domain.devices.import_class')
-    def should_inject_devices_from_dict(self, import_mock):
+    def setup_dependencies(self, repo, get_class):
+        classes = {'FakeDevice': FakeDevice, 'OtherFakeDevice': OtherFakeDevice}
+        get_class.side_effect = lambda class_name: classes[class_name]
 
         devices = {
-            'a_device': {'par_1': 'lorem', 'par_2': '>other_device'},
-            'other_device': {'par_1': 'ipsum'}
+            'a_device': {
+                '_strategy': 'factory', 'class': 'FakeDevice',
+                '_args': ['lorem', '>other_device'],
+                'par_3': 'ipsum', 'par_4': '>other_device'},
+            'other_device': {'class': 'OtherFakeDevice',
+                             'par_1': 'dolor'}
         }
-        dev_def_repo = Mock()
-        dev_def_repo.find_all_device_names.return_value = devices.keys()
-        dev_def_repo.find_by_name.side_effect = lambda name: devices[name]
+        repo.get_all_names_by_location.return_value = devices.keys()
+        repo.get_by_name_location.side_effect = lambda name, loc: devices[name]
 
-        container = DeviceContainer(dev_def_repo)
+    @patch('quactrl.domain.devices.get_class')
+    def should_inject_devices_from_repository(self, get_class):
+        repo = Mock()
+        self.setup_dependencies(repo, get_class)
+
+        container = DeviceContainer(repo)
 
         location = Mock()
         container.set_location(location)
+
+        # Correct injection of attributes
         assert container.location == location
-        assert dev_def_repo.set_location.assert_called_with()
+        assert container.a_device()
+        assert container.a_device().par_1 == 'lorem'
+        assert container.a_device().par_2 == container.other_device()
+        assert container.a_device().par_3 == 'ipsum'
+        assert container.a_device().par_4 == container.other_device()
+
+        assert container.other_device() == container.other_device()
+        assert container.other_device().par_1 == 'dolor'
+
+        # Correct injection of classes
+        assert type(container.a_device()) is FakeDevice
+        assert type(container.other_device()) is OtherFakeDevice
+        assert type(container.a_device().par_2) is OtherFakeDevice
