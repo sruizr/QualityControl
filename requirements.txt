@@ -9,7 +9,8 @@ jedi
 autopep8
 flake8
 yapf
-
+elpy
+black
 
 #rest-behave
 
