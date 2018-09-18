@@ -3,17 +3,15 @@ from quactrl.domain.devices import DeviceContainer
 
 
 class FakeDevice:
-    def __init__(self, par_1, par_2, ):
-        self.part_1 = part_1
-        self.part_2 = part_2
+    def __init__(self, par_1, par_2):
+        self.part_1 = par_1
+        self.part_2 = par_2
 
 
 class OtherFakeDevice:
     def __init__(self, par_1):
         self.part_1
-
-
-
+p
 
 class A_DeviceContainer:
 
