@@ -8,7 +8,7 @@ import quactrl.domain.paths as p
 
 
 def test_parse_part():
-    part = Mock()
+    part = Mock()+
     part.tracking = '123456789'
     part.part_model.name = 'part_name'
     part.resource.key = 'part_number'
