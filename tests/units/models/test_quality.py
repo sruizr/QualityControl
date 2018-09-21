@@ -1,197 +1,191 @@
-from quactrl.domain.quality import Check
+from unittest.mock import Mock, patch
+import quactrl.models.quality as q
 
 
-class A_Control(EmptyDataTest):
-    def should_create_a_check_instance(self):
-        control = p.Control()
-        test = f.Test()
-        test.part = Mock()
-        test.tester = Mock()
+# class A_Control(EmptyDataTest):
+#     def should_create_a_check_instance(self):
+#         control = p.Control()
+#         test = f.Test()
+#         test.part = Mock()
+#         test.tester = Mock()
 
-        responsible = n.Person()
-        test.responsible = responsible
+#         responsible = n.Person()
+#         test.responsible = responsible
 
-        check = control.create_flow(test)
+#         check = control.create_flow(test)
 
-        assert type(check) is f.Check
-        assert check.part == test.part
-        assert check.tester == test.tester
-        assert check.test == test
-        assert check.responsible == responsible
+#         assert type(check) is f.Check
+#         assert check.part == test.part
+#         assert check.tester == test.tester
+#         assert check.test == test
+#         assert check.responsible == responsible
 
 
 class A_Check:
-    def should_run_sync_check(self):
-        test = f.Test()
-        test.notify = Mock()
-        test.part = Mock()
+    def setup_method(self, method):
+        operation = Mock()
+        control = Mock()
+        responsible = Mock()
 
-        check = f.Check()
-        check.test = test
-        check.run()
+        check = q.Check(operation, control, responsible)
 
-        assert test.notify.mock_calls == [call(check)] * 2
+    def should_execute(self):
+        operation = Mock()
+        control = Mock()
+        control.method_pars = {'par':1}
+        method = control.get_method.return_value
+        responsible = Mock()
+        check = q.Check(operation, control, responsible)
+        check.state = 'started'
+
+        check.execute()
+        method.assert_called_with(check, par=1)
+        assert check.state == 'finished'
+
+        # Testing async execution
+        check.state = 'started'
+        check.thread = Mock()
+
+        check.execute()
+        assert check.state == 'ongoing'
+
+    def should_prepare(self):
+        operation = Mock()
+        control = Mock()
+        responsible = Mock()
+        check = q.Check(operation, control, responsible)
+        part = Mock()
+        tester = Mock()
+        check.prepare(subject=part, tester=tester)
+
+        assert check.subject == part
+        assert check.tester == tester
+        assert check.state == 'started'
+
+    @patch('quactrl.models.quality.datetime')
+    def should_close(self, mock_datetime):
+        operation = Mock()
+        control = Mock()
+        responsible = Mock()
+        check = q.Check(operation, control, responsible)
+
+        # Other test
+        check.state = 'finished'
+        check.close()
         assert check.state == 'ok'
+        assert check.finished_on == mock_datetime.datetime.now()
 
-    def should_run_async_check(self):
+        check.state = 'finished'
+        check.defects.append(Mock())
+        check.close()
+        assert check.state == 'nok'
 
-        test = f.Test()
-        test.part = Mock()
-        test.notify = Mock()
-        check = f.Check()
-        check.test = test
-        check.finish = Mock()
-
-        check_runner = CheckRunner(check)
-        check_runner.start()
-
-        check.finished.set()
-        while check_runner.is_alive():
-            pass
-
-        assert check.state == 'ok'
-        assert check.finished_on
-        assert check.started_on
-        assert test.notify.mock_calls == [call(check)] * 3
-
-    def should_cancel_async_check_running(self):
-        test = f.Test()
-        test.part = Mock()
-        test.notify = Mock()
-
-        check = f.Check()
-        check.test = test
-        check.finish = Mock()
-
-        check_runner = CheckRunner(check)
-        check_runner.start()
+    @patch('quactrl.models.quality.datetime')
+    def should_cancel(self, mock_datetime):
+        operation = Mock()
+        control = Mock()
+        responsible = Mock()
+        check = q.Check(operation, control, responsible)
+        check.state = 'ongoing'
+        check.thread = Mock()
 
         check.cancel()
-        while check_runner.is_alive():
-            pass
-
         assert check.state == 'cancelled'
-        assert test.notify.mock_calls == [call(check)] * 3
+        assert check.finished_on == mock_datetime.datetime.now()
         check.thread.cancel.assert_called_with()
 
+    @patch('quactrl.models.quality.Defect')
+    def should_add_defects(self, mock_Defect):
+        defect = mock_Defect.return_value
+        operation = Mock()
+        control = Mock()
+        responsible = Mock()
+        failure_mode = Mock()
+        check = q.Check(operation, control, responsible)
+        check.subject = Mock()
 
-class A_CheckWithHelpers(EmptyDataTest):
-    def should_add_new_measures(self):
-# <<<<<<< HEAD
-#         check = f.Check()
-#         part = i.Part(resourc)
+        check.add_defect(failure_mode, 'tracking', 3)
 
+        assert defect in check.defects
+        mock_Defect.assert_called_with(check.subject, failure_mode, 'tracking', 3)
 
-#         value =2.0
-#         characteristic = r.Characteristic('characteristic')
-#         element_key = 'e_key'
-#         check.add_measure(value, characteristic, element_key)
+    @patch('quactrl.models.quality.Measurement')
+    def should_add_measurements(self, mock_Measurement):
+        measurement = mock_Measurement.return_value
+        operation = Mock()
+        control = Mock()
+        responsible = Mock()
+        characteristic = Mock()
+        check = q.Check(operation, control, responsible)
+        check.subject = Mock()
+        check.add_defect = Mock()
 
-#         part = check.test.part
-#         assert part
-# =======
-        model = r.PartModel()
-        part = i.Part()
-        part.part_model = model
-        characteristic = r.Characteristic()
-        check = f.Check()
-        check.part = part
-        check.outputs = []
+        check.add_measurement(characteristic, 3, 'tracking')
 
-        check.add_measure(2.0, characteristic, element_key='el_1')
+        assert measurement in check.measurements
+        mock_Measurement.assert_called_with(check.subject, characteristic, 3, 'tracking')
+        failure_mode = measurement.eval.return_value
+        check.add_defect.assert_called_with(failure_mode,
+                                            'tracking', 1
+        )
 
-        assert len(part.measurements) == 1
-        measurement = part.measurements[0]
-        assert measurement.qty == 2.0
-        assert measurement.characteristic == characteristic
-        assert measurement == check.outputs[0]
+class A_Defect:
+    def should_be_inserted_into_subject(self):
+        subject = Mock()
+        subject.defects = []
+        failure_mode = Mock()
+        tracking = '1234'
+        qty = 5
 
-# >>>>>>> 6ca63ab1be90bcb96a3efab5df7e3116d40225f5
-
-    def should_replace_old_measures(self):
-        part = i.Part()
-        characteristic = r.Characteristic(key='char')
-        check = f.Check()
-        check.part = part
-        part.tracking = '1234'
-        check.outputs = []
-
-        i.Measurement(part, characteristic, tracking='1234*char[el_1]')
-
-        check.add_measure(2.0, characteristic, element_key='el_1')
-
-        assert len(part.measurements) == 1
-        measurement = part.measurements[0]
-        assert measurement.qty == 2.0
-        assert measurement.characteristic == characteristic
-        assert measurement == check.outputs[0]
+        defect = q.Defect(subject, failure_mode, tracking, qty)
+        assert defect in subject.defects
 
 
-    def should_add_new_defects(self):
-        failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
-        check = f.Check()
-        part = i.Part()
-        part.tracking = '1234'
-        check.part = part
-        check.outputs = []
+class A_Measurement:
+    def should_be_inserted_into_subject(self):
+        subject = Mock()
+        subject.measurements = []
+        characteristic = Mock()
+        tracking = '1234'
 
-        defect = check.add_defect(failure_mode, element_key='el_1', qty=2.0)
+        measurement = q.Measurement(subject, characteristic, tracking)
+        assert measurement in subject.measurements
 
-        assert len(part.defects) == 1
-        assert defect == part.defects[0]
-        assert defect.qty == 2.0
-        assert defect.tracking == '1234*low-char[el_1]'
-        assert defect.failure_mode == failure_mode
-        assert defect == check.outputs[0]
+    def should_eval_value(self):
+        characteristic = Mock()
+        characteristic.limits = [3, 6]
+        subject = Mock()
+        tracking = '1234'
+        measurement = q.Measurement(subject, characteristic, tracking)
 
-    def should_add_old_defects(self):
-        failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
-        part = i.Part()
-        part.tracking = '1234'
-        check = f.Check()
-        check.part = part
-        check.outputs = []
+        # Ok case
+        failure = measurement.eval_value(4)
+        assert failure is None
 
-        defect = i.Defect(part, failure_mode)
-        defect.tracking = '1234*low-char[el_1]'
+        # Low failure case
+        failure = measurement.eval_value(2)
+        characteristic.get_failure.assert_called_with('lo')
+        assert failure == characteristic.get_failure.return_value
 
-        new_defect = check.add_defect(failure_mode, element_key='el_1', qty=2.0)
+        # High failure case
+        failure = measurement.eval_value(7)
+        characteristic.get_failure.assert_called_with('hi')
+        assert failure == characteristic.get_failure.return_value
 
-        assert len(part.defects) == 1
-        assert defect == part.defects[0]
-        assert new_defect == defect
-        assert defect.qty == 2.0
-        assert defect.tracking == '1234*low-char[el_1]'
-        assert defect.failure_mode == failure_mode
-        assert defect == check.outputs[0]
+        # Suspicious low failure case
+        failure = measurement.eval_value(7, 2)
+        characteristic.get_failure.assert_called_with('shi')
+        assert failure == characteristic.get_failure.return_value
 
-
-    def should_clean_old_defects(self):
-        control = p.Control()
-        source_check = f.Check()
-        check = f.Check()
-        check.inputs = []
-        check.control = source_check.control = control
-        failure_mode = r.FailureMode(r.Characteristic(key='char'), 'low')
-
-        part = i.Part()
-        check.part = part
-        defect = i.Defect(part, failure_mode)
-        defect.avalaible_tokens.append(
-            b.Token(item=defect, qty=1.0, producer=source_check)
-            )
-
-        check.clean_old_defects()
-
-        assert defect in check.inputs
-        assert defect.qty == None
+        # Suspicious high failure case
+        failure = measurement.eval_value(7, 2)
+        characteristic.get_failure.assert_called_with('shi')
+        assert failure == characteristic.get_failure.return_value
 
 
-    def should_track_devices(self):
-        devices = [Mock(tracking='{}'.format(i)) for i in range(3)]
+class A_Control:
+    pass
 
-        check = f.Check()
 
-        check.track_devices(*devices)
-
-        assert check.tracking == '0&1&2'
+class A_FailureMode:
+    pass

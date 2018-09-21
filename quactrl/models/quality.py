@@ -1,5 +1,3 @@
-# import documents as docs
-#import quactrl.models.operations as ops
 import datetime
 
 
@@ -32,15 +30,16 @@ class Check:
     def execute(self):
         """Run control method
         """
-        method = self.control.get_method()
-        method(self)
+        if self.state == 'started':
+            method = self.control.get_method()
+            method(self, **self.control.method_pars)
 
-        # if method inserts a thread attribute on check,
-        # the execution is not finished(async)
-        if hasattr(self, 'thread'):
-            self.state == 'ongoing'
-        else:
-            self.state == 'finished'
+            # if method inserts a thread attribute on check,
+            # the execution is not finished(async)
+            if hasattr(self, 'thread'):
+                self.state = 'ongoing'
+            else:
+                self.state = 'finished'
 
     def close(self):
         """Eval results once check is finished
@@ -56,23 +55,65 @@ class Check:
         """
         if self.state == 'ongoing':
             self.thread.cancel()
-            self.thread.join()
             self.state = 'cancelled'
             self.finished_on = datetime.datetime.now()
 
-    def add_measurement(self, characteristic, value, tracking=None):
+    def add_measurement(self, characteristic, value, tracking):
         """Add measurement of a characteristic to check
         """
-        pass
+        measurement = Measurement(self.subject, characteristic, value, tracking)
+        failure_mode = measurement.eval()
+        if failure_mode:
+            self.add_defect(failure_mode, tracking, 1)
 
-    def add_defect(self, failure_mode, qty=1, tracking=None):
+        self.measurements.append(measurement)
+
+    def add_defect(self, failure_mode, tracking, qty=1):
         """Add defect of check
         """
-        pass
+        defect = Defect(self.subject, failure_mode, tracking, qty)
+        self.defects.append(defect)
+
+
+class Defect:
+    """Defect on a subject found by a check action
+    """
+    def __init__(self, subject, failure_mode, tracking, qty=1):
+        self.subject = subject
+        subject.defects.append(self)
+
+        self.failure_mode = failure_mode
+        self.tracking = tracking
+        self.qty = qty
+
+
+class Measurement:
+    """Measurement of a subject done by a check action
+    """
+    def __init__(self, subject, characteristic, tracking):
+        self.subject = subject
+        subject.measurements.append(self)
+
+        self.characteristic = characteristic
+        self.trackig = tracking
+        self.value = None
+
+    def eval_value(self, value, uncertainty=0):
+        mode_key = None
+        low_limit, high_limit = self.characteristic.limits
+
+        if high_limit is not None and value >= high_limit - uncertainty:
+            mode_key = 'hi' if value > high_limit else 'shi'
+
+        if low_limit is not None and value <= low_limit + uncertainty:
+            mode_key = 'lo' if value < low_limit else 'slo'
+
+        if mode_key:
+            return self.characteristic.get_failure(mode_key)
 
 
 class Control:
-    """Quality control of characteristic on a subject
+    """Plan for checking a characteristic on a subject
 
     A subject can be a machine, environment or material
     """
@@ -83,20 +124,16 @@ class Control:
         route.steps.append(self)
 
         self.characteristic = characteristic
-        self.sampling = sampling
+        self.sampling = Samsampling
         self.method = method
         self.reaction = reaction
         self.counter = None
 
-    def count(self, item):
+    def subject_needs_check(self, subject):
         """Counts item (time or units)
         and using sampling decides to create check or not
         """
         pass
-
-    def _create_check(self, operation, responsible=None):
-        pass
-
 
     def get_method(self):
         """Return a method to be executable by check
@@ -110,91 +147,18 @@ class Control:
 
 
 class Sampling:
-    pass
+    def __init__(self, quantity, frequency, count=0):
+        self.quantity = quantity
+        self.frequency = frequency
+        self.count = count
+
+    def coumt(self, subject):
+        return True
 
 
-class Method:
-    def __init__(self, m_class, comment):
-        pass
+class FailureMode:
+    def __init__(self, characteristic, mode):
+        self.characteristic = characteristic
+        self.mode = mode
 
-
-class Failure:
-    """Failure on part
-    """
-    def __init__(self, part, failure_mode):
-        super().__init__(parent=part, resource=failure_mode)
-        self.part.failures[failure_mode.characteristic] = self
-
-    @property
-    def failure_mode(self):
-        return self.resource
-
-    @property
-    def part(self):
-        return self.parent
-
-    def add_defect_from_check(self, check, qty=1):
-        return Defect
-
-
-class Defect:
-    """Defect on part after a check action
-    """
-    def __init__(self, failure, check, qty):
-        super().__init__(item=failure, producer=check, qty=qty)
-
-    @property
-    def failure_mode(self):
-        return self.item
-
-    @property
-    def check(self):
-        return self.producer
-
-
-class Measurement:
-    """Measurement of characteristic on a part/process
-    """
-    def __init__(self, part, characteristic):
-        super().__init__(parent=part, resource=characteristic)
-        self.measures = []
-
-    @property
-    def characteristic(self):
-        return self.resource
-
-    @property
-    def part(self):
-        return self.parent
-
-    def eval_measure_on_check(self, check, value):
-        measure = Measure(self, check)
-        defect = measure.eval(value)
-        if defect:
-            self.part.defects.append(defect)
-
-        return defect
-
-
-class Measure:
-    """Result of measurement after a check action
-    """
-    def __init__(self, measurement, check):
-        super().__init__(item=measurement, producer=check, qty=None)
-
-    @property
-    def measurement(self):
-        return self.item
-
-    @property
-    def value(self):
-        return self.qty
-
-    def eval(self, value):
-        self.qty = value
-
-
-class InspectionReport:
-    def __init__(self, reporter, samples):
-        super().__init__(reporter)
-        self.samples = samples
+        self.characteristic.failure_modes[mode] = self

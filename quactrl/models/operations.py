@@ -1,6 +1,7 @@
 import graph
 
 
+
 class Person(graph.Node):
     pass
 
