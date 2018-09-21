@@ -154,6 +154,7 @@ class A_Measurement(EmptyDataTest):
         assert defect.tracking == 'tr*slw-char'
         assert part.defects[3] == defect
 
+
 class A_Document(EmptyDataTest):
 
     def should_report_from_test(self):
