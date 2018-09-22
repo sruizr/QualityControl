@@ -7,7 +7,7 @@ class A_Check:
     def should_execute(self):
         operation = Mock()
         control = Mock()
-        control.method_pars = {'par':1}
+        control.method_pars = {'par': 1}
         method = control.get_method.return_value
         responsible = Mock()
         check = q.Check(operation, control, responsible)
@@ -82,7 +82,8 @@ class A_Check:
         check.add_defect(failure_mode, 'tracking', 3)
 
         assert defect in check.defects
-        mock_Defect.assert_called_with(check.subject, failure_mode, 'tracking', 3)
+        mock_Defect.assert_called_with(check.subject, failure_mode, 'tracking',
+                                       3)
 
     @patch('quactrl.models.quality.Measurement')
     def should_add_measurements(self, mock_Measurement):
@@ -98,11 +99,12 @@ class A_Check:
         check.add_measurement(characteristic, 3, 'tracking')
 
         assert measurement in check.measurements
-        mock_Measurement.assert_called_with(check.subject, characteristic, 3, 'tracking')
+        mock_Measurement.assert_called_with(check.subject, characteristic, 3,
+                                            'tracking')
         failure_mode = measurement.eval.return_value
         check.add_defect.assert_called_with(failure_mode,
-                                            'tracking', 1
-        )
+                                            'tracking', 1)
+
 
 class A_Defect:
     def should_be_inserted_into_subject(self):
