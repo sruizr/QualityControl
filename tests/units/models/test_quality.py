@@ -1,8 +1,13 @@
 from unittest.mock import Mock, patch
 import quactrl.models.quality as q
 
-
 class A_Check:
+    def setup_method(self, method):
+        operation = Mock()
+        control = Mock()
+        responsible = Mock()
+
+        check = q.Check(operation, control, responsible)
 
     def should_execute(self):
         operation = Mock()
