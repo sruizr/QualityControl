@@ -2,13 +2,6 @@ from unittest.mock import Mock, patch
 import quactrl.models.quality as q
 
 class A_Check:
-    def setup_method(self, method):
-        operation = Mock()
-        control = Mock()
-        responsible = Mock()
-
-        check = q.Check(operation, control, responsible)
-
     def should_execute(self):
         operation = Mock()
         control = Mock()
@@ -182,7 +175,7 @@ class A_Control:
         assert control.last_count == 0
 
         other_control = q.Control(route, part_group, characteristic)
-        assert other_control.sequence == 5
+        assert other_control.sequence == 1
 
     @patch('quactrl.models.quality.get_function')
     def should_get_method(self, mock_get):
@@ -213,7 +206,7 @@ class A_Control:
 
     @patch('quactrl.models.quality.Check')
     @patch('quactrl.models.quality.Sampling')
-    def should_create_check_if_necessary(self, mock_Sampling, mock_Check):
+    def should_create_action_if_necessary(self, mock_Sampling, mock_Check):
         sampling = mock_Sampling.return_value
         route = Mock()
         route.steps = []
@@ -228,11 +221,11 @@ class A_Control:
 
         operation = Mock()
         mock_Sampling.return_value.count.return_value = True
-        check = control.create_check(operation)
+        check = control.create_action(operation)
         assert check == mock_Check.return_value
 
         mock_Sampling.return_value.count.return_value = False
-        assert control.create_check(operation) is None
+        assert control.create_action(operation) is None
 
 
 class A_FailureMode:

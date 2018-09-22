@@ -125,7 +125,7 @@ class Control:
     def __init__(self, route, part_group, characteristic, sampling='100%',
                  method=None, method_pars=None, reaction=None):
         self.route = route
-        self.sequence = route.steps[-1].sequence + 5 if route.steps else 0
+        self.sequence = route.steps[-1].sequence + 1 if route.steps else 0
         route.steps.append(self)
 
         self.characteristic = characteristic
@@ -135,7 +135,7 @@ class Control:
         self.method_pars = method_pars if method_pars else {}
         self.reaction_name = reaction
 
-    def create_check(self, operation):
+    def create_action(self, operation):
         """Counts item (time or units)
         and using sampling decides to create check or not
         """
