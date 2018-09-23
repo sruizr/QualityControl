@@ -18,30 +18,10 @@ class Location:
     pass
 
 
-class PartModel:
-    pass
-
-
-class PartGroup:
-    """Clasification of part models
-    """
-    pass
-
-
-class Batch:
-    """Result of an operation action
-    """
-    pass
 
 
 
 
-
-class Part(Batch):
-    """Part with unique serial number
-    """
-    def __init__(self, **kwargs):
-        super().__init__(qty=1, **kwargs)
 
 
 class IncorrectOperationState(Exception):
@@ -132,7 +112,7 @@ class WrongInboxContent(Exception):
 class Route:
     """Planning of an operation over resources
     """
-    def __init__(self, role, consumes=None, productions=None, parent=None,
+    def __init__(self, role, source=None, destination=None, inputs=None, outputs=None, parent=None,
                  method=None, method_pars=None):
         """Create route from planned inputs and outputs, can be embebed
         """
@@ -143,8 +123,8 @@ class Route:
                              if parent.steps else 0)
             parent.steps.append(self)
 
-        self.consumes = consumes if consumes else []
-        self.productions = productions if productions else []
+        self.inputs = inputs if inputs else {}
+        self.outputs = outputs if outputs else {}
         self.method_name = method
         self.method_pars = method_pars if method_pars else {}
 

@@ -96,22 +96,24 @@ class An_Operation:
 
 class A_Route:
     def should_insert_into_parent(self):
+        role = Mock()
         parent = Mock()
         parent.steps = []
 
-        route = o.Route(parent=parent)
+        route = o.Route(role, parent=parent)
         assert route in parent.steps
         assert route.sequence == 0
 
-        other = o.Route(parent=parent)
+        other = o.Route(role, parent=parent)
         assert len(parent.steps) == 2
         assert other.sequence == 5
 
     @patch('quactrl.models.operations.get_function')
     def should_get_method(self, mock_get):
+        role = Mock()
         parent = Mock()
         parent.steps = []
-        route = o.Route(parent=parent, method='method_name')
+        route = o.Route(role, parent=parent, method='method_name')
 
         method = route.get_method()
 
@@ -121,8 +123,9 @@ class A_Route:
 
     @patch('quactrl.models.operations.Operation')
     def should_create_operation(self, mock_Operation):
+        role = Mock()
         parent_op = Mock()
-        route = o.Route()
+        route = o.Route(role)
 
         operation = route.create_operation(parent_op)
 
