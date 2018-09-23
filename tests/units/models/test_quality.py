@@ -1,80 +1,45 @@
 from unittest.mock import Mock, patch
 import quactrl.models.quality as q
 
+
 class A_Check:
-    def should_execute(self):
+
+    def should_start(self):
         operation = Mock()
         control = Mock()
-        control.method_pars = {'par': 1}
-        method = control.get_method.return_value
-        responsible = Mock()
-        check = q.Check(operation, control, responsible)
-        check.state = 'started'
-
-        check.execute()
-        method.assert_called_with(check, par=1)
-        assert check.state == 'finished'
-
-        # Testing async execution
-        check.state = 'started'
-        check.thread = Mock()
-
-        check.execute()
-        assert check.state == 'ongoing'
-
-    def should_prepare(self):
-        operation = Mock()
-        control = Mock()
-        responsible = Mock()
-        check = q.Check(operation, control, responsible)
+        check = q.Check(operation, control)
         part = Mock()
         tester = Mock()
-        check.prepare(subject=part, tester=tester)
+        check.start(subject=part, tester=tester)
 
-        assert check.subject == part
-        assert check.tester == tester
+        assert check.inbox['subject'] == part
+        assert check.inbox['tester'] == tester
         assert check.state == 'started'
 
-    @patch('quactrl.models.quality.datetime')
-    def should_close(self, mock_datetime):
+    def should_close(self):
         operation = Mock()
         control = Mock()
-        responsible = Mock()
-        check = q.Check(operation, control, responsible)
+        check = q.Check(operation, control)
 
         # Other test
         check.state = 'finished'
         check.close()
         assert check.state == 'ok'
-        assert check.finished_on == mock_datetime.datetime.now()
+        assert check.finished_on
 
         check.state = 'finished'
         check.defects.append(Mock())
         check.close()
         assert check.state == 'nok'
 
-    @patch('quactrl.models.quality.datetime')
-    def should_cancel(self, mock_datetime):
-        operation = Mock()
-        control = Mock()
-        responsible = Mock()
-        check = q.Check(operation, control, responsible)
-        check.state = 'ongoing'
-        check.thread = Mock()
-
-        check.cancel()
-        assert check.state == 'cancelled'
-        assert check.finished_on == mock_datetime.datetime.now()
-        check.thread.cancel.assert_called_with()
 
     @patch('quactrl.models.quality.Defect')
     def should_add_defects(self, mock_Defect):
         defect = mock_Defect.return_value
         operation = Mock()
         control = Mock()
-        responsible = Mock()
         failure_mode = Mock()
-        check = q.Check(operation, control, responsible)
+        check = q.Check(operation, control)
         check.subject = Mock()
 
         check.add_defect(failure_mode, 'tracking', 3)
@@ -88,9 +53,8 @@ class A_Check:
         measurement = mock_Measurement.return_value
         operation = Mock()
         control = Mock()
-        responsible = Mock()
         characteristic = Mock()
-        check = q.Check(operation, control, responsible)
+        check = q.Check(operation, control)
         check.subject = Mock()
         check.add_defect = Mock()
 

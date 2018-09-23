@@ -1,64 +1,31 @@
-import datetime
 from quactrl.helpers import get_function
+from quactrl.models.operations import Route, Operation
 
 
-class Check:
+class Check(Operation):
     """Verification of a characteristic on a part, outputs defects...
     """
-    def __init__(self, operation, control, responsible=None):
-        self.operation = operation
-        operation.actions.append(self)
-
-        if responsible is None:
-            self.responsible = operation.responsible
-
-        self.control = control
-        self.subject = None  # Object to be checked
+    def __init__(self, operation, control):
+        super().__init__(control, operation)
         self.measurements = []
         self.defects = []
-        self.state = 'open'
 
-    def prepare(self, **resources):
-        """Load resources to be used on checking process as attributes
-        """
-        for key, value in resources.items():
-            if key in ('part', 'machine', 'environment'):
-                key = 'subject'
-            setattr(self, key, value)
+    @property
+    def operation(self):
+        return self.parent
 
-        self.started_on = datetime.datetime.now()
-        self.state = 'started'
-
-    def execute(self):
-        """Run control method
-        """
-        if self.state == 'started':
-            method = self.control.get_method()
-            method(self, **self.control.method_pars)
-
-            # if method inserts a thread attribute on check,
-            # the execution is not finished(async)
-            if hasattr(self, 'thread'):
-                self.state = 'ongoing'
-            else:
-                self.state = 'finished'
+    @property
+    def control(self):
+        return self.route
 
     def close(self):
         """Eval results once check is finished
         """
-        if self.state == 'finished':
+        super().close()
+        if self.state == 'closed':
             self.state = 'nok' if self.defects else 'ok'
-            self.finished_on = datetime.datetime.now()
             if self.state == 'nok':
                 self.control.get_reaction()(self)
-
-    def cancel(self):
-        """Cancel execution of check (only if it's asyncronous)
-        """
-        if self.state == 'ongoing':
-            self.thread.cancel()
-            self.state = 'cancelled'
-            self.finished_on = datetime.datetime.now()
 
     def add_measurement(self, characteristic, value, tracking):
         """Add measurement of a characteristic to check
@@ -115,7 +82,7 @@ class Measurement:
             return self.characteristic.get_failure(mode_key)
 
 
-class Control:
+class Control(Route):
     """Plan for checking a characteristic on a subject
 
     A subject can be a machine, environment or material
@@ -123,29 +90,30 @@ class Control:
     _sampling_par = {'100%': (1, 1)}
 
     def __init__(self, route, part_group, characteristic, sampling='100%',
-                 method=None, method_pars=None, reaction=None):
-        self.route = route
-        self.sequence = route.steps[-1].sequence + 1 if route.steps else 0
-        route.steps.append(self)
+                 method=None, method_pars=None, reaction=None, role):
+        inputs = {'part_group': part_group}
+        outputs = {'characteristic': characteristic}
 
-        self.characteristic = characteristic
+        super().__init__(parent=route, consumes=part_group, )
+
         self.last_count = 0
         self.sampling = Sampling(self, *self._sampling_par[sampling])
-        self.method_name = method
-        self.method_pars = method_pars if method_pars else {}
         self.reaction_name = reaction
 
-    def create_action(self, operation):
+    @property
+    def characteristic(self):
+        return self.outputs['characteristic'][0]
+
+    @property
+    def part_group(self):
+        return self.inputs['part_group'][0]
+
+    def create_operation(self, parent):
         """Counts item (time or units)
         and using sampling decides to create check or not
         """
-        if self.sampling.count(operation):
-            return Check(operation, self)
-
-    def get_method(self):
-        """Return a method to be executable by check
-        """
-        return get_function(self.method_name)
+        if self.sampling.count(parent):
+            return Check(parent, self)
 
     def get_reaction(self):
         """Return a reaction method to be executed if check is nok
