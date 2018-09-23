@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 import quactrl.models.quality as q
 
+
 class A_Check:
     def should_execute(self):
         operation = Mock()

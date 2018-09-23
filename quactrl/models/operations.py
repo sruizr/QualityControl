@@ -1,4 +1,6 @@
 import datetime
+from quactrl.helpers import get_function
+
 
 class Person:
     pass
@@ -32,11 +34,6 @@ class Batch:
     pass
 
 
-class Route:
-    """Planning of an operation on parts
-    """
-    def __init__(self, inputs, outputs, source, destination):
-        self.steps = []
 
 
 
@@ -45,6 +42,10 @@ class Part(Batch):
     """
     def __init__(self, **kwargs):
         super().__init__(qty=1, **kwargs)
+
+
+class IncorrectOperationState(Exception):
+    pass
 
 
 class Operation:
@@ -59,13 +60,15 @@ class Operation:
             self.parent.add_action(self)
             self.responsible = parent.responsible
 
-        self.actions = []
+        self.operations = []
+        self.inputs = {}
+        self.outputs = {}
         self.state = 'open'
         self._cancel = False
+        self.on_op = None
 
-    def start(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+    def start(self, **inputs):
+        self.inputs.update(inputs)
         self.started_on = datetime.datetime.now()
         self.state = 'started'
         self.current_action = None
@@ -80,24 +83,27 @@ class Operation:
         else:
             self.state = 'finished'
 
-    def execute_actions(self):
+    def walk(self):
+        """Execute each child operation
+        """
         self.state = 'walking'
-        for action in self.get_actions():
-            self.current_action = action
-            action.start()
-            action.execute()
-            if action.state == 'ongoing':
-                action.thread.join()
-            action.close()
-            self.current_action = None
-        self.state = 'started'
+        for op in self._list_subops():
+            if op:  # step could no create operation!
+                self.on_op = op
+                op.start(**self.inputs)
+                op.execute()
+                if op.state == 'ongoing':
+                    op.thread.join()
+                op.close()
+                self.on_op = None
+        self.state = 'walked'
 
-    def list_actions(self):
+    def _list_subops(self):
         for step in self.route.steps:
             if self._cancel:
                 break
             else:
-                yield step.create_action(self)
+                yield step.create_operation(self)
 
     def close(self):
         if self.state == 'finished':
@@ -111,5 +117,36 @@ class Operation:
             self.thread.cancel()
         elif self.state == 'walking':
             self._cancel = True
+            self.current_op.cancel()
         self.state = 'cancelled'
         self.finished_on = datetime.datetime.now()
+
+class Route:
+    """Planning of an operation on parts
+    """
+    def __init__(self, inputs, outputs, source, destination):
+        self.steps = []
+    def __init__(self, route, part_group, characteristic, sampling='100%',
+                 method=None, method_pars=None, reaction=None):
+        self.route = route
+        self.sequence = route.steps[-1].sequence + 1 if route.steps else 0
+        route.steps.append(self)
+
+        self.characteristic = characteristic
+        self.last_count = 0
+        self.sampling = Sampling(self, *self._sampling_par[sampling])
+        self.method_name = method
+        self.method_pars = method_pars if method_pars else {}
+        self.reaction_name = reaction
+
+    def create_action(self, operation):
+        """Counts item (time or units)
+        and using sampling decides to create check or not
+        """
+        if self.sampling.count(operation):
+            return Check(operation, self)
+
+    def get_method(self):
+        """Return a method to be executable by check
+        """
+        return get_function(self.method_name)
