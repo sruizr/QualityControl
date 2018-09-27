@@ -89,12 +89,12 @@ class Control(Route):
     """
     _sampling_par = {'100%': (1, 1)}
 
-    def __init__(self, route, part_group, characteristic, sampling='100%',
-                 method=None, method_pars=None, reaction=None, role):
+    def __init__(self, route, part_group, characteristic, sampling,
+                 method, method_pars=None, role=None, reaction=None):
         inputs = {'part_group': part_group}
         outputs = {'characteristic': characteristic}
 
-        super().__init__(parent=route, consumes=part_group, )
+        super().__init__(role, parent=route, inputs=inputs, outputs=outputs)
 
         self.last_count = 0
         self.sampling = Sampling(self, *self._sampling_par[sampling])
@@ -102,11 +102,11 @@ class Control(Route):
 
     @property
     def characteristic(self):
-        return self.outputs['characteristic'][0]
+        return self.outputs['characteristic']
 
     @property
     def part_group(self):
-        return self.inputs['part_group'][0]
+        return self.inputs['part_group']
 
     def create_operation(self, parent):
         """Counts item (time or units)

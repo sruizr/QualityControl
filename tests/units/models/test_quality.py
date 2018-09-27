@@ -4,7 +4,6 @@ import quactrl.models.quality as q
 
 
 class A_Check:
-
     def should_start(self):
         operation = Mock()
         control = Mock()
@@ -128,32 +127,16 @@ class A_Measurement:
 
 
 class A_Control:
-    def should_insert_into_route(self):
+    def should_init(self):
         route = Mock()
         route.steps = []
         part_group = Mock()
         characteristic = Mock()
-
-        control = q.Control(route, part_group, characteristic)
-        assert control in route.steps
-        assert control.sequence == 0
-        assert control.last_count == 0
-
-        other_control = q.Control(route, part_group, characteristic)
-        assert other_control.sequence == 1
-
-    @patch('quactrl.models.quality.get_function')
-    def should_get_method(self, mock_get):
-        route = Mock()
-        route.steps = []
-        part_group = Mock()
-        characteristic = Mock()
+        sampling = '100%'
         method = 'method_name'
-        control = q.Control(route, part_group, characteristic, method=method)
-
-        method = control.get_method()
-        mock_get.assert_called_with('method_name')
-        assert method == mock_get.return_value
+        control = q.Control(route, part_group, characteristic, '100%', 'method_name')
+        assert characteristic == control.characteristic
+        assert part_group == control.part_group
 
     @patch('quactrl.models.quality.get_function')
     def should_get_reaction(self, mock_get):
@@ -163,7 +146,7 @@ class A_Control:
         characteristic = Mock()
         reaction = 'reaction_name'
         control = q.Control(route, part_group, characteristic,
-                            reaction=reaction)
+                            '100%', 'method_name', reaction=reaction)
         method = control.get_reaction()
 
         mock_get.assert_called_with('reaction_name')
@@ -171,7 +154,7 @@ class A_Control:
 
     @patch('quactrl.models.quality.Check')
     @patch('quactrl.models.quality.Sampling')
-    def should_create_action_if_necessary(self, mock_Sampling, mock_Check):
+    def should_create_check_if_necessary(self, mock_Sampling, mock_Check):
         sampling = mock_Sampling.return_value
         route = Mock()
         route.steps = []
@@ -180,17 +163,17 @@ class A_Control:
         sampling = '100%'
         method = 'method_name'
         reaction = 'reaction_name'
-        control = q.Control(route, part_group, characteristic, sampling,
-                            method, reaction)
+        control = q.Control(route, part_group, characteristic, '100%',
+                            'method_name', reaction)
         assert mock_Sampling.return_value == control.sampling
 
         operation = Mock()
         mock_Sampling.return_value.count.return_value = True
-        check = control.create_action(operation)
+        check = control.create_operation(operation)
         assert check == mock_Check.return_value
 
         mock_Sampling.return_value.count.return_value = False
-        assert control.create_action(operation) is None
+        assert control.create_operation(operation) is None
 
 
 class A_FailureMode:
