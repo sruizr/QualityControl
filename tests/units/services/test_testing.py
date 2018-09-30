@@ -1,4 +1,5 @@
 from unittest.mock import Mock, patch
+import time
 from ...units import TestWithPatches
 from queue import Queue
 import threading
@@ -19,7 +20,7 @@ class A_TestingService(TestWithPatches):
         serv = self.service
 
         serv.setup('loc', till_first_failure=False)
-        assert serv.cavities== 1
+        assert serv.cavities == 1
         assert serv.active_cavities == [None]
         self.Inspector.assert_called_with(
             serv.db, serv.dev_container, 'loc',  None, False
@@ -74,7 +75,12 @@ class A_TestingService(TestWithPatches):
         pass
 
 
-class An_Inspector:
+class An_Inspector(TestWithPatches):
+
+    def setup_method(self, method):
+        self.create_patches([
+            'quactrl.services.testing.Question'
+        ])
 
     def should_have_correct_name(self):
         inspector = t.Inspector(Mock(), Mock(), 'loc')
@@ -110,21 +116,63 @@ class An_Inspector:
         get_route.assert_called_with(inspector.part_model,
                                      db.Locations().get_by_key.return_value)
 
-    def should_start_run_stop(self):
+    def should_run_till_None_order(self):
         inspector = t.Inspector(Mock(), Mock(), 'loc')
         inspector.run_test = Mock()
 
-        inspector.start()
+        inspector.start()       #
         inspector.orders.put('mock_order')
+        time.sleep(0.1)
+        assert inspector.orders.qsize() == 0
 
-
-
-    def should_stack_part(self):
-        pass
+        inspector.run_test.assert_called_with('mock_order')
+        inspector.orders.put(None)
+        time.sleep(0.1)
+        assert not inspector.is_alive()
 
     def should_stop(self):
-        pass
+        inspector = t.Inspector(Mock(), Mock(), 'loc')
+        inspector.run_test = lambda order: time.sleep(0.1)
 
+        inspector.start()
+        inspector.orders.put('mock_order 1')
+        inspector.orders.put('mock_order 2')
+        inspector.orders.put('mock_order 3')
+
+        time.sleep(0.1)
+        orders = inspector.stop()
+        assert inspector.orders.qsize() == 0
+        assert len(orders) == 2
+        time.sleep(0.1)
+        assert not inspector.is_alive()
+
+    def should_process_questions(self):
+        inspector = t.Inspector(Mock(), Mock(), 'loc')
+        question = inspector.ask('Do you want to live forever?')
+        event = inspector.events.get()
+        assert event == ('waiting', question)
+        assert question == self.Question.return_value
+
+
+class  A_Question:
+    def ask_question(self, question):
+        question.ask('Are you?', 'bubilla?')
+
+    def should_wait_till_answer(self):
+        question = t.Question()
+        thread = threading.Thread(target=self.ask_question,
+                                  args=(question,))
+
+        thread.start()
+        assert thread.is_alive()
+
+        question.answer('Yes, I am')
+        time.sleep(0.1)
+
+        assert not thread.is_alive()
+
+        assert question.request == ('Are you?', 'bubilla?' )
+        assert question.response == ['Yes, I am']
 
 
         #     def should_setup(self):

@@ -211,10 +211,27 @@ class Inspector(threading.Thread):
     def stop(self):
         """Stop thread and return unprocessed orders"""
         pending_orders = []
+        self._stop_event.set()
 
         if self.orders.qsize() != 0:
             while not self.orders.empty():
                 pending_orders.append(self.orders.get())
-        self.orders.put(None)
 
         return pending_orders
+
+    def ask(self, message, *args):
+        question = Question()
+        self.events.put(('waiting', question))
+        question.ask(message, *args)
+        return question
+
+
+class Question(threading.Event):
+
+    def ask(self, message, *args):
+        self.request = (message, *args)
+        self.wait()
+
+    def answer(self, *args):
+        self.response = [arg for arg in args]
+        self.set()
