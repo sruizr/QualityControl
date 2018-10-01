@@ -1,4 +1,5 @@
 import datetime
+import sys
 from quactrl.helpers import get_function
 
 
@@ -43,15 +44,28 @@ class Operation:
         self.operations = []
         self.inbox = {}
         self.outbox = {}
-        self.state = 'open'
+        self.udpate = None
+        self._state = 'open'
         self._cancel = False
         self.on_op = None
 
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, state):
+        self._state = state
+        if self.udpate:
+            self.update(state, self)
+
     def start(self, **inputs):
+        self.update = inputs.get('update')
         self.inbox.update(inputs)
         self.started_on = datetime.datetime.now()
         self.state = 'started'
-        self.current_action = None
+        if self.udpate:
+            self.udpate('started', self)
 
     def execute(self):
         """Execute method asociated to route
@@ -73,11 +87,17 @@ class Operation:
         for op in self._list_subops():
             if op:  # step could no create operation!
                 self.on_op = op
-                op.start(**self.inbox)
-                op.execute()
-                if op.state == 'ongoing':
-                    op.thread.join()
-                op.close()
+                op.start(update=self.update, **self.inbox)
+                try:
+                    op.execute()
+                    if op.state == 'ongoing':
+                        op.thread.join()
+                    op.close()
+                except Exception as e:
+                    if self.update:
+                        self.update(*sys.exc_info())
+                    raise e
+
                 self.on_op = None
         self.state = 'walked'
 

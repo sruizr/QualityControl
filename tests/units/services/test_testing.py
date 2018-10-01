@@ -63,7 +63,9 @@ class A_TestingService(TestWithPatches):
 
         serv.stack_test('part_info', 'responsible_key', 1)
 
-        inspector.orders.put.assert_called_with(('part_info', 'responsible_key'))
+        inspector.orders.put.assert_called_with(
+            ('part_info', 'responsible_key')
+        )
 
     def should_tear_down(self):
         pass
@@ -152,6 +154,36 @@ class An_Inspector(TestWithPatches):
         event = inspector.events.get()
         assert event == ('waiting', question)
         assert question == self.Question.return_value
+
+    def should_run_test(self):
+        db = Mock()
+        dev_container = Mock()
+
+        inspector = t.Inspector(db, dev_container, 'ĺoc')
+        inspector.set_responsible = Mock()
+        inspector.set_route_for = Mock()
+        route = inspector.route = Mock()
+
+        part_info = {'part_number': 'part_number'}
+        part = db.Parts().get_or_create.return_value
+
+        inspector.run_test((part_info, 'resp'))
+
+        inspector.set_responsible.assert_called_with('resp')
+        inspector.set_route_for.assert_called_with(part)
+        test = route.create_operation.return_value
+
+        test.start.assert_called_with(
+            subject=part, dev_container=dev_container,
+            cavity=None, tff=inspector.tff,
+            update=inspector.update
+        )
+        test.walk.assert_called_with()
+        test.execute.assert_called_with()
+        test.close.assert_called_with()
+        db.Session().commit.assert_called_with()
+
+
 
 
 class  A_Question:

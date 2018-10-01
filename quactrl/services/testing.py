@@ -180,19 +180,15 @@ class Inspector(threading.Thread):
         """Process a full test  from an order
         """
         part_info, responsible_key = order
-        part = self.db.Parts().get_or_create(
-            part_info['part_number'], part_info['tracking'],
-            self.location)
-
-        self.set_responsible_by(responsible_key)
+        part = self.db.Parts().get_or_create(self.location, **part_info)
+        self.set_responsible(responsible_key)
         self.set_route_for(part)
 
         self.test = test = self.route.create_operation(self.responsible)
         self.db.Tests().add(test)
 
-        test.start(subject=part, observer=self,
-                   dev_container=self.dev_container,
-                   cavity=self.cavity, tff=self.service.tff)
+        test.start(subject=part, dev_container=self.dev_container,
+                   cavity=self.cavity, tff=self.tff, update=self.update)
         try:
             test.walk()
             test.execute()
@@ -203,10 +199,10 @@ class Inspector(threading.Thread):
         finally:
             self.db.Session().commit()
 
-    def update(self, obj, message, *args):
+    def update(self, state, obj, *args):
         """Receive from test notications of states
         """
-        self.events.put((obj, message, *args))
+        self.events.put((state, obj, *args))
 
     def stop(self):
         """Stop thread and return unprocessed orders"""
