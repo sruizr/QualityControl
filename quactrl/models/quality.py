@@ -30,17 +30,19 @@ class Check(Operation):
     def add_measurement(self, characteristic, value, tracking):
         """Add measurement of a characteristic to check
         """
+
         measurement = Measurement(self.subject, characteristic, value,
-                                  tracking)
+                                  tracking=None)
         failure_mode = measurement.eval()
         if failure_mode:
             self.add_defect(failure_mode, tracking, 1)
 
         self.measurements.append(measurement)
 
-    def add_defect(self, failure_mode, tracking, qty=1):
+    def add_defect(self, characteristic, mode_key, tracking=None, qty=1):
         """Add defect of check
         """
+        failure_mode = characteristic.failure_modes[mode_key]
         defect = Defect(self.subject, failure_mode, tracking, qty)
         self.defects.append(defect)
 
@@ -89,10 +91,10 @@ class Control(Route):
     """
     _sampling_par = {'100%': (1, 1)}
 
-    def __init__(self, route, part_group, characteristic, sampling,
+    def __init__(self, route, part_group, requirement, sampling,
                  method, method_pars=None, role=None, reaction=None):
         inputs = {'part_group': part_group}
-        outputs = {'characteristic': characteristic}
+        outputs = {'requirement': requirement}
 
         super().__init__(role, parent=route, inputs=inputs, outputs=outputs)
 
@@ -137,4 +139,10 @@ class FailureMode:
         self.characteristic = characteristic
         self.mode = mode
 
-        self.characteristic.failure_modes[mode] = self
+        self.characteristic.failure_modes[mode.key] = self
+
+
+class Mode:
+    def __init__(self, key, name):
+        self.key = key
+        self.name = name

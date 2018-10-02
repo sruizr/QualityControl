@@ -104,7 +104,8 @@ class TestingService:
 
     def restart_inspector(self, cavity=None):
         pending_orders = self.inspectors[cavity].stop()
-        inspector = Inspector(self.db, self.dev_container, self.location_key, cavity, self.ttf)
+        inspector = Inspector(self.db, self.dev_container, self.location_key,
+                              cavity, self.ttf)
         for order in pending_orders:
             inspector.orders.put(order)
 
@@ -137,6 +138,7 @@ class Inspector(threading.Thread):
         # Inputs and Outputs of inspector
         self.orders = Queue()
         self.events = Queue()
+        self.state = 'avalaible'
 
         # Batch variables
         self.responsible = None
@@ -168,13 +170,17 @@ class Inspector(threading.Thread):
     def run(self):
         """Thread activation processing order by order"""
         while not self._stop_event.is_set():
+            self.state = 'waiting'
             order = self.orders.get()
             if order is None:
                 self.orders.task_done()
                 break
             else:
+                self.state = 'iddle'
                 self.run_test(order)
                 self.orders.task_done()
+
+        self.state = 'stopped'
 
     def run_test(self, order):
         """Process a full test  from an order
@@ -196,6 +202,7 @@ class Inspector(threading.Thread):
         except Exception as e:
             self.update('exception', e)
             test.cancel()
+            self.state = 'cancelled'
         finally:
             self.db.Session().commit()
 

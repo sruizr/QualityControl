@@ -12,12 +12,30 @@ class Device:
     """
     pass
 
+class DeviceModel:
+    pass
+
 
 class Location:
     """Site of products
     """
     pass
 
+
+class Part(Batch):
+    """Part with unique serial number
+    """
+    def __init__(self, model, tracking, location=None):
+        super().__init__(qty=1, **kwargs)
+
+
+class Batch:
+    """Result of an operation action
+    """
+    def __init__(self, model, tracking, qty):
+        self.model = model
+        self.tracking = tracking
+        self.qty = qty
 
 
 
