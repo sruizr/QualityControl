@@ -1,4 +1,4 @@
-from .graph import Item, Resource
+import re
 
 
 class PartGroup:
@@ -9,32 +9,32 @@ class PartGroup:
         self.name = name
         self.description = description
         self.part_models = []
-        self.requirements = []
+        self.requirements = {}
 
 
 class PartModel(PartGroup):
-
+    """Abstraction of part, type of part
+    """
     def __init__(self, part_number, description, name=None):
         self.key = part_number
         self.name = name
         self.description = description
         self.part_groups = []
-        self.requirements = []
-
-    def get_all_requirements(self):
-        pass
+        self.requirements = {}
 
 
 class Requirement:
     """Requirement of PartModel, PartGroup or other requirements
     """
-    def __init__(self, parent, characteristic, specs=None):
-        self.parent = parent
-        parent.requirements.append(self)
-        self.key = '{}*{}'.format(parent.key, characteristic.key)
-
+    def __init__(self, characteristic, key, specs=None):
+        self.key = key
         self.characteristic = characteristic
         self.specs = specs if specs else {}
+        self.requirements = []
+
+    @property
+    def eid(self):
+        return re.findall('.*>(.*)', self.key)
 
 
 class Characteristic:
