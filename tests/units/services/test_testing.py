@@ -13,54 +13,49 @@ class A_TestingService(TestWithPatches):
             'quactrl.services.testing.DeviceContainer'
         ])
         self.db = Mock()
-        self.service = t.TestingService(self.db)
+        self.service = t.Service(self.db, 'location')
 
-    def should_setup_without_cavities(self):
-        serv = self.service
+    def should_init_without_cavities(self):
+        serv = t.Service(self.db, 'location')
 
-        serv.setup('loc', till_first_failure=False)
         assert serv.cavities == 1
         assert serv.active_cavities == [None]
         self.Inspector.assert_called_with(
-            serv.db, serv.dev_container, 'loc',  None, False
+            serv.db, serv.dev_container, 'location',  None, True
         )
         inspector = self.Inspector.return_value
         inspector.start.assert_called_with()
 
-    def should_setup_with_all_cavities(self):
-        serv = self.service
-
-        serv.setup('loc', 5)
+    def should_init_with_all_cavities(self):
+        serv = t.Service(self.db, 'location', 5)
 
         assert serv.cavities == 5
         for cavity in range(5):
             assert cavity in serv.inspectors.keys()
 
-    def should_setup_with_some_cavities(self):
-        serv = self.service
-
-        serv.setup('loc', [2, 3])
+    def should_init_with_some_cavities(self):
+        serv = t.Service(self.db, 'location', [2, 3])
 
         assert serv.cavities == 2
         for cavity in [2, 3]:
             assert cavity in serv.inspectors.keys()
 
-    def should_raise_exception_when_there_are_inspectors_working(self):
+    def _should_raise_exception_when_there_are_inspectors_working(self):
         serv = self.service
 
         serv.inspectors = {1: Mock()}
         try:
-            serv.setup('lock')
+
             pytest.fail('No InspectorException raised')
         except t.InspectorException:
             pass
 
-    def should_stack_test_on_cavity(self):
+    def should_stack_part_on_cavity(self):
         serv = self.service
         inspector = Mock()
         serv.inspectors = {1: inspector}
 
-        serv.stack_test('part_info', 'responsible_key', 1)
+        serv.stack_part('part_info', 'responsible_key', 1)
 
         inspector.orders.put.assert_called_with(
             ('part_info', 'responsible_key')
@@ -74,6 +69,7 @@ class A_TestingService(TestWithPatches):
 
     def should_restart_inspector(self):
         pass
+
 
 
 class An_Inspector(TestWithPatches):
@@ -167,7 +163,9 @@ class An_Inspector(TestWithPatches):
         inspector.set_route_for = Mock()
         route = inspector.route = Mock()
 
-        part_info = {'part_number': 'part_number'}
+        part_info = {'part_number': 'part_number',
+                     'serial_number': '1234567890'
+        }
         part = db.Parts().get_or_create.return_value
 
         inspector.run_test((part_info, 'resp'))

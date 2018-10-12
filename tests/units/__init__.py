@@ -2,7 +2,6 @@ from unittest.mock import patch
 import pytest
 
 
-
 current = pytest.mark.current
 
 
@@ -14,6 +13,7 @@ class TestWithPatches:
         for definition in definitions:
             patcher = patch(definition, autospec=True)
             name = definition.split('.')[-1]
+
             self.patch[name] = patcher.start()
             self._patchers.append(patcher)
             setattr(self, name, self.patch[name])
