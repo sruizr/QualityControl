@@ -14,70 +14,51 @@ class InspectorException(Exception):
     pass
 
 
-class TestingService:
+class Service:
     """Test parts from a location"""
-    def __init__(self, database):
+    def __init__(self, database, location, cavities, till_first_failure=True):
         self.db= database
 
         self.events = {}
-        self.inspectors = {}
-        self.location_key = None
-        self.dev_container = DeviceContainer(self.db.DeviceDefs())
+        self.location_key = location
 
-    @property
-    def cavities(self):
-        return len(self.inspectors)
+        self.dev_container = DeviceContainer(self.db.DeviceDefs(), location)
+        self.dev_container.set_location(location)
+        self._start_inspectors(cavities, till_first_failure)
 
-    @property
-    def tests(self):
-        """List tests by cavity"""
-        return {cavity: inspector.test
-                for cavity, inspector in zip(self.active_cavities, self.inspectors)
-        }
 
-    def setup(self, location_key, cavities=None, till_first_failure=True):
-        """Setup Manager with running variables"""
-        self.tff = till_first_failure
-        self.location_key = location_key
+    def restart(self, cavities, till_first_failure):
+        self.stop()
+        self._start_inspectors(cavities, till_first_failure)
 
-        self.dev_container.set_location(location_key)
-
+    def _start_inspectors(self, cavities, tff):
         for inspector in self.inspectors.values():
             if inspector.is_alive():
                 raise InspectorException('Inspector {} is still alive, stop it before new setup'.format(inspector.name))
                 inspector.stop()
 
         if cavities is None:
-            self.active_cavities = [None]
+            active_cavities = [None]
         else:
             if type(cavities) is int:
-                self.active_cavities = list(range(cavities))
+                active_cavities = list(range(cavities))
             elif type(cavities) is list:
-                self.active_cavities = cavities
+                active_cavities = cavities
 
         self.inspectors = {
             cavity: Inspector(self.db, self.dev_container, self.location_key,
                               cavity, till_first_failure)
-            for cavity in self.active_cavities
+            for cavity in active_cavities
         }
 
         for inspector in self.inspectors.values():
             inspector.start()
 
-    def stack_test(self, part_info, responsible_key, cavity=None):
-        """Start test from part_information, responsible and other process parameters"""
-        inspector = self.inspectors[cavity]
-        inspector.orders.put((part_info, responsible_key))
-
-    def notify(self, info, cavity=None):
-        """Transfer notification from client to inspector"""
-        self.inspectors[cavity - 1].notify(info)
-
-    def stop_inspector(self, cavity=None):
+    def stop(self, inspector=None):
         """Stop a concrete inspector or all inspectors"""
         pending_orders = []
 
-        if cavity is None:
+        if inspector is None:
             for inspector in self.inspectors:
                 if inspector:
                     pending_orders.extend(inspector.stop())
@@ -89,6 +70,31 @@ class TestingService:
                 pending_orders.extend(inspector.stop())
             self.inspectors[cavity - 1] = Inspector(self)
         return pending_orders
+
+
+    @property
+    def cavities(self):
+        return len(self.inspectors)
+
+    @property
+    def active_cavities(self):
+        return list(self.inspectors.keys())
+
+    @property
+    def tests(self):
+        """List tests by cavity"""
+        return {cavity: inspector.test
+                for cavity, inspector in zip(self.active_cavities, self.inspectors)
+        }
+
+    def stack_part(self, part_info, responsible_key, cavity=None):
+        """Start test from part_information, responsible and other process parameters"""
+        inspector = self.inspectors[cavity]
+        inspector.orders.put((part_info, responsible_key))
+
+    def notify(self, info, cavity=None):
+        """Transfer notification from client to inspector"""
+        self.inspectors[cavity - 1].notify(info)
 
     def get_events(self, cavity=None):
         """Get events from inspector and store them to manager.events"""
