@@ -14,11 +14,11 @@ class InspectorException(Exception):
 class Service:
     """Test parts from a location"""
     def __init__(self, database, location, cavities=None,
-                 till_first_failure=True, sn_gen=None):
+                 till_first_failure=True, sn_compose=None):
         self.db = database
         self.tff = till_first_failure
         self.location_key = location
-        self.sn_gen = None
+        self.sn_compose = None
 
         self.events = {}
         self.inspectors = {}
@@ -26,6 +26,8 @@ class Service:
         self.dev_container = DeviceContainer(self.db.DeviceDefs())
         self.dev_container.set_location(location)
         self._start_inspectors(cavities)
+        self._batches = {}
+        self._lock = threading.Lock()
 
     @property
     def cavities(self):
@@ -40,6 +42,21 @@ class Service:
         """List tests by cavity"""
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
+
+    def gen_sn(self, part_number, batch_number):
+        if self.sn_compose is None:
+            raise Exception('No sn_compose function is defined')
+
+        with self._lock:
+            if batch_number not in self._batches:
+                self._batches[batch_number] = self.db.Parts().get_or_create_batch(
+                    part_number, batch_number
+                )
+            batch = self._batches[batch_number]
+            counter = batch.qty = batch.qty + 1
+            self.db.session().commit()
+
+        return self.sn_compose(batch_number, counter)
 
     def _start_inspectors(self, cavities):
         if cavities is None:
@@ -186,7 +203,9 @@ class Inspector(threading.Thread):
         """
         part_info, responsible_key = order
         if 'serial_number' not in part_info:
-            part_info['serial_number'] = self.gen_sn(part_info['batch_number'])
+            part_info['serial_number'] = self.gen_sn(
+                part_info['part_number'],
+                part_info['batch_number'])
 
         part = self.db.Parts().get_or_create(self.location, **part_info)
         self.set_responsible(responsible_key)
