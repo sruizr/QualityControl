@@ -30,18 +30,19 @@ class Requirement:
         self.key = key
         self.characteristic = characteristic
         self.specs = specs if specs else {}
-        self.requirements = []
+        self.requirements = {}
 
     @property
     def eid(self):
-        return re.findall('.*>(.*)', self.key)
+        return re.findall('.*>(.*)', self.key)[0]
 
 
 class Characteristic:
     """Attribute on an element
     """
-    def __init__(self, attribute, element):
-        self.key = '{}@{}'.format(attribute.key, element.key)
+    def __init__(self, attribute, element, key=None):
+        self.key = '{}@{}'.format(attribute.key, element.key) \
+            if key is None else key
         self.attribute = attribute
         self.element = element
         self.failure_modes = {}
@@ -59,3 +60,12 @@ class Element:
 
     def path(self):
         return '{}/{}'.format(self.parent.path(), self.key)
+
+
+class  Attribute:
+    """Evaluable attribute of an element
+    """
+    def __init__(self, key, name, description=None):
+        self.key = key
+        self.name = name
+        self.description = description
