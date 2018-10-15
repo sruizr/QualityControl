@@ -1,8 +1,5 @@
 import threading
-import sys
 from queue import Queue
-import quactrl.models.operations as ops
-import quactrl.models.quality as qua
 from quactrl.models.devices import DeviceContainer
 
 
@@ -14,81 +11,106 @@ class InspectorException(Exception):
     pass
 
 
-class TestingService:
+class Service:
     """Test parts from a location"""
-    def __init__(self, database):
-        self.db= database
+    def __init__(self, database, location, cavities=None,
+                 till_first_failure=True, sn_compose=None):
+        self.db = database
+        self.tff = till_first_failure
+        self.location_key = location
+        self.sn_compose = None
 
         self.events = {}
         self.inspectors = {}
-        self.location_key = None
+
         self.dev_container = DeviceContainer(self.db.DeviceDefs())
+        self.dev_container.set_location(location)
+        self._start_inspectors(cavities)
+        self._batches = {}
+        self._lock = threading.Lock()
 
     @property
     def cavities(self):
         return len(self.inspectors)
 
     @property
+    def active_cavities(self):
+        return list(self.inspectors.keys())
+
+    @property
     def tests(self):
         """List tests by cavity"""
         return {cavity: inspector.test
-                for cavity, inspector in zip(self.active_cavities, self.inspectors)
-        }
+                for cavity, inspector in self.inspectors.items()}
 
-    def setup(self, location_key, cavities=None, till_first_failure=True):
-        """Setup Manager with running variables"""
-        self.tff = till_first_failure
-        self.location_key = location_key
+    def gen_sn(self, part_number, batch_number):
+        if self.sn_compose is None:
+            raise Exception('No sn_compose function is defined')
 
-        self.dev_container.set_location(location_key)
+        with self._lock:
+            if batch_number not in self._batches:
+                self._batches[batch_number] = self.db.Parts().get_or_create_batch(
+                    part_number, batch_number
+                )
+            batch = self._batches[batch_number]
+            counter = batch.qty = batch.qty + 1
+            self.db.session().commit()
 
-        for inspector in self.inspectors.values():
-            if inspector.is_alive():
-                raise InspectorException('Inspector {} is still alive, stop it before new setup'.format(inspector.name))
-                inspector.stop()
+        return self.sn_compose(batch_number, counter)
 
+    def _start_inspectors(self, cavities):
         if cavities is None:
-            self.active_cavities = [None]
+            active_cavities = [None]
         else:
             if type(cavities) is int:
-                self.active_cavities = list(range(cavities))
+                active_cavities = list(range(cavities))
             elif type(cavities) is list:
-                self.active_cavities = cavities
+                active_cavities = cavities
 
-        self.inspectors = {
-            cavity: Inspector(self.db, self.dev_container, self.location_key,
-                              cavity, till_first_failure)
-            for cavity in self.active_cavities
-        }
-
-        for inspector in self.inspectors.values():
+        for cavity in active_cavities:
+            inspector = Inspector(self.db, self.dev_container,
+                                  self.location_key, cavity, self.tff)
             inspector.start()
+            self.inspectors[cavity] = inspector
 
-    def stack_test(self, part_info, responsible_key, cavity=None):
-        """Start test from part_information, responsible and other process parameters"""
+    def restart(self, cavities=None, clean_orders=False):
+        """Restart inspectors
+        """
+        if cavities is None:
+            cavities = self.active_cavities
+
+        for cavity in cavities:
+            pending_orders = self.stop(cavity)
+            inspector = Inspector(self.db, self.dev_container,
+                                  self.location_key, cavity, self.ttf)
+            self.inspectors[cavity] = inspector
+            inspector.start()
+            if not clean_orders:
+                for order in pending_orders:
+                    inspector.orders.put(order)
+
+    def stop(self, cavity=None):
+        """Stop a concrete inspector or all inspectors"""
+        pending_orders = []
+        if cavity is None:
+            for inspector in self.inspectors.values():
+                if inspector:
+                    pending_orders.extend(inspector.stop())
+        else:
+            if cavity in self.inspectors.keys():
+                inspector = self.inspectors[cavity]
+                pending_orders.extend(inspector.stop())
+
+        return pending_orders
+
+    def stack_part(self, part_info, responsible_key, cavity=None):
+        """Start part for testing on an order process parameters"""
         inspector = self.inspectors[cavity]
         inspector.orders.put((part_info, responsible_key))
 
     def notify(self, info, cavity=None):
         """Transfer notification from client to inspector"""
-        self.inspectors[cavity - 1].notify(info)
-
-    def stop_inspector(self, cavity=None):
-        """Stop a concrete inspector or all inspectors"""
-        pending_orders = []
-
-        if cavity is None:
-            for inspector in self.inspectors:
-                if inspector:
-                    pending_orders.extend(inspector.stop())
-
-            self.inspectors = [Inspector(self) for _ in range(self.cavities)]
-        else:
-            inspector = self.inspectors[cavity - 1]
-            if inspector:
-                pending_orders.extend(inspector.stop())
-            self.inspectors[cavity - 1] = Inspector(self)
-        return pending_orders
+        self.inspectors[cavity].notify(info)
 
     def get_events(self, cavity=None):
         """Get events from inspector and store them to manager.events"""
@@ -102,21 +124,15 @@ class TestingService:
                 self.events[cavity - 1].extend(events)
         return events
 
-    def restart_inspector(self, cavity=None):
-        pending_orders = self.inspectors[cavity].stop()
-        inspector = Inspector(self.db, self.dev_container, self.location_key, cavity, self.ttf)
-        for order in pending_orders:
-            inspector.orders.put(order)
-
-        inspector.start()
-        self.inspectors[cavity] = Inspector
+    def get_last_events(self, cavity=None):
+        pass
 
 
 class Inspector(threading.Thread):
     """Inspector of one unique part sharing some devices on a location
     """
     def __init__(self, database, dev_container, location_key,
-                 cavity=None, tff=True):
+                 cavity=None, tff=True, gen_sn=None):
         """Args:
         database(Container): Persistence layer container of providers
         dev_container(Container): Container of devices
@@ -133,10 +149,12 @@ class Inspector(threading.Thread):
         self.location = self.db.Locations().get_by_key(location_key)
         self.cavity = cavity
         self.tff = tff
+        self.gen_sn = gen_sn
 
         # Inputs and Outputs of inspector
         self.orders = Queue()
         self.events = Queue()
+        self.state = 'avalaible'
 
         # Batch variables
         self.responsible = None
@@ -168,18 +186,27 @@ class Inspector(threading.Thread):
     def run(self):
         """Thread activation processing order by order"""
         while not self._stop_event.is_set():
+            self.state = 'waiting'
             order = self.orders.get()
             if order is None:
                 self.orders.task_done()
                 break
             else:
+                self.state = 'iddle'
                 self.run_test(order)
                 self.orders.task_done()
+
+        self.state = 'stopped'
 
     def run_test(self, order):
         """Process a full test  from an order
         """
         part_info, responsible_key = order
+        if 'serial_number' not in part_info:
+            part_info['serial_number'] = self.gen_sn(
+                part_info['part_number'],
+                part_info['batch_number'])
+
         part = self.db.Parts().get_or_create(self.location, **part_info)
         self.set_responsible(responsible_key)
         self.set_route_for(part)
@@ -196,6 +223,7 @@ class Inspector(threading.Thread):
         except Exception as e:
             self.update('exception', e)
             test.cancel()
+            self.state = 'cancelled'
         finally:
             self.db.Session().commit()
 

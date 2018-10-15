@@ -39,5 +39,5 @@ class DeviceContainer(containers.DynamicContainer):
                     kwargs[key] = self._inject_provider(value[1:])
 
             setattr(self, dev_name, Provider(DeviceClass, *args,
-                                                      **kwargs))
+                                             **kwargs))
         return getattr(self, dev_name)

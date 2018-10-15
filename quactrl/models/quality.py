@@ -1,3 +1,4 @@
+import datetime
 from quactrl.helpers import get_function
 from quactrl.models.operations import Route, Operation
 
@@ -21,26 +22,38 @@ class Check(Operation):
     def close(self):
         """Eval results once check is finished
         """
-        super().close()
-        if self.state == 'closed':
+        if self.state == 'finished':
             self.state = 'nok' if self.defects else 'ok'
+            self.finished_on = datetime.datetime.now()
             if self.state == 'nok':
                 self.control.get_reaction()(self)
 
-    def add_measurement(self, characteristic, value, tracking):
+        for measurement in self.measurements:
+            measurement.produce(self)
+
+        for defect in self.defects:
+            defect.produce(self)
+
+    def add_measurement(self, requirement, value, index=None):
         """Add measurement of a characteristic to check
         """
-        measurement = Measurement(self.subject, characteristic, value,
-                                  tracking)
+        tracking = requirement.eid
+        if index is not None:
+            tracking = '{}_{}'.format(tracking, index)
+        measurement = Measurement(self.subject, requirement, value, tracking)
         failure_mode = measurement.eval()
         if failure_mode:
             self.add_defect(failure_mode, tracking, 1)
 
         self.measurements.append(measurement)
 
-    def add_defect(self, failure_mode, tracking, qty=1):
+    def add_defect(self, requirement, mode_key, index=None, qty=1):
         """Add defect of check
         """
+        failure_mode = requirement.characteristic.failure_modes[mode_key]
+        tracking = requirement.eid
+        if index is not None:
+            tracking = '{}_{}'.format(tracking, index)
         defect = Defect(self.subject, failure_mode, tracking, qty)
         self.defects.append(defect)
 
@@ -60,17 +73,18 @@ class Defect:
 class Measurement:
     """Measurement of a subject done by a check action
     """
-    def __init__(self, subject, characteristic, tracking):
+    def __init__(self, subject, requirement, tracking):
         self.subject = subject
         subject.measurements.append(self)
 
-        self.characteristic = characteristic
+        self.characteristic = requirement.characteristic
+        self.limits = requirement
         self.trackig = tracking
         self.value = None
 
     def eval_value(self, value, uncertainty=0):
         mode_key = None
-        low_limit, high_limit = self.characteristic.limits
+        low_limit, high_limit = self.requirementcharacteristic.limits
 
         if high_limit is not None and value >= high_limit - uncertainty:
             mode_key = 'hi' if value > high_limit else 'shi'
@@ -89,10 +103,10 @@ class Control(Route):
     """
     _sampling_par = {'100%': (1, 1)}
 
-    def __init__(self, route, part_group, characteristic, sampling,
+    def __init__(self, route, part_group, requirement, sampling,
                  method, method_pars=None, role=None, reaction=None):
         inputs = {'part_group': part_group}
-        outputs = {'characteristic': characteristic}
+        outputs = {'requirement': requirement}
 
         super().__init__(role, parent=route, inputs=inputs, outputs=outputs)
 
@@ -137,4 +151,10 @@ class FailureMode:
         self.characteristic = characteristic
         self.mode = mode
 
-        self.characteristic.failure_modes[mode] = self
+        self.characteristic.failure_modes[mode.key] = self
+
+
+class Mode:
+    def __init__(self, key, name):
+        self.key = key
+        self.name = name

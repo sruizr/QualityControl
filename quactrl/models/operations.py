@@ -12,6 +12,9 @@ class Device:
     """
     pass
 
+class DeviceModel:
+    pass
+
 
 class Location:
     """Site of products
@@ -19,10 +22,21 @@ class Location:
     pass
 
 
+class Batch:
+    """Result of an operation action
+    """
+    def __init__(self, model, tracking, qty):
+        self.model = model
+        self.tracking = tracking
+        self.qty = qty
 
 
-
-
+class Part(Batch):
+    """Part with unique serial number
+    """
+    def __init__(self, model, tracking, location=None):
+        super().__init__(qty=1, **kwargs)
+        self.defects = []
 
 
 class IncorrectOperationState(Exception):
@@ -61,11 +75,11 @@ class Operation:
 
     def start(self, **inputs):
         self.update = inputs.get('update')
+        self.cavity = inputs.get('cavity')
+
         self.inbox.update(inputs)
         self.started_on = datetime.datetime.now()
         self.state = 'started'
-        if self.udpate:
-            self.udpate('started', self)
 
     def execute(self):
         """Execute method asociated to route
