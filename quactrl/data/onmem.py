@@ -1,13 +1,22 @@
+from threading import Lock
 from quactrl.models.operations import PartModel, Part_Group
 
 
 class Session:
-    _Routes = {}
-    _Parts = {}
-    _Persons = {}
-    _Locations = {}
-    _PartModels = {}
-    _Tests = []
+    _routes = {}
+    _persons = {}
+    _locations = {}
+    _part_models = {}
+    _attributes = {}
+    _elements = {}
+    _failure_modes = {}
+    _locations = {}
+    _part_groups = {}
+    _routes = {}
+    _devices = {}
+
+    _tests = []
+    lock = Lock()
 
     def commit(self):
         pass
@@ -17,59 +26,85 @@ class Repository:
     def __init__(self, session):
         self.session = session
 
+class KeyRepo:
+    def __init__(self, session, repo_dict):
+        self.session = session
+        self._repo_dict = repo_dict
 
-class LocationRepo(Repository):
-    def get_by_key(self, key):
-        return self.session._Locations[key]
+    def add(self, obj):
+        with self.session.lock:
+            self._repo_dict[obj.key] = obj
 
-    def add(self, location):
-        self.session._Locations[location.key] = location
-
-
-class PersonRepo(Repository):
-    def get_by_key(self, key):
-        return self.session._Persons[key]
-
-    def add(self, person):
-        self.session._Persons[person.key] = person
+    def get(self, key):
+        return self._repo_dict[key]
 
 
-class PartModelsRepo(Repository):
+class LocationRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._locations)
 
-    def add(self, part_model):
-        self.session._PartModels[part_model.part_number] = part_model
 
-    def get_by_part_number(self, key):
-        return self.session._PartModels[key]
+class PersonRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._persons)
+
+
+class FailureModeRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._failure_modes)
+
+
+class CharacteristicRepo(Repository):
+    def __init__(self, session):
+        super().__init__(session, session._characteristics)
+
+
+class ElementRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._elements)
+
+class AttributeRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._attributes)
+
+
+class PartModelsRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._part_models)
+
+
+class DeviceRepo(Repository):
+    def add_to_location(self, device, location):
+        if location.key not in self.session._devices:
+            self.session._devices[location.key] = []
+
+        self.session._devices[location.key].append(device)
 
 
 class RouteRepo(Repository):
     def add(self, route):
         location = route.from_node
         resources = []
+
         for resource_map in route.outputs:
             resource = resource_map.resource
             resources.append(resource)
-        for resource in resources:
-            self.session._Routes[(resource, location)]
+        with self.session.lock:
+            for resource in resources:
+                self.session._routes[(resource, location)]
 
     def get_by_part_model_and_location(self, part_model, location):
         key = (part_model, location)
-        if key in self.session._Routes:
-            return self.session._Routes[key]
+        if key in self.session._routes:
+            return self.session._routes[key]
 
         for group in part_model.groups:
             key = (group, location)
-            if key in self.sessionn._Routes:
-                return self.session._Routes[key]
-
-class BatchRepo(Repository):
-    pass
-
-class PartRepo(Repository):
-    def get_or_create(self, location, )
+            if key in self.sessionn._routes:
+                return self.session._routes[key]
 
 
-class Test(Repository):
+class TestRepo(Repository):
     def add(self, test):
-        self.session._Tests.append(test)
+        with self.session.lock:
+            self.session._tests.append(test)

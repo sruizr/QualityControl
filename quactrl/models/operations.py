@@ -22,21 +22,32 @@ class Location:
     pass
 
 
-class Batch:
-    """Result of an operation action
+class ProductionOrder:
+    """Plan of part production
     """
-    def __init__(self, model, tracking, qty):
-        self.model = model
-        self.tracking = tracking
-        self.qty = qty
+    def __init__(self, part_model, order_number, qty=None):
+        self.part_model = part_model
+        self.order_number = order_number
+        self.planned_qty = qty
+        self.produced_qty = 0
+        self.product_number = 0
+
+    def get_product_number(self):
+        self.product_number += 1
+        return self._product_number
+
+    def count(self):
+        self.produced_qty += 1
 
 
-class Part(Batch):
+class Part:
     """Part with unique serial number
     """
-    def __init__(self, model, tracking, location=None):
-        super().__init__(qty=1, **kwargs)
+    def __init__(self, model, serial_number):
+        self.model = model
+        self.serial_number = serial_number
         self.defects = []
+        self.measures = []
 
 
 class IncorrectOperationState(Exception):
@@ -152,6 +163,9 @@ class Route:
         """
         self.parent = parent
         self.sequence = 0
+        self.source = source
+        self.destination = destination
+
         if parent:
             self.sequence = (parent.steps[-1].sequence + 5
                              if parent.steps else 0)

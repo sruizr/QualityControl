@@ -26,7 +26,8 @@ class Service:
         self.dev_container = DeviceContainer(self.db.DeviceDefs())
         self.dev_container.set_location(location)
         self._start_inspectors(cavities)
-        self._batches = {}
+
+        self._production_orders = {}
         self._lock = threading.Lock()
 
     @property
@@ -43,20 +44,20 @@ class Service:
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
 
-    def gen_sn(self, part_number, batch_number):
+    def gen_sn(self, po_number, part_number):
         if self.sn_compose is None:
             raise Exception('No sn_compose function is defined')
 
         with self._lock:
-            if batch_number not in self._batches:
-                self._batches[batch_number] = self.db.Parts().get_or_create_batch(
-                    part_number, batch_number
+            if po_number not in self._batches:
+                self._production_orders[po_number] = self.db.ProdOrders().get_or_create(
+                    part_number, po_number
                 )
-            batch = self._batches[batch_number]
+            batch = self._production_orders[po_number]
             counter = batch.qty = batch.qty + 1
             self.db.session().commit()
 
-        return self.sn_compose(batch_number, counter)
+        return self.sn_compose(po_number, counter)
 
     def _start_inspectors(self, cavities):
         if cavities is None:
