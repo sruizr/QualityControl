@@ -7,15 +7,6 @@ class Person:
     pass
 
 
-class Device:
-    """Device from a location to be used for operations
-    """
-    pass
-
-class DeviceModel:
-    pass
-
-
 class Location:
     """Site of products
     """
@@ -43,11 +34,13 @@ class ProductionOrder:
 class Part:
     """Part with unique serial number
     """
-    def __init__(self, model, serial_number):
+    def __init__(self, model, tracking, location=None, responsible=None):
         self.model = model
-        self.serial_number = serial_number
+        self.tracking = tracking
         self.defects = []
         self.measures = []
+        self.location = location
+        self.responsible = responsible
 
 
 class IncorrectOperationState(Exception):
