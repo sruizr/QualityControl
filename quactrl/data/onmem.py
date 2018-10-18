@@ -1,3 +1,6 @@
+import re
+import os.path
+import csv
 from threading import Lock
 from quactrl.models.operations import PartModel, Part_Group
 
@@ -14,17 +17,29 @@ class Session:
     _part_groups = {}
     _routes = {}
     _devices = {}
-
+    _device_models = {}
     _tests = []
+    _roles = {}
+    _parts = {}
     lock = Lock()
 
+    def __init__(self, out_path):
+        self._tests_f = open(os.path.join(out_path, "tests.csv"), 'a')
+        self._checks_f = open(os.path.join(out_path, "checkss.csv"), 'a')
+        self._measures_f = open(os.path.join(out_path, "measures.csv"), 'a')
+        self._defects_f = open(os.path.join(out_path, "defects.csv"), 'a')
+
     def commit(self):
-        pass
+        self._tests_f.flush()
+        self._checks_f.flush()
+        self._measures_f.flush()
+        self._defects_f.flush()
 
 
 class Repository:
     def __init__(self, session):
         self.session = session
+
 
 class KeyRepo:
     def __init__(self, session, repo_dict):
@@ -37,6 +52,11 @@ class KeyRepo:
 
     def get(self, key):
         return self._repo_dict[key]
+
+
+class RoleRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._roles)
 
 
 class LocationRepo(KeyRepo):
@@ -63,22 +83,52 @@ class ElementRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, session._elements)
 
+
 class AttributeRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, session._attributes)
 
 
-class PartModelsRepo(KeyRepo):
+class PartModelRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, session._part_models)
 
 
-class DeviceRepo(Repository):
-    def add_to_location(self, device, location):
-        if location.key not in self.session._devices:
-            self.session._devices[location.key] = []
+class DeviceModelRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._device_models)
 
-        self.session._devices[location.key].append(device)
+
+class DeviceRepo(Repository):
+    def add(self, device):
+        with self.session.lock:
+            key = device.location.key
+            if key not in self.session._devices:
+                self.session._devices[key] = []
+            self.session._devices[key].append(device)
+
+    def get_all_from(self, location):
+        devices = {}
+        all_devices = self.session.devices[location.key]
+        for device in all_devices:
+            devices[device.name] = device
+        return devices
+
+
+class PartRepo(Repository):
+    def add(self, part):
+        with self.session.lock:
+            self.session._parts[part.location.key] = part
+
+    def get_from_location(self, location, part_model, tracking):
+        parts = self.session._parts[location.key]
+        for part in parts:
+            if part.model == part_model and part.tracking == tracking:
+                return part
+
+    def get_last_serial_number(self, part_model, sn_filter):
+        for parts in self.session._parts.values():
+            pass
 
 
 class RouteRepo(Repository):
