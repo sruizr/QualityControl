@@ -12,6 +12,37 @@ class Location:
     """
     pass
 
+class Movement:
+    def __init__(self, responsible):
+        self.responsible = responsible
+        self.items = []
+        self._on_hands = set()
+        self.destination = None
+        self.started_on = None
+        self.finished_on = None
+
+    def get(self, item, from_location=None):
+        if not self._on_hands:
+            self.started_on = datetime.datetime.now()
+
+        if from_location is not None and from_location != item.location:
+            raise NotFoundException()
+        item.location = None
+        item.last_movement = self
+
+        self.items.append(item)
+        self._on_hands.add(item)
+
+    def put(self, item, to_location):
+        if item not in self._on_hands:
+            self.get(item)
+
+        self._on_hands.remove(item)
+        item.location = to_location
+        item.last_movement = self
+
+        if not self._on_hands:
+            self.finished_on = datetime.datetime.now()
 
 class ProductionOrder:
     """Plan of part production
