@@ -3,7 +3,10 @@ import quactrl.data.onmem as onmem
 from quactrl.helpers import get_class
 
 
-class Data(containers.Container):
+class Data(containers.DynamicContainer):
+    def __init__(self, args):
+        "docstring"
+
     config = providers.Config()
     Session = providers.ThreadLocalSingleton(config.string_connection)
     Persons = providers.ThreadLocalSingleton(onmem.PersonRepo,

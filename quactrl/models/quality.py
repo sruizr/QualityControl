@@ -96,19 +96,16 @@ class Measurement:
             return self.characteristic.get_failure(mode_key)
 
 
-class Control(Route):
+class Control:
     """Plan for checking a characteristic on a subject
 
     A subject can be a machine, environment or material
     """
     _sampling_par = {'100%': (1, 1)}
 
-    def __init__(self, route, part_group, requirement, sampling,
-                 method, method_pars=None, role=None, reaction=None):
-        inputs = {'part_group': part_group}
-        outputs = {'requirement': requirement}
-
-        super().__init__(role, parent=route, inputs=inputs, outputs=outputs)
+    def __init__(self, route, requirement, method, method_pars=None,
+                 sampling='100%', reaction=None):
+        self.requirement = requirement
 
         self.last_count = 0
         self.sampling = Sampling(self, *self._sampling_par[sampling])
@@ -117,10 +114,6 @@ class Control(Route):
     @property
     def characteristic(self):
         return self.outputs['characteristic']
-
-    @property
-    def part_group(self):
-        return self.inputs['part_group']
 
     def create_operation(self, parent):
         """Counts item (time or units)

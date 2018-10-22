@@ -1,5 +1,6 @@
 import datetime
 import sys
+from collections import namedtuple
 from quactrl.helpers import get_function
 
 
@@ -12,37 +13,39 @@ class Location:
     """
     pass
 
-class Movement:
+
+Motion = namedtuple('Motion', 'type item location qty', defaults=(1,))
+
+
+class Handling:
     def __init__(self, responsible):
         self.responsible = responsible
-        self.items = []
-        self._on_hands = set()
-        self.destination = None
+        self.motions = []
         self.started_on = None
         self.finished_on = None
 
-    def get(self, item, from_location=None):
-        if not self._on_hands:
-            self.started_on = datetime.datetime.now()
+    def start(self):
+        self.started_on = datetime.datetime.now()
+
+    def get(self, item, from_location=None, qty=1):
+        if not self.started_on:
+            self.start()
 
         if from_location is not None and from_location != item.location:
-            raise NotFoundException()
+            raise Exception()
+
+        self.motions.append(Motion('GET', item, item.location, qty))
         item.location = None
-        item.last_movement = self
 
-        self.items.append(item)
-        self._on_hands.add(item)
-
-    def put(self, item, to_location):
-        if item not in self._on_hands:
-            self.get(item)
-
-        self._on_hands.remove(item)
+    def put(self, item, to_location, qty=1):
+        self.motions.append(Motion('PUT', item, item.location, qty))
         item.location = to_location
-        item.last_movement = self
+        if item.qty != qty:
+            raise Exception()
 
-        if not self._on_hands:
-            self.finished_on = datetime.datetime.now()
+    def finish(self):
+        self.finished_on = datetime.datetime.now()
+
 
 class ProductionOrder:
     """Plan of part production
@@ -65,23 +68,25 @@ class ProductionOrder:
 class Part:
     """Part with unique serial number
     """
-    def __init__(self, model, tracking, location=None, responsible=None):
+    def __init__(self, model, tracking, location=None):
         self.model = model
         self.tracking = tracking
+        self.location = location
         self.defects = []
         self.measures = []
-        self.location = location
-        self.responsible = responsible
 
 
 class IncorrectOperationState(Exception):
     pass
 
 
-class Operation:
+class Operation(Handling):
     """Add value stream action over a batch
     """
     def __init__(self, route, parent=None, responsible=None):
+        if responsible is None and parent is None:
+            raise Exception()
+
         self.route = route
         self.responsible = responsible
 
@@ -90,6 +95,7 @@ class Operation:
             self.parent.add_action(self)
             self.responsible = parent.responsible
 
+        super().__init__(self.responsible)
         self.operations = []
         self.inbox = {}
         self.outbox = {}
@@ -109,11 +115,11 @@ class Operation:
             self.update(state, self)
 
     def start(self, **inputs):
+        super().start()
         self.update = inputs.get('update')
         self.cavity = inputs.get('cavity')
 
         self.inbox.update(inputs)
-        self.started_on = datetime.datetime.now()
         self.state = 'started'
 
     def execute(self):

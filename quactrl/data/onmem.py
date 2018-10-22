@@ -1,8 +1,5 @@
-import re
 import os.path
-import csv
 from threading import Lock
-from quactrl.models.operations import PartModel, Part_Group
 
 
 class Session:
