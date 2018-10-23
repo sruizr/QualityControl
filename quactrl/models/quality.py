@@ -1,6 +1,6 @@
 import datetime
 from quactrl.helpers import get_function
-from quactrl.models.operations import Route, Operation
+from quactrl.models.operations import Operation, Step
 
 
 class Check(Operation):
@@ -96,7 +96,7 @@ class Measurement:
             return self.characteristic.get_failure(mode_key)
 
 
-class Control:
+class Control(Step):
     """Plan for checking a characteristic on a subject
 
     A subject can be a machine, environment or material
@@ -105,6 +105,8 @@ class Control:
 
     def __init__(self, route, requirement, method, method_pars=None,
                  sampling='100%', reaction=None):
+
+        super().__init__(route, method, method_pars)
         self.requirement = requirement
 
         self.last_count = 0

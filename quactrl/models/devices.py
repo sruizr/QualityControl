@@ -19,12 +19,13 @@ class DeviceModel:
 
 
 class Device:
-    def __init__(self, device_model, tracking, flow=None, config_pars=None):
+    def __init__(self, device_model, tracking, location=None,
+                 config_pars=None):
         self.model = device_model
         self.tracking = tracking
         self.config_pars = config_pars if config_pars else {}
-        if flow:
-            self.flow.locate(self)
+        self.location = location
+
     @property
     def name(self):
         value = re.findall('(.*)>.*', self.tracking)

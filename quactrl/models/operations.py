@@ -4,17 +4,16 @@ from collections import namedtuple
 from quactrl.helpers import get_function
 
 
-class Person:
-    pass
-
-
 class Location:
     """Site of products
     """
-    pass
+    def __init__(self, key, name, description=None):
+        self.key = key
+        self.name = name
+        self.description = description
 
 
-Motion = namedtuple('Motion', 'type item location qty', defaults=(1,))
+Motion = namedtuple('Motion', 'type item location qty')
 
 
 class Handling:
@@ -45,24 +44,6 @@ class Handling:
 
     def finish(self):
         self.finished_on = datetime.datetime.now()
-
-
-class ProductionOrder:
-    """Plan of part production
-    """
-    def __init__(self, part_model, order_number, qty=None):
-        self.part_model = part_model
-        self.order_number = order_number
-        self.planned_qty = qty
-        self.produced_qty = 0
-        self.product_number = 0
-
-    def get_product_number(self):
-        self.product_number += 1
-        return self._product_number
-
-    def count(self):
-        self.produced_qty += 1
 
 
 class Part:
@@ -187,7 +168,8 @@ class WrongInboxContent(Exception):
 class Route:
     """Planning of an operation over resources
     """
-    def __init__(self, role, source=None, destination=None, inputs=None, outputs=None, parent=None,
+    def __init__(self, role, source=None, destination=None,
+                 outputs=None, parent=None,
                  method=None, method_pars=None):
         """Create route from planned inputs and outputs, can be embebed
         """
@@ -195,14 +177,14 @@ class Route:
         self.sequence = 0
         self.source = source
         self.destination = destination
+        self.steps = []
 
         if parent:
             self.sequence = (parent.steps[-1].sequence + 5
                              if parent.steps else 0)
             parent.steps.append(self)
 
-        self.inputs = inputs if inputs else {}
-        self.outputs = outputs if outputs else {}
+        self.outputs = outputs if outputs else []
         self.method_name = method
         self.method_pars = method_pars if method_pars else {}
 
@@ -211,7 +193,6 @@ class Route:
         """
         return Operation(self, parent, responsible)
 
-
     def get_method(self):
         """Return a method to be executable by check
         """
@@ -219,3 +200,14 @@ class Route:
 
     def validate_inbox(self, inbox):
         pass
+
+
+class Step:
+    """Planning of a sub action for a Route
+    """
+
+    def __init__(self, route, method, method_pars):
+
+        self.route = route
+        self.method = method
+        self.method_pars = method_pars if method_pars else {}

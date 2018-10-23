@@ -1,4 +1,3 @@
-import os.path
 from threading import Lock
 
 
@@ -9,7 +8,7 @@ class Session:
     _part_models = {}
     _attributes = {}
     _elements = {}
-    _failure_modes = {}
+    _modes = {}
     _locations = {}
     _part_groups = {}
     _routes = {}
@@ -18,19 +17,23 @@ class Session:
     _tests = []
     _roles = {}
     _parts = {}
+    _requirements = {}
+    _characteristics = {}
     lock = Lock()
 
     def __init__(self, out_path):
-        self._tests_f = open(os.path.join(out_path, "tests.csv"), 'a')
-        self._checks_f = open(os.path.join(out_path, "checkss.csv"), 'a')
-        self._measures_f = open(os.path.join(out_path, "measures.csv"), 'a')
-        self._defects_f = open(os.path.join(out_path, "defects.csv"), 'a')
+        pass
+        # self._tests_f = open(os.path.join(out_path, "tests.csv"), 'a')
+        # self._checks_f = open(os.path.join(out_path, "checkss.csv"), 'a')
+        # self._measures_f = open(os.path.join(out_path, "measures.csv"), 'a')
+        # self._defects_f = open(os.path.join(out_path, "defects.csv"), 'a')
 
     def commit(self):
-        self._tests_f.flush()
-        self._checks_f.flush()
-        self._measures_f.flush()
-        self._defects_f.flush()
+        pass
+        # self._tests_f.flush()
+        # self._checks_f.flush()
+        # self._measures_f.flush()
+        # self._defects_f.flush()
 
 
 class Repository:
@@ -51,6 +54,11 @@ class KeyRepo:
         return self._repo_dict[key]
 
 
+class RequirementRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._requirements)
+
+
 class RoleRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, session._roles)
@@ -66,12 +74,12 @@ class PersonRepo(KeyRepo):
         super().__init__(session, session._persons)
 
 
-class FailureModeRepo(KeyRepo):
+class ModeRepo(KeyRepo):
     def __init__(self, session):
-        super().__init__(session, session._failure_modes)
+        super().__init__(session, session._modes)
 
 
-class CharacteristicRepo(Repository):
+class CharacteristicRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, session._characteristics)
 
@@ -130,15 +138,16 @@ class PartRepo(Repository):
 
 class RouteRepo(Repository):
     def add(self, route):
-        location = route.from_node
+        location = route.source
         resources = []
 
         for resource_map in route.outputs:
-            resource = resource_map.resource
-            resources.append(resource)
+            key = resource_map.key
+            resources.append(key)
+
         with self.session.lock:
             for resource in resources:
-                self.session._routes[(resource, location)]
+                self.session._routes[(resource, location)] = route
 
     def get_by_part_model_and_location(self, part_model, location):
         key = (part_model, location)

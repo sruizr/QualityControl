@@ -15,10 +15,12 @@ class PartGroup:
 class PartModel(PartGroup):
     """Abstraction of part, type of part
     """
-    def __init__(self, part_number, description, name=None):
+    def __init__(self, part_number, description=None, name=None,
+                 device_class=None):
         self.key = part_number
         self.name = name
         self.description = description
+        self.device_class = device_class
         self.part_groups = []
         self.requirements = {}
 
@@ -62,7 +64,7 @@ class Element:
         return '{}/{}'.format(self.parent.path(), self.key)
 
 
-class  Attribute:
+class Attribute:
     """Evaluable attribute of an element
     """
     def __init__(self, key, name, description=None):

@@ -1,34 +1,42 @@
 from dependency_injector import providers, containers
-import quactrl.data.onmem as onmem
 from quactrl.helpers import get_class
 
 
 class Data(containers.DynamicContainer):
-    def __init__(self, args):
-        "docstring"
+    _MODELS = [
+        'hhrr.Person', 'hhrr.Role',
+        'operations.Location', 'operations.Part', 'operations.Route',
+        'products.Characteristic', 'products.PartModel',
+        'products.Element', 'products.Attribute', 'products.Characteristic',
+        'products.Requirement',
+        'quality.Test', 'quality.Mode',
+        'devices.DeviceModel', 'devices.Device'
+    ]
 
-    config = providers.Config()
-    Session = providers.ThreadLocalSingleton(config.string_connection)
-    Persons = providers.ThreadLocalSingleton(onmem.PersonRepo,
-                                             session=Session)
-    Roles = providers.ThreadLocalSingleton(onmem.RoleRepo, session=Session)
-    Locations = providers.ThreadLocalSingleton(onmem.LocationRepo,
-                                               session=Session)
-    FailureModes = providers.ThreadLocalSingleton(onmem.FailureModeRepo,
-                                                  session=Session)
-    Characteristics = providers.ThreadLocalSingleton(onmem.CharacteristicRepo,
-                                                     session=Session)
-    Elements = providers.ThreadLocalSingleton(onmem.ElementRepo, session=Session)
-    Attributes = providers.ThreadLocalSingleton(onmem.AttributeRepo,
-                                                session=Session)
-    PartModels = providers.ThreadLocalSingleton(onmem.PartModelRepo,
-                                                session=Session)
-    DeviceModels = providers.ThreadLocalSingleton(onmem.DeviceModelRepo,
-                                                  session=Session)
-    Devices = providers.ThreadSafeSingleton(onmem.DeviceRepo,
-                                            session=Session)
+    def __init__(self, module_name, connection_string=None):
+        super().__init__()
+        self.connection_string = connection_string
+        self.module_name = module_name
+        SessionClass = get_class('{}.Session'.format(module_name))
+        self.Session = providers.ThreadLocalSingleton(SessionClass,
+                                                      connection_string)
+        self._load_repos()
 
-    Parts = providers.ThreadLocalSingleton(onmem.PartRepo, session=Session)
-    Routes = providers.ThreadLocalSingleton(onmem.RouteRepo, session=Session)
-    Tests = providers.ThreadLocalSingleton(onmem.TestRepo,
-                                           session=Session)
+    def _get_class(self, name):
+        full_class_name = '{}.{}Repo'.format(self.module_name, name)
+        ResultClass = get_class(full_class_name)
+        return ResultClass
+
+    def _load_repos(self):
+        for model in self._MODELS:
+            model_name = model.split('.')[1]
+            try:
+                RepoClass = self._get_class(model),
+            except ImportError:
+                RepoClass = self._get_class(model_name)
+
+            Provider = providers.ThreadLocalSingleton(
+                RepoClass,
+                session=self.Session
+            )
+            setattr(self, model_name + 's', Provider)
