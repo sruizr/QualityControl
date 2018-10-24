@@ -54,7 +54,7 @@ class Part:
         self.tracking = tracking
         self.location = location
         self.defects = []
-        self.measures = []
+        self.measurements = []
         self.dut = None
         self.pars = pars if pars else {}
 
@@ -84,7 +84,7 @@ class Operation(Handling):
         self.operations = []
         self.inbox = {}
         self.outbox = {}
-        self.udpate = None
+        self.update = None
         self._state = 'open'
         self._cancel = False
         self.on_op = None
@@ -96,12 +96,13 @@ class Operation(Handling):
     @state.setter
     def state(self, state):
         self._state = state
-        if self.udpate:
+
+        if self.update:
             self.update(state, self)
 
     def start(self, **inputs):
         super().start()
-        self.update = inputs.pop('update')
+        self.update = inputs.pop('update', None)
         self.cavity = inputs.pop('cavity')
 
         self.inbox.update(inputs)
@@ -131,6 +132,8 @@ class Operation(Handling):
                 if op.state == 'ongoing':
                     op.thread.join()
                 op.close()
+                if op.state == 'nok' and self.tff:
+                    self.cancel()
 
         self.on_op = None
         self.state = 'walked'
@@ -154,6 +157,7 @@ class Operation(Handling):
             self.thread.cancel()
         elif self.state == 'walking':
             self._cancel = True
+        if self.on_op:
             self.on_op.cancel()
         self.state = 'cancelled'
         self.finished_on = datetime.datetime.now()

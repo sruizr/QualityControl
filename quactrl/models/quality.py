@@ -1,13 +1,24 @@
 import datetime
 from quactrl.helpers import get_function
-from quactrl.models.operations import Operation, Step
+from quactrl.models.operations import Operation, Step, Action
 
 
-class Check(Operation):
+class DefectFound(Exception):
+    pass
+
+
+class Test(Operation):
+    """Test with checks and added value actions
+    """
+    def __init__(self, route, responsible):
+        super().__init__(route, responsible)
+
+
+class Check(Action):
     """Verification of a characteristic on a part, outputs defects...
     """
     def __init__(self, operation, control):
-        super().__init__(control, operation)
+        super().__init__(control, parent=operation)
         self.measurements = []
         self.defects = []
 
@@ -28,11 +39,11 @@ class Check(Operation):
             if self.state == 'nok':
                 self.control.get_reaction()(self)
 
-        for measurement in self.measurements:
-            self.put(measurement, self.parent.destination)
+        # for measurement in self.measurements:
+        #     self.put(measurement, self.parent.route.destination)
 
-        for defect in self.defects:
-            self.put(defect, self.parent.destination)
+        # for defect in self.defects:
+        #     self.put(defect, self.parent.route.destination)
 
     def add_measurement(self, requirement, value, index=None):
         """Add measurement of a characteristic to check
@@ -40,10 +51,10 @@ class Check(Operation):
         tracking = requirement.eid
         if index is not None:
             tracking = '{}_{}'.format(tracking, index)
-        measurement = Measurement(self.subject, requirement, value, tracking)
-        failure_mode = measurement.eval()
-        if failure_mode:
-            self.add_defect(failure_mode, tracking, 1)
+        measurement = Measurement(self.inbox['part'], requirement.characteristic, tracking, value)
+        mode_key = measurement.eval_value(requirement.specs['limits'])
+        if mode_key:
+            self.add_defect(requirement, mode_key, tracking, 1)
 
         self.measurements.append(measurement)
 
@@ -54,7 +65,7 @@ class Check(Operation):
         tracking = requirement.eid
         if index is not None:
             tracking = '{}_{}'.format(tracking, index)
-        defect = Defect(self.subject, failure_mode, tracking, qty)
+        defect = Defect(self.inbox['part'], failure_mode, tracking, qty)
         self.defects.append(defect)
 
 
@@ -73,27 +84,28 @@ class Defect:
 class Measurement:
     """Measurement of a subject done by a check action
     """
-    def __init__(self, subject, requirement, tracking):
+    def __init__(self, subject, characteristic, tracking, value):
         self.subject = subject
         subject.measurements.append(self)
 
-        self.characteristic = requirement.characteristic
-        self.limits = requirement
+        self.characteristic = characteristic
         self.trackig = tracking
-        self.value = None
+        self.value = value
 
-    def eval_value(self, value, uncertainty=0):
+    def eval_value(self, limits,  uncertainty=0):
         mode_key = None
-        low_limit, high_limit = self.requirementcharacteristic.limits
+        low_limit, high_limit = limits
 
-        if high_limit is not None and value >= high_limit - uncertainty:
-            mode_key = 'hi' if value > high_limit else 'shi'
+        if high_limit is not None and self.value >= high_limit - uncertainty:
+            mode_key = 'hi' if self.value > high_limit else 'shi'
 
-        if low_limit is not None and value <= low_limit + uncertainty:
-            mode_key = 'lo' if value < low_limit else 'slo'
+        if low_limit is not None and self.value <= low_limit + uncertainty:
+            mode_key = 'lo' if self.value < low_limit else 'slo'
 
-        if mode_key:
-            return self.characteristic.get_failure(mode_key)
+        if low_limit > high_limit:
+            mode_key = None if mode_key else 'lo'
+
+        return mode_key
 
 
 class Control(Step):
@@ -127,7 +139,9 @@ class Control(Step):
     def get_reaction(self):
         """Return a reaction method to be executed if check is nok
         """
-        return get_function(self.reaction_name)
+        if self.reaction_name:
+            return get_function(self.reaction_name)
+        return lambda check: None
 
 
 class Sampling:
@@ -145,6 +159,7 @@ class FailureMode:
     def __init__(self, characteristic, mode):
         self.characteristic = characteristic
         self.mode = mode
+        self.key = "{}-{}".format(mode.key, characteristic.key)
 
         self.characteristic.failure_modes[mode.key] = self
 

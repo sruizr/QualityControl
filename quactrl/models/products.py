@@ -38,7 +38,8 @@ class Requirement:
 
     @property
     def eid(self):
-        return re.findall('.*>(.*)', self.key)[0]
+        result = re.findall('.*>(.*)', self.key)
+        return result[0] if result else ''
 
 
 class Characteristic:
@@ -55,9 +56,11 @@ class Characteristic:
 class Element:
     """Abstract subsystem or component
     """
-    def __init__(self, key, name=None, parent=None):
+    def __init__(self, key, name=None, description=None, parent=None):
         self.key = key
         self.name = name
+        self.description = description
+
         self.parent = parent
         if parent:
             self.parent.components = self
