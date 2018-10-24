@@ -1,4 +1,5 @@
 import re
+from quactrl.helpers import get_class
 
 
 class PartGroup:
@@ -20,7 +21,8 @@ class PartModel(PartGroup):
         self.key = part_number
         self.name = name
         self.description = description
-        self.device_class = device_class
+        self.device_class = get_class(device_class) if device_class else None
+
         self.part_groups = []
         self.requirements = {}
 

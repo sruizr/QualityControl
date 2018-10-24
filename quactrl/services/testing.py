@@ -1,6 +1,9 @@
 import threading
+import traceback
 from queue import Queue
 from quactrl.models.devices import DeviceContainer
+import quactrl.models.operations as op
+import sys
 
 
 class NotFoundPart(Exception):
@@ -18,13 +21,14 @@ class Service:
         self.db = database
         self.tff = till_first_failure
         self.location_key = location
-        self.sn_compose = None
+        self.sn_compose = sn_compose
+        self._production_orders = {}
 
         self.events = {}
         self.inspectors = {}
 
-        self.dev_container = DeviceContainer(self.db.DeviceDefs())
-        self.dev_container.set_location(location)
+        all_devices = self.db.Devices().get_all_from(location)
+        self.dev_container = DeviceContainer(all_devices)
         self._start_inspectors(cavities)
 
         self._production_orders = {}
@@ -44,20 +48,22 @@ class Service:
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
 
-    def gen_sn(self, po_number, part_number):
-        if self.sn_compose is None:
-            raise Exception('No sn_compose function is defined')
+    def gen_sn(self, part_number, po_number):
+        return '18220999990007'
+        # if self.sn_compose is None:
+        #     raise Exception('No sn_compose function is defined')
 
-        with self._lock:
-            if po_number not in self._batches:
-                self._production_orders[po_number] = self.db.ProdOrders().get_or_create(
-                    part_number, po_number
-                )
-            batch = self._production_orders[po_number]
-            counter = batch.qty = batch.qty + 1
-            self.db.session().commit()
+        # with self._lock:
+        #     if po_number not in self._batches:
 
-        return self.sn_compose(po_number, counter)
+        #         self._production_orders[po_number] = self.db.ProdOrders().get_or_create(
+        #             part_number, po_number
+        #         )
+        #     batch = self._production_orders[po_number]
+        #     counter = batch.qty = batch.qty + 1
+        #     self.db.session().commit()
+
+        # return self.sn_compose(po_number, counter)
 
     def _start_inspectors(self, cavities):
         if cavities is None:
@@ -70,7 +76,7 @@ class Service:
 
         for cavity in active_cavities:
             inspector = Inspector(self.db, self.dev_container,
-                                  self.location_key, cavity, self.tff)
+                                  self.location_key, cavity, self.tff, self.gen_sn)
             inspector.start()
             self.inspectors[cavity] = inspector
 
@@ -128,6 +134,9 @@ class Service:
     def get_last_events(self, cavity=None):
         pass
 
+    def __del__(self):
+        self.stop()
+
 
 class Inspector(threading.Thread):
     """Inspector of one unique part sharing some devices on a location
@@ -147,7 +156,7 @@ class Inspector(threading.Thread):
         super().__init__(name=name)
         self.db = database
         self.dev_container = dev_container
-        self.location = self.db.Locations().get_by_key(location_key)
+        self.location = self.db.Locations().get(location_key)
         self.cavity = cavity
         self.tff = tff
         self.gen_sn = gen_sn
@@ -168,14 +177,13 @@ class Inspector(threading.Thread):
         """Loads responsible if it has changed
         """
         if self.responsible is None or self.responsible.key != responsible_key:
-            self.responsible = self.db.Persons().get_by_key(responsible_key)
+            self.responsible = self.db.Persons().get(responsible_key)
 
     def set_route_for(self, part_number):
         if (
                 self.part_model is None
                 or self.part_model.part_number != part_number):
-            self.part_model = self.db.PartModels().get_by_part_number(
-                part_number)
+            self.part_model = self.db.PartModels().get(part_number)
 
         if (
                 self.route is None
@@ -203,26 +211,41 @@ class Inspector(threading.Thread):
         """Process a full test  from an order
         """
         part_info, responsible_key = order
-        if 'serial_number' not in part_info:
-            part_info['serial_number'] = self.gen_sn(
-                part_info['part_number'],
-                part_info['batch_number'])
 
-        part = self.db.Parts().get_or_create(self.location, **part_info)
+        self.set_route_for(part_info.pop('part_number'))
+        serial_number = part_info.pop('serial_number', None)
+        if not serial_number:
+            serial_number = self.gen_sn(
+                self.part_model.key,
+                part_info.pop('batch_number')
+            )
+
+        part = self.db.Parts().get(self.part_model, serial_number)
+        if part is None:
+            part = op.Part(self.part_model, serial_number,
+                           location=self.location)
+        if part.location != self.location:
+            raise Exception('Part found on incorrect location')
+
+        connection = self.dev_container.modbus_conn()
+        connection = connection if self.cavity is None \
+            else connection[self.cavity]
+        part.set_dut(connection)
         self.set_responsible(responsible_key)
-        self.set_route_for(part)
 
         self.test = test = self.route.create_operation(self.responsible)
         self.db.Tests().add(test)
 
-        test.start(subject=part, dev_container=self.dev_container,
-                   cavity=self.cavity, tff=self.tff, update=self.update)
+        test.start(part=part, dev_container=self.dev_container,
+                   cavity=self.cavity,
+                   tff=self.tff, update=self.update)
         try:
             test.walk()
             test.execute()
             test.close()
         except Exception as e:
-            self.update('exception', e)
+            trc = sys.exc_info()
+            self.update('exception', e, traceback.format_tb(trc[2]))
             test.cancel()
             self.state = 'cancelled'
         finally:
@@ -241,6 +264,8 @@ class Inspector(threading.Thread):
         if self.orders.qsize() != 0:
             while not self.orders.empty():
                 pending_orders.append(self.orders.get())
+        else:
+            self.orders.put(None)
 
         return pending_orders
 
@@ -249,6 +274,7 @@ class Inspector(threading.Thread):
         self.events.put(('waiting', question))
         question.ask(message, *args)
         return question
+
 
 
 class Question(threading.Event):

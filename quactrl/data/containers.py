@@ -16,8 +16,8 @@ class Data(containers.DynamicContainer):
     def __init__(self, module_name, connection_string=None):
         super().__init__()
         self.connection_string = connection_string
-        self.module_name = module_name
-        SessionClass = get_class('{}.Session'.format(module_name))
+        self.module_name = 'quactrl.data.' + module_name
+        SessionClass = get_class('{}.Session'.format(self.module_name))
         self.Session = providers.ThreadLocalSingleton(SessionClass,
                                                       connection_string)
         self._load_repos()

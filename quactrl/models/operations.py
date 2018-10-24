@@ -49,12 +49,17 @@ class Handling:
 class Part:
     """Part with unique serial number
     """
-    def __init__(self, model, tracking, location=None):
+    def __init__(self, model, tracking, location=None, pars=None):
         self.model = model
         self.tracking = tracking
         self.location = location
         self.defects = []
         self.measures = []
+        self.dut = None
+        self.pars = pars if pars else {}
+
+    def set_dut(self, connection):
+        self.dut = self.model.device_class(connection, self.pars)
 
 
 class IncorrectOperationState(Exception):
@@ -64,7 +69,7 @@ class IncorrectOperationState(Exception):
 class Operation(Handling):
     """Add value stream action over a batch
     """
-    def __init__(self, route, parent=None, responsible=None):
+    def __init__(self, route, responsible=None, parent=None):
         if responsible is None and parent is None:
             raise Exception()
 
@@ -73,7 +78,6 @@ class Operation(Handling):
 
         self.parent = parent
         if parent:
-            self.parent.add_action(self)
             self.responsible = parent.responsible
 
         super().__init__(self.responsible)
@@ -97,8 +101,8 @@ class Operation(Handling):
 
     def start(self, **inputs):
         super().start()
-        self.update = inputs.get('update')
-        self.cavity = inputs.get('cavity')
+        self.update = inputs.pop('update')
+        self.cavity = inputs.pop('cavity')
 
         self.inbox.update(inputs)
         self.state = 'started'
@@ -108,9 +112,8 @@ class Operation(Handling):
         """
         if (self.state == 'started'
             or self.state == 'walked'):
-            method = self.route.get_method()
-            if method:
-                method(self, **self.route.method_pars)
+            if self.route.method:
+                self.route.method(self, **self.route.method_pars)
                 if hasattr(self, 'thread'):
                     self.state = 'ongoing'
                 else:
@@ -123,18 +126,13 @@ class Operation(Handling):
         for op in self._list_subops():
             if op:  # step could no create operation!
                 self.on_op = op
-                op.start(update=self.update, **self.inbox)
-                try:
-                    op.execute()
-                    if op.state == 'ongoing':
-                        op.thread.join()
-                    op.close()
-                except Exception as e:
-                    if self.update:
-                        self.update(*sys.exc_info())
-                    raise e
+                op.start(cavity=self.cavity, update=self.update, **self.inbox)
+                op.execute()
+                if op.state == 'ongoing':
+                    op.thread.join()
+                op.close()
 
-                self.on_op = None
+        self.on_op = None
         self.state = 'walked'
 
     def _list_subops(self):
@@ -156,7 +154,7 @@ class Operation(Handling):
             self.thread.cancel()
         elif self.state == 'walking':
             self._cancel = True
-            self.current_op.cancel()
+            self.on_op.cancel()
         self.state = 'cancelled'
         self.finished_on = datetime.datetime.now()
 
@@ -170,7 +168,7 @@ class Route:
     """
     def __init__(self, role, source=None, destination=None,
                  outputs=None, parent=None,
-                 method=None, method_pars=None):
+                 method_name=None, method_pars=None):
         """Create route from planned inputs and outputs, can be embebed
         """
         self.parent = parent
@@ -185,18 +183,13 @@ class Route:
             parent.steps.append(self)
 
         self.outputs = outputs if outputs else []
-        self.method_name = method
+        self.method = get_function(method_name) if method_name else None
         self.method_pars = method_pars if method_pars else {}
 
     def create_operation(self, parent=None, responsible=None):
         """Returns operation instance from parent or responsible
         """
         return Operation(self, parent, responsible)
-
-    def get_method(self):
-        """Return a method to be executable by check
-        """
-        return get_function(self.method_name)
 
     def validate_inbox(self, inbox):
         pass
@@ -205,9 +198,10 @@ class Route:
 class Step:
     """Planning of a sub action for a Route
     """
-
-    def __init__(self, route, method, method_pars):
-
+    def __init__(self, route, method_name, method_pars):
         self.route = route
-        self.method = method
+        self.method = get_function(method_name) if method_name else None
         self.method_pars = method_pars if method_pars else {}
+
+    def create_operation(self, parent):
+        return Operation(self, parent)

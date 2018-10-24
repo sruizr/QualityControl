@@ -1,4 +1,5 @@
 from threading import Lock
+import sqlite3
 
 
 class Session:
@@ -112,9 +113,9 @@ class DeviceRepo(Repository):
                 self.session._devices[key] = []
             self.session._devices[key].append(device)
 
-    def get_all_from(self, location):
+    def get_all_from(self, location_key):
         devices = {}
-        all_devices = self.session.devices[location.key]
+        all_devices = self.session._devices[location_key]
         for device in all_devices:
             devices[device.name] = device
         return devices
@@ -123,12 +124,17 @@ class DeviceRepo(Repository):
 class PartRepo(Repository):
     def add(self, part):
         with self.session.lock:
-            self.session._parts[part.location.key] = part
+            if part.model not in self.session.parts:
+                self.session._parts[part.model] = []
+            self.session._parts[part.model].append(part)
 
-    def get_from_location(self, location, part_model, tracking):
-        parts = self.session._parts[location.key]
+    def get(self, part_model, serial_number):
+        if part_model not in self.session._parts:
+            return
+
+        parts = self.session._parts[part_model]
         for part in parts:
-            if part.model == part_model and part.tracking == tracking:
+            if part.tracking == serial_number:
                 return part
 
     def get_last_serial_number(self, part_model, sn_filter):
@@ -138,7 +144,7 @@ class PartRepo(Repository):
 
 class RouteRepo(Repository):
     def add(self, route):
-        location = route.source
+        location = route.source.key
         resources = []
 
         for resource_map in route.outputs:
@@ -150,11 +156,11 @@ class RouteRepo(Repository):
                 self.session._routes[(resource, location)] = route
 
     def get_by_part_model_and_location(self, part_model, location):
-        key = (part_model, location)
+        key = (part_model.key, location.key)
         if key in self.session._routes:
             return self.session._routes[key]
 
-        for group in part_model.groups:
+        for group in part_model.part_groups:
             key = (group, location)
             if key in self.sessionn._routes:
                 return self.session._routes[key]

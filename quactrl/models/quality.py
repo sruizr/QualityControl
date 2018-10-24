@@ -29,10 +29,10 @@ class Check(Operation):
                 self.control.get_reaction()(self)
 
         for measurement in self.measurements:
-            measurement.produce(self)
+            self.put(measurement, self.parent.destination)
 
         for defect in self.defects:
-            defect.produce(self)
+            self.put(defect, self.parent.destination)
 
     def add_measurement(self, requirement, value, index=None):
         """Add measurement of a characteristic to check
@@ -103,10 +103,10 @@ class Control(Step):
     """
     _sampling_par = {'100%': (1, 1)}
 
-    def __init__(self, route, requirement, method, method_pars=None,
+    def __init__(self, route, requirement, method_name, method_pars=None,
                  sampling='100%', reaction=None):
 
-        super().__init__(route, method, method_pars)
+        super().__init__(route, method_name, method_pars)
         self.requirement = requirement
 
         self.last_count = 0
@@ -137,7 +137,7 @@ class Sampling:
         self.frequency = frequency
 
     def count(self, operation):
-        self.control.last_count += operation.part.qty
+        self.control.last_count += self.quantity
         return True
 
 

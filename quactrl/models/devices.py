@@ -51,9 +51,9 @@ class DeviceContainer(containers.DynamicContainer):
 
     def _inject_provider(self, dev_name):
         if not hasattr(self, dev_name):
-            device  = self._devices[dev_name]
+            device = self._devices[dev_name]
             config = device.config_pars.copy()
-            Provider = self._strategies[config.pop('_strategy', 'thread_safe_singleton')]
+            Provider = self._strategies[config.pop('_strategy', 'thread_safe_sing')]
             DeviceClass = device.model.get_class()
             args = config.pop('_args', [])
             for index in range(len(args)):
