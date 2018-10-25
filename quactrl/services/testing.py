@@ -3,6 +3,7 @@ import traceback
 from queue import Queue
 from quactrl.models.devices import DeviceContainer
 import quactrl.models.operations as op
+from quactrl.models.quality import DefectFound
 import sys
 
 
@@ -17,11 +18,11 @@ class InspectorException(Exception):
 class Service:
     """Test parts from a location"""
     def __init__(self, database, location, cavities=None,
-                 till_first_failure=True, sn_compose=None):
+                 till_first_failure=True, sn_generator=None):
         self.db = database
         self.tff = till_first_failure
         self.location_key = location
-        self.sn_compose = sn_compose
+        self.sn_generator = sn_generator
         self._production_orders = {}
 
         self.events = {}
@@ -48,23 +49,6 @@ class Service:
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
 
-    def gen_sn(self, part_number, po_number):
-        return '18220999990007'
-        # if self.sn_compose is None:
-        #     raise Exception('No sn_compose function is defined')
-
-        # with self._lock:
-        #     if po_number not in self._batches:
-
-        #         self._production_orders[po_number] = self.db.ProdOrders().get_or_create(
-        #             part_number, po_number
-        #         )
-        #     batch = self._production_orders[po_number]
-        #     counter = batch.qty = batch.qty + 1
-        #     self.db.session().commit()
-
-        # return self.sn_compose(po_number, counter)
-
     def _start_inspectors(self, cavities):
         if cavities is None:
             active_cavities = [None]
@@ -76,7 +60,8 @@ class Service:
 
         for cavity in active_cavities:
             inspector = Inspector(self.db, self.dev_container,
-                                  self.location_key, cavity, self.tff, self.gen_sn)
+                                  self.location_key, cavity, self.tff,
+                                  self.sn_generator)
             inspector.start()
             self.inspectors[cavity] = inspector
 
@@ -89,7 +74,8 @@ class Service:
         for cavity in cavities:
             pending_orders = self.stop(cavity)
             inspector = Inspector(self.db, self.dev_container,
-                                  self.location_key, cavity, self.ttf)
+                                  self.location_key, cavity, self.ttf,
+                                  self.sn_generator)
             self.inspectors[cavity] = inspector
             inspector.start()
             if not clean_orders:
@@ -142,7 +128,7 @@ class Inspector(threading.Thread):
     """Inspector of one unique part sharing some devices on a location
     """
     def __init__(self, database, dev_container, location_key,
-                 cavity=None, tff=True, gen_sn=None):
+                 cavity=None, tff=True, sn_generator=None):
         """Args:
         database(Container): Persistence layer container of providers
         dev_container(Container): Container of devices
@@ -159,7 +145,7 @@ class Inspector(threading.Thread):
         self.location = self.db.Locations().get(location_key)
         self.cavity = cavity
         self.tff = tff
-        self.gen_sn = gen_sn
+        self.sn_generator = sn_generator
 
         # Inputs and Outputs of inspector
         self.orders = Queue()
@@ -207,15 +193,12 @@ class Inspector(threading.Thread):
 
         self.state = 'stopped'
 
-    def run_test(self, order):
-        """Process a full test  from an order
+    def get_part(self, part_info):
+        """Get part from data layer if exist or create a new one
         """
-        part_info, responsible_key = order
-
-        self.set_route_for(part_info.pop('part_number'))
         serial_number = part_info.pop('serial_number', None)
         if not serial_number:
-            serial_number = self.gen_sn(
+            serial_number = self.sn_generator.get_serial_number(
                 self.part_model.key,
                 part_info.pop('batch_number')
             )
@@ -231,25 +214,38 @@ class Inspector(threading.Thread):
         connection = connection if self.cavity is None \
             else connection[self.cavity]
         part.set_dut(connection)
-        self.set_responsible(responsible_key)
 
-        self.test = test = self.route.create_operation(self.responsible)
-        self.db.Tests().add(test)
-
-        test.start(part=part, dev_container=self.dev_container,
-                   cavity=self.cavity,
-                   tff=self.tff, update=self.update)
+    def run_test(self, order):
+        """Process a full test  from an order
+        """
         try:
-            test.walk()
-            test.execute()
-            test.close()
+            part_info, responsible_key = order
+            self.set_responsible(responsible_key)
+            self.set_route_for(part_info.pop('part_number'))
+            part = self.get_part(part_info)
+
+            self.test = test = self.route.implement(self.responsible,
+                                                    self.update)
+            self.db.Tests().add(test)
+            test.start(part=part, dev_container=self.dev_container,
+                       cavity=self.cavity)
+            try:
+                test.walk()
+                test.execute()
+                test.close()
+            except DefectFound:
+                if self.tff:
+                    test.close()
+            except Exception as e:
+                trc = sys.exc_info()
+                self.update('test_error', e, traceback.format_tb(trc[2]))
+                test.cancel()
+            finally:
+                self.db.Session().commit()
         except Exception as e:
             trc = sys.exc_info()
-            self.update('exception', e, traceback.format_tb(trc[2]))
-            test.cancel()
-            self.state = 'cancelled'
-        finally:
-            self.db.Session().commit()
+            self.update('crash', e, traceback.format_tb(trc[2]))
+            raise e
 
     def update(self, state, obj, *args):
         """Receive from test notications of states
@@ -274,7 +270,6 @@ class Inspector(threading.Thread):
         self.events.put(('waiting', question))
         question.ask(message, *args)
         return question
-
 
 
 class Question(threading.Event):

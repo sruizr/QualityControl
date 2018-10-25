@@ -1,34 +1,42 @@
 import datetime
 from quactrl.helpers import get_function
-from quactrl.models.operations import Operation, Step, Action
+from quactrl.models.operations import Step, Action, Operation, Route
 
 
 class DefectFound(Exception):
     pass
 
 
+class ControlPlan(Route):
+    def implement(self, responsible, update=None):
+        return Test(self, responsible, update)
+
+
 class Test(Operation):
-    """Test with checks and added value actions
-    """
-    def __init__(self, route, responsible):
-        super().__init__(route, responsible)
+    def close(self):
+        if self.state in ('finished', 'walking'):
+            if self.state == 'walking':
+                self._cancel = True
+            state = 'success'
+            for step in self.steps:
+                if step.state == 'nok':
+                    state = 'failed'
+                    break
+            self.state = state
+            self.finished_on = datetime.datetime.now()
 
 
 class Check(Action):
     """Verification of a characteristic on a part, outputs defects...
     """
     def __init__(self, operation, control):
-        super().__init__(control, parent=operation)
+        super().__init__(operation, control)
         self.measurements = []
         self.defects = []
 
     @property
-    def operation(self):
-        return self.parent
-
-    @property
     def control(self):
-        return self.route
+        return self.step
 
     def close(self):
         """Eval results once check is finished
@@ -38,6 +46,7 @@ class Check(Action):
             self.finished_on = datetime.datetime.now()
             if self.state == 'nok':
                 self.control.get_reaction()(self)
+                raise DefectFound()
 
         # for measurement in self.measurements:
         #     self.put(measurement, self.parent.route.destination)
@@ -51,7 +60,8 @@ class Check(Action):
         tracking = requirement.eid
         if index is not None:
             tracking = '{}_{}'.format(tracking, index)
-        measurement = Measurement(self.inbox['part'], requirement.characteristic, tracking, value)
+        measurement = Measurement(self.inbox['part'],
+                                  requirement.characteristic, tracking, value)
         mode_key = measurement.eval_value(requirement.specs['limits'])
         if mode_key:
             self.add_defect(requirement, mode_key, tracking, 1)
