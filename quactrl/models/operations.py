@@ -21,7 +21,7 @@ class Handling:
         self.motions = []
         self.started_on = None
         self.finished_on = None
-        self.update = None
+        self.update = update
         self._state = 'open'
 
     @property
@@ -75,10 +75,6 @@ class Part:
         self.dut = self.model.device_class(connection, self.pars)
 
 
-class IncorrectOperationState(Exception):
-    pass
-
-
 class Action(Handling):
     """Implementation of a step from a route
     """
@@ -86,6 +82,12 @@ class Action(Handling):
         super().__init__(operation.responsible, update)
         self.operation = operation
         self.step = step
+        self.inbox = {}
+
+    def start(self, **inputs):
+        super().start()
+        self.cavity = inputs.pop('cavity')
+        self.inbox.update(inputs)
 
     def execute(self):
         """Execute method asociated to route
@@ -96,7 +98,7 @@ class Action(Handling):
                 if hasattr(self, 'thread'):
                     self.state = 'ongoing'
                 else:
-                    self.state = 'finished'
+                    self.state = 'done'
 
     def cancel(self):
         """Cancel execution of operation
@@ -122,8 +124,7 @@ class Operation(Handling):
 
     def start(self, **inputs):
         super().start()
-        self.update = inputs.paction('update', None)
-        self.cavity = inputs.paction('cavity')
+        self.cavity = inputs.pop('cavity')
         self.inbox.update(inputs)
 
     def execute(self):
@@ -135,8 +136,8 @@ class Operation(Handling):
                 self.route.method(self, **self.route.method_pars)
                 if hasattr(self, 'thread'):
                     self.state = 'ongoing'
-                else:
-                    self.state = 'done'
+
+            self.state = 'done'
 
     def walk(self):
         """Execute each child action
@@ -146,6 +147,7 @@ class Operation(Handling):
         for action in self.action_iterator():
             if action:  # step could no create operation!
                 self.on_action = action
+                self.actions.append(action)
                 action.start(cavity=self.cavity, **self.inbox)
                 action.execute()
                 if action.state == 'ongoing':

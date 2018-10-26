@@ -12,7 +12,7 @@ class Session:
     _modes = {}
     _locations = {}
     _part_groups = {}
-    _routes = {}
+    _control_plans = {}
     _devices = {}
     _device_models = {}
     _tests = []
@@ -22,7 +22,9 @@ class Session:
     _characteristics = {}
     lock = Lock()
 
-    def __init__(self, out_path):
+    def __init__(self, out_file):
+        """
+        """
         pass
         # self._tests_f = open(os.path.join(out_path, "tests.csv"), 'a')
         # self._checks_f = open(os.path.join(out_path, "checkss.csv"), 'a')
@@ -142,28 +144,28 @@ class PartRepo(Repository):
             pass
 
 
-class RouteRepo(Repository):
-    def add(self, route):
-        location = route.source.key
+class ControlPlanRepo(Repository):
+    def add(self, control_plan):
+        location = control_plan.source.key
         resources = []
 
-        for resource_map in route.outputs:
+        for resource_map in control_plan.outputs:
             key = resource_map.key
             resources.append(key)
 
         with self.session.lock:
             for resource in resources:
-                self.session._routes[(resource, location)] = route
+                self.session._control_plans[(resource, location)] = control_plan
 
     def get_by_part_model_and_location(self, part_model, location):
         key = (part_model.key, location.key)
-        if key in self.session._routes:
-            return self.session._routes[key]
+        if key in self.session._control_plans:
+            return self.session._control_plans[key]
 
         for group in part_model.part_groups:
             key = (group, location)
-            if key in self.sessionn._routes:
-                return self.session._routes[key]
+            if key in self.sessionn._control_plans:
+                return self.session._control_plans[key]
 
 
 class TestRepo(Repository):

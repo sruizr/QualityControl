@@ -14,12 +14,12 @@ class ControlPlan(Route):
 
 class Test(Operation):
     def close(self):
-        if self.state in ('finished', 'walking'):
+        if self.state in ('done', 'walking'):
             if self.state == 'walking':
                 self._cancel = True
             state = 'success'
-            for step in self.steps:
-                if step.state == 'nok':
+            for action in self.actions:
+                if action.state == 'nok':
                     state = 'failed'
                     break
             self.state = state
@@ -29,8 +29,8 @@ class Test(Operation):
 class Check(Action):
     """Verification of a characteristic on a part, outputs defects...
     """
-    def __init__(self, operation, control):
-        super().__init__(operation, control)
+    def __init__(self, operation, control, update=None):
+        super().__init__(operation, control, update)
         self.measurements = []
         self.defects = []
 
@@ -39,14 +39,16 @@ class Check(Action):
         return self.step
 
     def close(self):
-        """Eval results once check is finished
+        """Eval results once check is finished, if ttf raises DefectFound
         """
-        if self.state == 'finished':
+        if self.state == 'done':
             self.state = 'nok' if self.defects else 'ok'
             self.finished_on = datetime.datetime.now()
             if self.state == 'nok':
                 self.control.get_reaction()(self)
-                raise DefectFound()
+                tff = self.inbox.get('tff', True)
+                if tff:
+                    raise DefectFound()
 
         # for measurement in self.measurements:
         #     self.put(measurement, self.parent.route.destination)
@@ -139,12 +141,12 @@ class Control(Step):
     def characteristic(self):
         return self.outputs['characteristic']
 
-    def create_operation(self, parent):
+    def implement(self, operation):
         """Counts item (time or units)
         and using sampling decides to create check or not
         """
-        if self.sampling.count(parent):
-            return Check(parent, self)
+        if self.sampling.count(operation):
+            return Check(operation, self, operation.update)
 
     def get_reaction(self):
         """Return a reaction method to be executed if check is nok

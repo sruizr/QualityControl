@@ -106,7 +106,7 @@ class Service:
         self.inspectors[cavity].notify(info)
 
     def get_events(self, cavity=None):
-        """Get events from inspector and store them to manager.events"""
+        """Get events from inspector from current test"""
         events = []
 
         if cavity is None:
@@ -118,6 +118,8 @@ class Service:
         return events
 
     def get_last_events(self, cavity=None):
+        """Retrieve last events since previous call
+        """
         pass
 
     def __del__(self):
@@ -155,7 +157,7 @@ class Inspector(threading.Thread):
         # Batch variables
         self.responsible = None
         self.part_model = None
-        self.route = None
+        self.control_plan = None
 
         self._stop_event = threading.Event()
 
@@ -165,18 +167,19 @@ class Inspector(threading.Thread):
         if self.responsible is None or self.responsible.key != responsible_key:
             self.responsible = self.db.Persons().get(responsible_key)
 
-    def set_route_for(self, part_number):
+    def set_control_plan_for(self, part_number):
         if (
                 self.part_model is None
-                or self.part_model.part_number != part_number):
+                or self.part_model.key != part_number):
             self.part_model = self.db.PartModels().get(part_number)
 
         if (
-                self.route is None
+                self.control_plan is None
                 or self.part_model in
-                self.route.inputs['part_group'].part_models):
-            self.route = self.db.Routes().get_by_part_model_and_location(
-                self.part_model, self.location)
+                self.control_plan.inputs['part_group'].part_models):
+            self.control_plan = (self.db.ControlPlans()
+                                 .get_by_part_model_and_location(
+                                     self.part_model, self.location))
 
     def run(self):
         """Thread activation processing order by order"""
@@ -214,28 +217,33 @@ class Inspector(threading.Thread):
         connection = connection if self.cavity is None \
             else connection[self.cavity]
         part.set_dut(connection)
+        return part
 
     def run_test(self, order):
         """Process a full test  from an order
         """
         try:
             part_info, responsible_key = order
+            part_info = part_info.copy()
             self.set_responsible(responsible_key)
-            self.set_route_for(part_info.pop('part_number'))
+            self.set_control_plan_for(part_info.pop('part_number'))
             part = self.get_part(part_info)
 
-            self.test = test = self.route.implement(self.responsible,
-                                                    self.update)
+            self.test = test = self.control_plan.implement(self.responsible,
+                                                           self.update)
             self.db.Tests().add(test)
             test.start(part=part, dev_container=self.dev_container,
-                       cavity=self.cavity)
+                       cavity=self.cavity, tff=self.tff)
             try:
+                self.dev_container.dyncir().hard_reset_dut(
+                    part.dut.supply_voltage,
+                    2, 1, self.cavity
+                )
                 test.walk()
                 test.execute()
                 test.close()
             except DefectFound:
-                if self.tff:
-                    test.close()
+                test.close()
             except Exception as e:
                 trc = sys.exc_info()
                 self.update('test_error', e, traceback.format_tb(trc[2]))
@@ -270,6 +278,9 @@ class Inspector(threading.Thread):
         self.events.put(('waiting', question))
         question.ask(message, *args)
         return question
+
+    def download_events(self):
+        pass
 
 
 class Question(threading.Event):
