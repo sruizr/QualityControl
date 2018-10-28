@@ -130,7 +130,7 @@ class PartRepo(Repository):
                 self.session._parts[part.model] = []
             self.session._parts[part.model].append(part)
 
-    def get(self, part_model, serial_number):
+    def get_by(self, part_model, serial_number):
         if part_model not in self.session._parts:
             return
 
@@ -157,7 +157,7 @@ class ControlPlanRepo(Repository):
             for resource in resources:
                 self.session._control_plans[(resource, location)] = control_plan
 
-    def get_by_part_model_and_location(self, part_model, location):
+    def get_by(self, part_model, location):
         key = (part_model.key, location.key)
         if key in self.session._control_plans:
             return self.session._control_plans[key]

@@ -1,13 +1,13 @@
 import threading
+import sys
 import traceback
 from queue import Queue
 from quactrl.models.devices import DeviceContainer
 import quactrl.models.operations as op
 from quactrl.models.quality import DefectFound
-import sys
 
 
-class NotFoundPart(Exception):
+class WrongLocationError(Exception):
     pass
 
 
@@ -18,11 +18,11 @@ class InspectorException(Exception):
 class Service:
     """Test parts from a location"""
     def __init__(self, database, location, cavities=None,
-                 till_first_failure=True, sn_generator=None):
+                 till_first_failure=True):
+
         self.db = database
         self.tff = till_first_failure
         self.location_key = location
-        self.sn_generator = sn_generator
         self._production_orders = {}
 
         self.events = {}
@@ -60,8 +60,7 @@ class Service:
 
         for cavity in active_cavities:
             inspector = Inspector(self.db, self.dev_container,
-                                  self.location_key, cavity, self.tff,
-                                  self.sn_generator)
+                                  self.location_key, cavity, self.tff)
             inspector.start()
             self.inspectors[cavity] = inspector
 
@@ -107,30 +106,45 @@ class Service:
 
     def get_events(self, cavity=None):
         """Get events from inspector from current test"""
-        events = []
-
-        if cavity is None:
-            for _cavity in range(self.cavities):
-                events.append(self.download_events(_cavity + 1))
-        elif self.inspectors[cavity - 1]:
-                events = self.inspectors[cavity - 1].empty_events()
-                self.events[cavity - 1].extend(events)
-        return events
+        if cavity not in self.active_cavities:
+            for _cavity in self.active_cavities:
+                self.get_events(_cavity)
+            return self.events
+        else:
+            self.get_last_events(cavity)
+            return self.events[cavity]
 
     def get_last_events(self, cavity=None):
         """Retrieve last events since previous call
         """
-        pass
+        if cavity not in self.active_cavities:  # Asking to all cavities
+            last_events = {}
+            for _cavity in self.active_cavities:
+                last_events[_cavity] = self.get_last_events(_cavity)
+        else:
+            last_events = self.inspectors[cavity].get_last_events()
+            if self.test_has_finished[cavity] and last_events:
+                self.events[cavity] = last_events
+            else:
+                self.events[cavity].extend(last_events)
+
+        return last_events
+
+    def test_has_finished(self, cavity):
+        event = self.events[cavity][-1]
+        is_finished = event[0] in ('success', 'failed', 'cancelled')
+        is_finished &= event[1].__class__.__name__ == 'Test'
+        return is_finished
 
     def __del__(self):
         self.stop()
 
 
 class Inspector(threading.Thread):
-    """Inspector of one unique part sharing some devices on a location
+    """Inspector of one cavity sharing some devices on a location
     """
     def __init__(self, database, dev_container, location_key,
-                 cavity=None, tff=True, sn_generator=None):
+                 cavity=None, tff=True):
         """Args:
         database(Container): Persistence layer container of providers
         dev_container(Container): Container of devices
@@ -141,13 +155,14 @@ class Inspector(threading.Thread):
         name = 'Inspector'
         if cavity is not None:
             name += '_{}'.format(cavity)
+
         super().__init__(name=name)
+
         self.db = database
         self.dev_container = dev_container
         self.location = self.db.Locations().get(location_key)
         self.cavity = cavity
         self.tff = tff
-        self.sn_generator = sn_generator
 
         # Inputs and Outputs of inspector
         self.orders = Queue()
@@ -167,9 +182,8 @@ class Inspector(threading.Thread):
         if self.responsible is None or self.responsible.key != responsible_key:
             self.responsible = self.db.Persons().get(responsible_key)
 
-    def set_control_plan_for(self, part_number):
-        if (
-                self.part_model is None
+    def set_part_model(self, part_number):
+        if (self.part_model is None
                 or self.part_model.key != part_number):
             self.part_model = self.db.PartModels().get(part_number)
 
@@ -178,8 +192,8 @@ class Inspector(threading.Thread):
                 or self.part_model in
                 self.control_plan.inputs['part_group'].part_models):
             self.control_plan = (self.db.ControlPlans()
-                                 .get_by_part_model_and_location(
-                                     self.part_model, self.location))
+                                 .get_by(self.part_model, self.location))
+
 
     def run(self):
         """Thread activation processing order by order"""
@@ -196,22 +210,28 @@ class Inspector(threading.Thread):
 
         self.state = 'stopped'
 
-    def get_part(self, part_info):
+    def get_part(self, serial_number, pars):
         """Get part from data layer if exist or create a new one
         """
-        serial_number = part_info.pop('serial_number', None)
-        if not serial_number:
-            serial_number = self.sn_generator.get_serial_number(
-                self.part_model.key,
-                part_info.pop('batch_number')
-            )
 
-        part = self.db.Parts().get(self.part_model, serial_number)
+        # if not serial_number:
+        #     serial_number = self.sn_generator.get_serial_number(
+        #         self.part_model.key,
+        #         part_info.pop('batch_number')
+        #     )
+
+        part = self.db.Parts().get_by(self.part_model, serial_number)
+
         if part is None:
             part = op.Part(self.part_model, serial_number,
-                           location=self.location)
+                           location=self.location, pars=pars)
+
         if part.location != self.location:
-            raise Exception('Part found on incorrect location')
+            raise WrongLocationError(
+                'Part {} with sn {} found on {}'.format(
+                    part.model.key, part.tracking, part.location.key
+                )
+            )
 
         connection = self.dev_container.modbus_conn()
         connection = connection if self.cavity is None \
@@ -224,10 +244,12 @@ class Inspector(threading.Thread):
         """
         try:
             part_info, responsible_key = order
-            part_info = part_info.copy()
             self.set_responsible(responsible_key)
-            self.set_control_plan_for(part_info.pop('part_number'))
-            part = self.get_part(part_info)
+
+            part_number = part_info.pop('part_number')
+            self.set_part_model(part_number)
+            serial_number = part_info.pop('serial_number')
+            part = self.get_part(serial_number, part_info)
 
             self.test = test = self.control_plan.implement(self.responsible,
                                                            self.update)
@@ -274,13 +296,25 @@ class Inspector(threading.Thread):
         return pending_orders
 
     def ask(self, message, *args):
+        """Ask a question to the client, waiting the result
+        """
         question = Question()
         self.events.put(('waiting', question))
         question.ask(message, *args)
         return question
 
-    def download_events(self):
-        pass
+    def get_last_events(self):
+        """Retrieve a list of last events of current test
+        """
+        events = []
+        for _ in range(self.events.qsize()):
+            event = self.events.get()
+            events.append(event)
+            if event[0] in ('success', 'failed', 'cancelled') \
+               and event[1].__class__.__name__ == 'Test':
+                break
+
+        return events
 
 
 class Question(threading.Event):
