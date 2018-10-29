@@ -172,6 +172,7 @@ class Inspector(threading.Thread):
         # Batch variables
         self.responsible = None
         self.part_model = None
+        self.part = None
         self.control_plan = None
 
         self._stop_event = threading.Event()
@@ -249,7 +250,7 @@ class Inspector(threading.Thread):
             part_number = part_info.pop('part_number')
             self.set_part_model(part_number)
             serial_number = part_info.pop('serial_number')
-            part = self.get_part(serial_number, part_info)
+            self.part = part = self.get_part(serial_number, part_info)
 
             self.test = test = self.control_plan.implement(self.responsible,
                                                            self.update)
@@ -272,6 +273,7 @@ class Inspector(threading.Thread):
                 test.cancel()
             finally:
                 self.db.Session().commit()
+                self.part = None
         except Exception as e:
             trc = sys.exc_info()
             self.update('crash', e, traceback.format_tb(trc[2]))
