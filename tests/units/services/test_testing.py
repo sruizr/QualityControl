@@ -71,12 +71,12 @@ class A_TestingService(TestWithPatches):
         pass
 
 
-
 class An_Inspector(TestWithPatches):
 
     def setup_method(self, method):
         self.create_patches([
-            'quactrl.services.testing.Question'
+            'quactrl.services.testing.Question',
+            'quactrl.services.testing.op.Part'
         ])
 
     def should_have_correct_name(self):
@@ -89,29 +89,49 @@ class An_Inspector(TestWithPatches):
     def should_set_responsible(self):
         db = Mock()
         inspector = t.Inspector(db, Mock(), 'loc')
-        responsible = db.Persons().get_by_key.return_value
+        responsible = db.Persons().get.return_value
 
         inspector.set_responsible('responsible')
 
         assert responsible == inspector.responsible
 
         inspector.set_responsible('other')
-        assert db.Persons().get_by_key.call_count == 2
-        db.Persons().get_by_key.assert_called_with('other')
+        assert db.Persons().get.call_count == 2
+        db.Persons().get.assert_called_with('other')
 
-    def should_set_route(self):
+    def should_set_part_model(self):
         db = Mock()
         inspector = t.Inspector(db, Mock(), 'loc')
-        get_part_model = db.PartModels().get_by_part_number
-        get_route = db.Routes().get_by_part_model_and_location
 
-        inspector.set_route_for('part_number')
+        get_part_model = db.PartModels().get
+        get_control_plan = db.ControlPlans().get_by
+
+        inspector.set_part_model('part_number')
         assert inspector.part_model == get_part_model.return_value
-        assert inspector.route == get_route.return_value
+        assert inspector.control_plan == get_control_plan.return_value
 
         get_part_model.assert_called_with('part_number')
-        get_route.assert_called_with(inspector.part_model,
-                                     db.Locations().get_by_key.return_value)
+        get_control_plan.assert_called_with(
+            inspector.part_model,
+            db.Locations().get.return_value)
+
+    def should_get_part_from_part_info(self):
+        db = Mock()
+        inspector = t.Inspector(db, Mock(), 'loc')
+        inspector.part_model = Mock()
+        inspector.location = Mock()
+
+        get_part = db.Parts().get_by
+        get_part.return_value = None
+        expected_part = self.Part.return_value
+        expected_part.location = inspector.location
+
+        part = inspector.get_part('1234567890', {'par': 1})
+
+        assert part == expected_part
+
+        get_part.return_value = expected_part = Mock()
+
 
     def should_run_till_None_order(self):
         inspector = t.Inspector(Mock(), Mock(), 'loc')
@@ -160,24 +180,25 @@ class An_Inspector(TestWithPatches):
 
         inspector = t.Inspector(db, dev_container, 'ĺoc')
         inspector.set_responsible = Mock()
-        inspector.set_route_for = Mock()
-        route = inspector.route = Mock()
+        inspector.set_part_model = Mock()
+        inspector.get_part = Mock()
+        part = inspector.get_part.return_value
+        control_plan = inspector.control_plan = Mock()
 
         part_info = {'part_number': 'part_number',
                      'serial_number': '1234567890'
         }
-        part = db.Parts().get_or_create.return_value
 
         inspector.run_test((part_info, 'resp'))
 
         inspector.set_responsible.assert_called_with('resp')
-        inspector.set_route_for.assert_called_with(part)
-        test = route.create_operation.return_value
+        inspector.set_part_model.assert_called_with('part_number')
+        inspector.get_part.assert_called_with('1234567890', {})
+        test = control_plan.implement.return_value
 
         test.start.assert_called_with(
-            subject=part, dev_container=dev_container,
-            cavity=None, tff=inspector.tff,
-            update=inspector.update
+            part=part, dev_container=dev_container,
+            cavity=None, tff=inspector.tff
         )
         test.walk.assert_called_with()
         test.execute.assert_called_with()

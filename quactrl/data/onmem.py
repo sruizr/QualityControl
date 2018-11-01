@@ -22,21 +22,111 @@ class Session:
     _characteristics = {}
     lock = Lock()
 
-    def __init__(self, out_file):
+    def __init__(self, string_connection):
         """
         """
-        pass
-        # self._tests_f = open(os.path.join(out_path, "tests.csv"), 'a')
-        # self._checks_f = open(os.path.join(out_path, "checkss.csv"), 'a')
-        # self._measures_f = open(os.path.join(out_path, "measures.csv"), 'a')
-        # self._defects_f = open(os.path.join(out_path, "defects.csv"), 'a')
+        pars = string_connection.split(';')
+        output_path = pars.pop(0)
+        self.conn = sqlite3.connect(output_path)
+        parameters = {}
+        for parameter in pars:
+            field, value = parameter.split('=')
+            parameters[field] = value
+
+        if 'clear' in parameters:
+            self._clear_out_data()
+
+    def _clear_out_data(self):
+        c = self.conn.cursor()
+        c.execute('delete * from Measurements')
+        c.execute('delete * from Defects')
+        c.execute('delete * from Actions')
+        c.execute('delete * from Tests')
+        c.execute('delete * from Parts')
+        c.commit()
 
     def commit(self):
-        pass
-        # self._tests_f.flush()
-        # self._checks_f.flush()
-        # self._measures_f.flush()
-        # self._defects_f.flush()
+        self.c = self.conn.cursor()
+        for test in self._tests:
+            if not hasattr(test, '_id'):
+                part = self._upsert_part(test.inbox['part'])
+                self._insert_test(test)
+                for action in test.actions:
+                    if action.__class__.__name__ == 'Check':
+                        check = action
+                        self._insert_check(check, test._id)
+                        for measurement in check.measurements:
+                            self._insert_measurement(measurement, check)
+                        for defect in check.defects:
+                            self._insert_defect(defect, check)
+                    else:
+                        self._insert_action(action)
+
+        self.c.commit()
+
+    def _upsert_part(self, part):
+        id = self.c.execute(
+            'select id from Parts where part_number=?, serial_number=?',
+            (part.model.key, part.serial_number)
+        )
+        if not id:
+            self.c.execute(
+                'insert into Parts (part_number, serial_number) values (?, ?)',
+                (part.model.key, part.serial_number)
+            )
+            id = self.c.lastrowid
+
+        part._id = id
+
+    def _insert_test(self, test):
+        self.c.execute(
+            ('insert into Tests '
+             '(fk_part, started_on, finished_on, responsible_key, state) '
+             'values(?, ?, ?, ?)'),
+            (test.part._id, test.started_on, test.finished_on,
+             test.state, test.responsible.key)
+        )
+        test._id = self.c.lastrowid
+
+    def _insert_check(self, check):
+        self.c.execute(
+            ('insert into Actions ',
+             '(fk_test, started_on, finished_on, description, state) '
+             'values (?, ?, ?, ?, ?)'),
+            (check.test._id, check.started_on, check.finished_on,
+             check.requirement.description, check.state)
+        )
+        check._id = self.c.lastrowid
+
+    def _insert_action(self, action):
+        self.c.execute(
+            ('insert into Actions ',
+             '(fk_test, started_on, finished_on, description, state) '
+             'values (?, ?, ?, ?, ?)'),
+            (action.test._id, action.started_on, action.finished_on,
+             action.step.method_name, action.state)
+        )
+        action._id = self.c.lastrowid
+
+    def _insert_measurement(self, measurement, check):
+        self.c.execute(
+            ('insert into Measurements '
+             '(fk_check, char_key, tracking, value) '
+             'values (?, ?, ?, ?)'),
+            (check._id, measurement.characteristic.key, measurement.tracking,
+             measurement.value)
+        )
+
+        measurement._id = self.c.lastrowid
+
+    def _insert_defect(self, defect, check):
+        self.c.execute(
+            ('insert into Defects '
+             '(fk_check, failure_key, tracking) '
+             'values (? , ?, ?)'),
+            (check._id, defect.failure.key, defect.tracking)
+        )
+        defect._id = self.c.lastrowid
 
 
 class Repository:
@@ -130,7 +220,7 @@ class PartRepo(Repository):
                 self.session._parts[part.model] = []
             self.session._parts[part.model].append(part)
 
-    def get(self, part_model, serial_number):
+    def get_by(self, part_model, serial_number):
         if part_model not in self.session._parts:
             return
 
@@ -157,7 +247,7 @@ class ControlPlanRepo(Repository):
             for resource in resources:
                 self.session._control_plans[(resource, location)] = control_plan
 
-    def get_by_part_model_and_location(self, part_model, location):
+    def get_by(self, part_model, location):
         key = (part_model.key, location.key)
         if key in self.session._control_plans:
             return self.session._control_plans[key]
