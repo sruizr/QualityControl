@@ -30,7 +30,7 @@ class AuTestResource:
                 cavity = 1
             elif self._is_num(arg_2):
                 cavity = int(arg_2)
-            last = last == ''
+                last = last == ''
             return self.handle_get_events(cavity, last)
 
     def handle_get_events(self, cavity, only_last):
@@ -50,7 +50,7 @@ class AuTestResource:
         if cavity is None:
             result = [tester.test for tester in self.manager.testers] \
                      if self.manager.cavities > 1 else \
-                     self.manager.testers[0].test
+                        self.manager.testers[0].test
         else:
             result = self.manager.testers[cavity - 1].test
         if result is None:
