@@ -23,7 +23,6 @@ class Service:
         self.db = database
         self.tff = till_first_failure
         self.location_key = location
-        self._production_orders = {}
 
         self.events = {}
         self.inspectors = {}
@@ -32,7 +31,6 @@ class Service:
         self.dev_container = DeviceContainer(all_devices)
         self._start_inspectors(cavities)
 
-        self._production_orders = {}
         self._lock = threading.Lock()
 
     @property
@@ -51,7 +49,7 @@ class Service:
 
     def _start_inspectors(self, cavities):
         if cavities is None:
-            active_cavities = [None]
+            active_cavities = None
         else:
             if type(cavities) is int:
                 active_cavities = list(range(cavities))
@@ -144,7 +142,7 @@ class Inspector(threading.Thread):
     """Inspector of one cavity sharing some devices on a location
     """
     def __init__(self, database, dev_container, location_key,
-                 cavity=None, tff=True):
+                 cavity=0, tff=True):
         """Args:
         database(Container): Persistence layer container of providers
         dev_container(Container): Container of devices

@@ -1,6 +1,5 @@
 from threading import Lock
-import sqlite3
-
+from quactrl.data.sqlite import TestSaver
 
 class Session:
     _routes = {}
@@ -25,109 +24,21 @@ class Session:
     def __init__(self, string_connection):
         """
         """
-        pars = string_connection.split(';')
-        output_path = pars.pop(0)
-        self.conn = sqlite3.connect(output_path)
-        parameters = {}
-        for parameter in pars:
-            field, value = parameter.split('=')
-            parameters[field] = value
-
-        if 'clear' in parameters:
-            self._clear_out_data()
-
-    def _clear_out_data(self):
-        c = self.conn.cursor()
-        c.execute('delete * from Measurements')
-        c.execute('delete * from Defects')
-        c.execute('delete * from Actions')
-        c.execute('delete * from Tests')
-        c.execute('delete * from Parts')
-        c.commit()
+        self.test_saver = None
+        if string_connection:
+            pars = string_connection.split(';')
+            file_name = pars.pop(0)
+            parameters = {}
+            for parameter in pars:
+                field, value = parameter.split('=')
+                parameters[field] = value
+            self.test_saver = TestSaver(file_name, clear)
 
     def commit(self):
-        self.c = self.conn.cursor()
-        for test in self._tests:
-            if not hasattr(test, '_id'):
-                part = self._upsert_part(test.inbox['part'])
-                self._insert_test(test)
-                for action in test.actions:
-                    if action.__class__.__name__ == 'Check':
-                        check = action
-                        self._insert_check(check, test._id)
-                        for measurement in check.measurements:
-                            self._insert_measurement(measurement, check)
-                        for defect in check.defects:
-                            self._insert_defect(defect, check)
-                    else:
-                        self._insert_action(action)
-
-        self.c.commit()
-
-    def _upsert_part(self, part):
-        id = self.c.execute(
-            'select id from Parts where part_number=?, serial_number=?',
-            (part.model.key, part.serial_number)
-        )
-        if not id:
-            self.c.execute(
-                'insert into Parts (part_number, serial_number) values (?, ?)',
-                (part.model.key, part.serial_number)
-            )
-            id = self.c.lastrowid
-
-        part._id = id
-
-    def _insert_test(self, test):
-        self.c.execute(
-            ('insert into Tests '
-             '(fk_part, started_on, finished_on, responsible_key, state) '
-             'values(?, ?, ?, ?)'),
-            (test.part._id, test.started_on, test.finished_on,
-             test.state, test.responsible.key)
-        )
-        test._id = self.c.lastrowid
-
-    def _insert_check(self, check):
-        self.c.execute(
-            ('insert into Actions ',
-             '(fk_test, started_on, finished_on, description, state) '
-             'values (?, ?, ?, ?, ?)'),
-            (check.test._id, check.started_on, check.finished_on,
-             check.requirement.description, check.state)
-        )
-        check._id = self.c.lastrowid
-
-    def _insert_action(self, action):
-        self.c.execute(
-            ('insert into Actions ',
-             '(fk_test, started_on, finished_on, description, state) '
-             'values (?, ?, ?, ?, ?)'),
-            (action.test._id, action.started_on, action.finished_on,
-             action.step.method_name, action.state)
-        )
-        action._id = self.c.lastrowid
-
-    def _insert_measurement(self, measurement, check):
-        self.c.execute(
-            ('insert into Measurements '
-             '(fk_check, char_key, tracking, value) '
-             'values (?, ?, ?, ?)'),
-            (check._id, measurement.characteristic.key, measurement.tracking,
-             measurement.value)
-        )
-
-        measurement._id = self.c.lastrowid
-
-    def _insert_defect(self, defect, check):
-        self.c.execute(
-            ('insert into Defects '
-             '(fk_check, failure_key, tracking) '
-             'values (? , ?, ?)'),
-            (check._id, defect.failure.key, defect.tracking)
-        )
-        defect._id = self.c.lastrowid
-
+        if self.test_saver:
+            for test in self._tests:
+                if not hasattr(test, '_id'):
+                    self.test_saver.save(test)
 
 class Repository:
     def __init__(self, session):
@@ -230,6 +141,7 @@ class PartRepo(Repository):
                 return part
 
     def get_last_serial_number(self, part_model, sn_filter):
+
         for parts in self.session._parts.values():
             pass
 

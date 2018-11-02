@@ -137,10 +137,6 @@ class Control(Step):
         self.sampling = Sampling(self, *self._sampling_par[sampling])
         self.reaction_name = reaction
 
-    @property
-    def characteristic(self):
-        return self.outputs['characteristic']
-
     def implement(self, operation):
         """Counts item (time or units)
         and using sampling decides to create check or not
@@ -175,6 +171,9 @@ class FailureMode:
 
         self.characteristic.failure_modes[mode.key] = self
 
+    def __str__(self):
+        return '{} {} @ {}'.format(self.mode.name, self.characteristic.attribute.name,
+                                   self.characteristic.element.name)
 
 class Mode:
     def __init__(self, key, name):

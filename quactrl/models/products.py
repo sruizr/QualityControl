@@ -52,11 +52,14 @@ class Characteristic:
         self.element = element
         self.failure_modes = {}
 
+    def __str__(self):
+        return '{} @ {}'.format(self.attribute.name, self.element.name)
+
 
 class Element:
     """Abstract subsystem or component
     """
-    def __init__(self, key, name=None, description=None, parent=None):
+    def __init__(self, key, name, description=None, parent=None):
         self.key = key
         self.name = name
         self.description = description

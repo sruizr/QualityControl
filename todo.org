@@ -112,3 +112,8 @@
 *** TODO GET- TestResource reports current state
 *** TODO DEL- TestResource is stopped
 *** TODO POST- TestResource is logged
+
+* Commit plan
+** TODO Test results saves on sqlite database
+** TODO Implement data layer with sqlalchemy
+** TODO Testing service is fully tested
