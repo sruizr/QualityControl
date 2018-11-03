@@ -114,6 +114,25 @@
 *** TODO POST- TestResource is logged
 
 * Commit plan
+** DONE Testing service start, stop and restarts
+** TODO Testing service retrieve events from cavities
+** TODO Inspector .....
 ** TODO Test results saves on sqlite database
 ** TODO Implement data layer with sqlalchemy
-** TODO Testing service is fully tested
+** TODO Quality models are tested
+** TODO Operations models are tested
+** TODO Product models are tested
+* States diagrams
+#+BEGIN_SRC dot :file images/actions-states.png :var input=make-dot :exports results
+Action {
+ Open -> Started-> Done -> Closed
+ Started -> Ongoing -> Done
+ Cancelled
+}
+#+END_SRC
+
+#+BEGIN_SRC dot :file images/operations-state.png :var input=make-dot :exports results
+Operations {
+ Open -> Started -> Walking -> Walked -> Done -> Closed
+}
+#+END_SRC

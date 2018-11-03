@@ -6,6 +6,7 @@ import quactrl.services.testing as t
 import pytest
 
 
+@pytest.mark.current
 class A_TestingService(TestWithPatches):
     def setup_method(self, method):
         super().create_patches([
@@ -15,30 +16,109 @@ class A_TestingService(TestWithPatches):
         self.db = Mock()
         self.service = t.Service(self.db, 'location')
 
-    def should_init_without_cavities(self):
+    def should_init_with_dev_container(self):
         serv = t.Service(self.db, 'location')
 
-        assert serv.cavities == 1
-        assert serv.active_cavities == [None]
-        self.Inspector.assert_called_with(
-            serv.db, serv.dev_container, 'location',  None, True
+        assert serv.cavities == 0
+        assert not serv.active_cavities
+
+        dev_repo = self.db.Devices.return_value
+        dev_repo.get_all_from.assert_called_with('location')
+        self.DeviceContainer.assert_called_with(
+            dev_repo.get_all_from.return_value
         )
-        inspector = self.Inspector.return_value
-        inspector.start.assert_called_with()
 
-    def should_init_with_all_cavities(self):
-        serv = t.Service(self.db, 'location', 5)
+    def should_start_a_cavity(self):
+        serv = t.Service(self.db, 'location')
 
-        assert serv.cavities == 5
-        for cavity in range(5):
-            assert cavity in serv.inspectors.keys()
+        serv.start(1)
+        assert serv.cavities == 1
+        assert serv.active_cavities == [1]
+        self.Inspector.assert_called_with(
+            self.db, self.DeviceContainer.return_value,
+            'location', 1, True
+        )
 
-    def should_init_with_some_cavities(self):
-        serv = t.Service(self.db, 'location', [2, 3])
+        serv.restart = Mock()
+        serv.start(1)
 
-        assert serv.cavities == 2
-        for cavity in [2, 3]:
-            assert cavity in serv.inspectors.keys()
+        serv.restart.assert_called_with(1)
+
+    def should_start_many_cavities(self):
+        serv = t.Service(self.db, 'location')
+
+        serv.start([1, 3, 5])
+        assert serv.cavities == 3
+        assert set(serv.active_cavities) == set([1, 3, 5])
+
+    def should_stop_a_cavity(self):
+        serv = t.Service(self.db, 'location')
+
+        serv.inspectors[1] = inspector_1 = Mock()
+
+        pending_orders = serv.stop(1)
+
+        assert 1 not in serv.inspectors
+        inspector_1.stop.assert_called_with()
+        assert pending_orders == inspector_1.stop.return_value
+
+    def should_stop_all_cavities(self):
+        serv = t.Service(self.db, 'location')
+
+        serv.inspectors[1] = inspector_1 = Mock()
+        serv.inspectors[3] = inspector_3 = Mock()
+
+        pending_orders = serv.stop()
+
+        assert not serv.inspectors
+        inspector_1.stop.assert_called_with()
+        inspector_3.stop.assert_called_with()
+        assert pending_orders[1] == inspector_1.stop.return_value
+        assert pending_orders[3] == inspector_3.stop.return_value
+
+    def should_restart_a_cavity_reinserting_orders(self):
+        serv = t.Service(self.db, 'location')
+        serv.inspectors[1] = Mock()
+
+        serv.start = Mock()
+        serv.stop = Mock()
+        serv.stop.return_value = ['order']
+
+        result = serv.restart(1)
+
+        serv.stop.assert_called_with(1)
+        serv.start.assert_called_with(1)
+        serv.inspectors[1].orders.put.assert_called_with('order')
+        assert result is None
+
+    def should_restart_a_cavity_returning_orders(self):
+        serv = t.Service(self.db, 'location')
+        serv.inspectors[1] = Mock()
+
+        serv.start = Mock()
+        serv.stop = Mock()
+        serv.stop.return_value = ['order']
+
+        result = serv.restart(1, False)
+
+        serv.stop.assert_called_with(1)
+        serv.start.assert_called_with(1)
+        serv.inspectors[1].orders.put.assert_not_called()
+        assert result == ['order']
+
+    def should_restart_all_cavities(self):
+        serv = t.Service(self.db, 'location')
+        serv.inspectors[1] = Mock()
+        serv.inspectors[4] = Mock()
+
+        serv.start = Mock()
+        serv.stop = Mock()
+        serv.stop.return_value = ['order']
+
+        serv.restart()
+
+        assert len(serv.stop.mock_calls) == 2
+        assert len(serv.start.mock_calls) == 2
 
     def _should_raise_exception_when_there_are_inspectors_working(self):
         serv = self.service
@@ -61,13 +141,10 @@ class A_TestingService(TestWithPatches):
             ('part_info', 'responsible_key')
         )
 
-    def should_tear_down(self):
+    def should_return_last_events(self):
         pass
 
-    def should_stop_inspector(self):
-        pass
-
-    def should_restart_inspector(self):
+    def should_return_all_events(self):
         pass
 
 

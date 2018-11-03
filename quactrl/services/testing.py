@@ -17,8 +17,7 @@ class InspectorException(Exception):
 
 class Service:
     """Test parts from a location"""
-    def __init__(self, database, location, cavities=None,
-                 till_first_failure=True):
+    def __init__(self, database, location, till_first_failure=True):
 
         self.db = database
         self.tff = till_first_failure
@@ -26,12 +25,10 @@ class Service:
 
         self.events = {}
         self.inspectors = {}
+        self._lock = threading.Lock()
 
         all_devices = self.db.Devices().get_all_from(location)
         self.dev_container = DeviceContainer(all_devices)
-        self._start_inspectors(cavities)
-
-        self._lock = threading.Lock()
 
     @property
     def cavities(self):
@@ -47,60 +44,65 @@ class Service:
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
 
-    def _start_inspectors(self, cavities):
-        if cavities is None:
-            active_cavities = None
-        else:
-            if type(cavities) is int:
-                active_cavities = list(range(cavities))
-            elif type(cavities) is list:
-                active_cavities = cavities
-
-        for cavity in active_cavities:
-            inspector = Inspector(self.db, self.dev_container,
-                                  self.location_key, cavity, self.tff)
-            inspector.start()
-            self.inspectors[cavity] = inspector
-
-    def restart(self, cavities=None, clean_orders=False):
-        """Restart inspectors
+    def start(self, cavity=None):
+        """Start a cavity asigning an inspector
         """
-        if cavities is None:
-            cavities = self.active_cavities
-
-        for cavity in cavities:
-            pending_orders = self.stop(cavity)
-            inspector = Inspector(self.db, self.dev_container,
-                                  self.location_key, cavity, self.ttf,
-                                  self.sn_generator)
-            self.inspectors[cavity] = inspector
+        if type(cavity) is list:
+            for cavity_ in cavity:
+                self.start(cavity_)
+        elif cavity in self.inspectors:
+            self.restart(cavity)
+        else:
+            self.inspectors[cavity] = inspector = Inspector(
+                self.db, self.dev_container,
+                self.location_key, cavity, self.tff
+            )
             inspector.start()
-            if not clean_orders:
-                for order in pending_orders:
-                    inspector.orders.put(order)
 
     def stop(self, cavity=None):
         """Stop a concrete inspector or all inspectors"""
-        pending_orders = []
-        if cavity is None:
-            for inspector in self.inspectors.values():
+        if cavity in self.inspectors.keys():
+            inspector = self.inspectors.pop(cavity)
+            return inspector.stop()
+        elif cavity is None:  # All cavities will stop
+            pending_orders = {}
+            cavities = list(self.inspectors.keys())
+            for cavity in cavities:
+                inspector = self.inspectors.pop(cavity)
                 if inspector:
-                    pending_orders.extend(inspector.stop())
-        else:
-            if cavity in self.inspectors.keys():
-                inspector = self.inspectors[cavity]
-                pending_orders.extend(inspector.stop())
+                    pending_orders[cavity] = inspector.stop()
+            return pending_orders
 
-        return pending_orders
+    def restart(self, cavity=None, reinsert_orders=True):
+        """Restart cavity inspection, all if None
+        """
+        if cavity in self.active_cavities:
+            pending_orders = self.stop(cavity)
+            self.start(cavity)
+
+            if reinsert_orders:
+                for order in pending_orders:
+                    self.inspectors[cavity].orders.put(order)
+            else:
+                return pending_orders
+
+        elif cavity is None:  # All active cavities will restart
+            all_orders = {}
+            for cavity in self.active_cavities:
+                pending_orders = self.restart(cavity, reinsert_orders)
+                if not reinsert_orders:
+                    all_orders[cavity] = pending_orders
+            if not reinsert_orders:
+                return all_orders
 
     def stack_part(self, part_info, responsible_key, cavity=None):
         """Start part for testing on an order process parameters"""
         inspector = self.inspectors[cavity]
         inspector.orders.put((part_info, responsible_key))
 
-    def notify(self, info, cavity=None):
-        """Transfer notification from client to inspector"""
-        self.inspectors[cavity].notify(info)
+    # def notify(self, info, cavity=None):
+    #     """Transfer notification from client to inspector"""
+    #     self.inspectors[cavity].notify(info)
 
     def get_events(self, cavity=None):
         """Get events from inspector from current test"""
