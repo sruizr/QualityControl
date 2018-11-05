@@ -12,6 +12,10 @@ class PartGroup:
         self.part_models = []
         self.requirements = {}
 
+    def add_part_model(self, part_model):
+        self.part_models.append(part_model)
+        part_model.groups.append(self)
+
 
 class PartModel(PartGroup):
     """Abstraction of part, type of part

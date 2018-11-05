@@ -125,7 +125,6 @@ class A_TestingService(TestWithPatches):
 
         serv.inspectors = {1: Mock()}
         try:
-
             pytest.fail('No InspectorException raised')
         except t.InspectorException:
             pass
@@ -209,7 +208,6 @@ class An_Inspector(TestWithPatches):
 
         get_part.return_value = expected_part = Mock()
 
-
     def should_run_till_None_order(self):
         inspector = t.Inspector(Mock(), Mock(), 'loc')
         inspector.run_test = lambda order: time.sleep(0.1)
@@ -264,7 +262,7 @@ class An_Inspector(TestWithPatches):
 
         part_info = {'part_number': 'part_number',
                      'serial_number': '1234567890'
-        }
+                     }
 
         inspector.run_test((part_info, 'resp'))
 

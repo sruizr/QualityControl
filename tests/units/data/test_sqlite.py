@@ -12,7 +12,6 @@ class A_TestSaver:
         test.responsible.key = 'sruiz'
         test.state = 'success'
 
-
         part = test.part
         part.serial_number = '1234567890'
         part.model.key = 'part_number'
@@ -24,7 +23,7 @@ class A_TestSaver:
         check.test = test
         check.started_on = datetime.datetime.now()
         check.finished_on = datetime.datetime.now()
-        check.requirement.description =  'requirement'
+        check.requirement.description = 'requirement'
         check.state = 'ok'
         check.measurements = []
         check.defects = []

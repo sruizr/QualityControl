@@ -95,7 +95,7 @@ class TestSaver:
         self.c.execute('DELETE * FROM Actions')
         self.c.execute('DELETE * FROM Tests')
         self.c.execute('DELETE * FROM Parts')
-        cursor.commit()
+        self.conn.commit()
 
     def upsert_part(self, part):
         self.c.execute(
@@ -115,7 +115,6 @@ class TestSaver:
         part._id = id
 
     def insert_test(self, test):
-        finished_on = test.finished_on.isoformat(' ') if test.finished_on else None
         self.c.execute(
             ('insert into Tests '
              '(fk_part, started_on, finished_on, responsible_key, state) '
@@ -127,7 +126,7 @@ class TestSaver:
 
     def insert_check(self, check):
         print((check.test._id, check.started_on, check.finished_on,
-             check.requirement.description, check.state))
+               check.requirement.description, check.state))
         self.c.execute(
             ('insert into Actions '
              '(fk_test, started_on, finished_on, description, state) '

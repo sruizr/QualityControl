@@ -123,7 +123,7 @@ class Service:
                 last_events[_cavity] = self.get_last_events(_cavity)
         else:
             last_events = self.inspectors[cavity].get_last_events()
-            if self.test_has_finished[cavity] and last_events:
+            if self.test_has_finished(cavity) and last_events:
                 self.events[cavity] = last_events
             else:
                 self.events[cavity].extend(last_events)
@@ -131,6 +131,8 @@ class Service:
         return last_events
 
     def test_has_finished(self, cavity):
+        if cavity not in self.events:
+            return True
         event = self.events[cavity][-1]
         is_finished = event[0] in ('success', 'failed', 'cancelled')
         is_finished &= event[1].__class__.__name__ == 'Test'
@@ -194,7 +196,6 @@ class Inspector(threading.Thread):
                 self.control_plan.inputs['part_group'].part_models):
             self.control_plan = (self.db.ControlPlans()
                                  .get_by(self.part_model, self.location))
-
 
     def run(self):
         """Thread activation processing order by order"""

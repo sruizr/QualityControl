@@ -1,6 +1,7 @@
 from threading import Lock
 from quactrl.data.sqlite import TestSaver
 
+
 class Session:
     _routes = {}
     _persons = {}
@@ -29,9 +30,14 @@ class Session:
             pars = string_connection.split(';')
             file_name = pars.pop(0)
             parameters = {}
-            for parameter in pars:
-                field, value = parameter.split('=')
-                parameters[field] = value
+            for par in pars:
+                parameter = par.split('=')
+                if len(parameter) == 1:
+                    parameters[parameter[0]] = True
+                else:
+                    parameter[parameter[0]] = parameter[1]
+
+            clear = parameters.get('clear', False)
             self.test_saver = TestSaver(file_name, clear)
 
     def commit(self):
