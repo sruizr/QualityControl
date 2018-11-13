@@ -113,7 +113,7 @@ class Service:
             return self.events
         else:
             self.get_last_events(cavity)
-            return self.events[cavity]
+            return self.events.get(cavity)
 
     def get_last_events(self, cavity=None):
         """Retrieve last events since previous call
@@ -134,6 +134,7 @@ class Service:
     def test_has_finished(self, cavity):
         if cavity not in self.events:
             return True
+
         event = self.events[cavity][-1]
         is_finished = event[0] in ('success', 'failed', 'cancelled')
         is_finished &= event[1].__class__.__name__ == 'Test'
@@ -147,7 +148,7 @@ class Inspector(threading.Thread):
     """Inspector of one cavity sharing some devices on a location
     """
     def __init__(self, database, dev_container, location_key,
-                 cavity=0, tff=True):
+                 cavity=None, tff=True):
         """Args:
         database(Container): Persistence layer container of providers
         dev_container(Container): Container of devices

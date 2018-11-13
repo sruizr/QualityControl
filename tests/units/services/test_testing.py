@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 import time
 from ...units import TestWithPatches
 import threading
@@ -141,10 +141,45 @@ class A_TestingService(TestWithPatches):
         )
 
     def should_return_last_events(self):
-        pass
+        serv = self.service
+        serv.get_last_events = Mock()
+        serv.get_last_events.return_value = [1, 2]
+        serv.inspectors[1] = Mock()
+
+        serv.get_events(1)
+
+        serv.get_last_events.assert_called_with(1)
+
+        serv.inspectors = {2: Mock(), 5: Mock()}
+        serv.get_events()
+
+        assert call(2) in serv.get_last_events.mock_calls
+        assert call(5) in serv.get_last_events.mock_calls
 
     def should_return_all_events(self):
-        pass
+        serv = self.service
+        serv.inspectors = {1: Mock(), 5: Mock()}
+        event = ['started', Mock()]
+        serv.inspectors[1].get_last_events.return_value = [event]
+        serv.inspectors[5].get_last_events.return_value = [event]
+
+        assert [event] == serv.get_last_events(1)
+        assert {1: [event, event], 5: [event]} == serv.get_last_events()
+
+
+    def should_return_if_test_is_finished(self):
+        serv = self.service
+
+        # No cavity active answer test is finished
+        assert serv.test_has_finished(8)
+
+        serv.events = {1: [['started', Mock()]] }
+        assert not serv.test_has_finished(1)
+
+        test = Mock()
+        test.__class__.__name__ = 'Test'
+        serv.events[1].append(['success', test])
+        assert serv.test_has_finished(1)
 
 
 class An_Inspector(TestWithPatches):
