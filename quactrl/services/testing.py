@@ -57,6 +57,7 @@ class Service:
                 self.db, self.dev_container,
                 self.location_key, cavity, self.tff
             )
+            inspector.setDaemon(True)
             inspector.start()
 
     def stop(self, cavity=None):
@@ -259,9 +260,9 @@ class Inspector(threading.Thread):
             test.start(part=part, dev_container=self.dev_container,
                        cavity=self.cavity, tff=self.tff)
             try:
-                self.dev_container.dyncir().hard_reset_dut(
-                    part.dut.supply_voltage,
-                    2, 1, self.cavity
+                self.dev_container.dyncir().switch_on_dut(
+                    voltage=part.dut.supply_voltage,
+                    wait_after=1, cavity=self.cavity
                 )
                 test.walk()
                 test.execute()
@@ -274,6 +275,10 @@ class Inspector(threading.Thread):
                 test.cancel()
             finally:
                 self.db.Session().commit()
+                self.dev_container.dyncir().switch_off_dut(
+                    voltage=part.dut.supply_voltage,
+                    wait_after=0, cavity=self.cavity
+                )
                 self.part = None
         except Exception as e:
             trc = sys.exc_info()
@@ -283,7 +288,9 @@ class Inspector(threading.Thread):
     def update(self, state, obj, *args):
         """Receive from test notications of states
         """
-        self.events.put((state, obj, *args))
+        self.events.put(
+            (state, obj, *args)
+        )
 
     def stop(self):
         """Stop thread and return unprocessed orders"""
