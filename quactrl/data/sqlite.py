@@ -3,12 +3,15 @@ import sqlite3
 
 
 class TestSaver:
-    def __init__(self, file_name=':memory:', clear=False):
+    def __init__(self, file_name=':memory:', create_schema=False, keep_data=False):
         "docstring"
         self.conn = sqlite3.connect(file_name)
         self.c = self.conn.cursor()
-        if os.path.exists(file_name) and clear:
-            self.clear()
+        if os.path.exists(file_name):
+            if create_schema:
+                self.create_schema()
+            if not keep_data:
+                self.clear()
         else:
             self.create_schema()
 
@@ -29,6 +32,12 @@ class TestSaver:
         self.conn.commit()
 
     def create_schema(self):
+        try:
+            self.c.execute("select * from Parts where id=0")
+            return
+        except Exception:
+            pass
+
         self.c.execute(
             """
             CREATE TABLE `Parts`
@@ -46,7 +55,8 @@ class TestSaver:
             'started_on' TEXT,
             'finished_on' TEXT,
             'responsible_key' TEXT,
-            'state' TEXT
+            'state' TEXT,
+            'cavity' INTEGER
             )
             """
         )
@@ -117,22 +127,20 @@ class TestSaver:
     def insert_test(self, test):
         self.c.execute(
             ('insert into Tests '
-             '(fk_part, started_on, finished_on, responsible_key, state) '
-             'values (?, ?, ?, ?, ?)'),
+             '(fk_part, started_on, finished_on, responsible_key, state, cavity) '
+             'values (?, ?, ?, ?, ?, ?)'),
             (test.part._id, test.started_on, test.finished_on,
-             test.state, test.responsible.key)
+             test.responsible.key, test.state, test.cavity)
         )
         test._id = self.c.lastrowid
 
     def insert_check(self, check):
-        print((check.test._id, check.started_on, check.finished_on,
-               check.requirement.description, check.state))
         self.c.execute(
             ('insert into Actions '
              '(fk_test, started_on, finished_on, description, state) '
              'values (?, ?, ?, ?, ?)'),
             (check.test._id, check.started_on, check.finished_on,
-             check.requirement.description, check.state)
+             check.control.requirement.description, check.state)
         )
         check._id = self.c.lastrowid
 
@@ -141,7 +149,7 @@ class TestSaver:
             ('insert into Actions '
              '(fk_test, started_on, finished_on, description, state) '
              'values (?, ?, ?, ?, ?)'),
-            (action.test._id, action.started_on,
+            (action.operation._id, action.started_on,
              action.finished_on,
              action.step.method_name, action.state)
         )
@@ -163,6 +171,23 @@ class TestSaver:
             ('insert into Defects '
              '(fk_check, failure_key, tracking) '
              'values (? , ?, ?)'),
-            (check._id, defect.failure.key, defect.tracking)
+            (check._id, defect.failure_mode.key, defect.tracking)
         )
         defect._id = self.c.lastrowid
+
+    def get_max_part_sn(self, part_number, batch_number, pos):
+        sql = """
+        select
+        serial_number, CAST(serial_number as INTEGER) as sn,
+        SUBSTR(serial_number, {}, {}) as batch_number
+        from Parts
+        where
+        (part_number =?) and (batch_number=?) order by sn desc limit 1
+        """
+        sql = sql.format(pos+1, len(batch_number))
+
+        self.c.execute(sql, (part_number, batch_number))
+        result = self.c.fetchone()
+
+        if result:
+            return result[0]

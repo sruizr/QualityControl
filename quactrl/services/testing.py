@@ -11,6 +11,10 @@ class WrongLocationError(Exception):
     pass
 
 
+class IncorrectSetup(Exception):
+    pass
+
+
 class InspectorException(Exception):
     pass
 
@@ -57,6 +61,7 @@ class Service:
                 self.db, self.dev_container,
                 self.location_key, cavity, self.tff
             )
+            self.events[cavity] = []
             inspector.setDaemon(True)
             inspector.start()
 
@@ -135,6 +140,9 @@ class Service:
         if cavity not in self.events:
             return True
 
+        if not self.events[cavity]:
+            return True
+
         event = self.events[cavity][-1]
         is_finished = event[0] in ('success', 'failed', 'cancelled')
         is_finished &= event[1].__class__.__name__ == 'Test'
@@ -191,11 +199,10 @@ class Inspector(threading.Thread):
         if (self.part_model is None
                 or self.part_model.key != part_number):
             self.part_model = self.db.PartModels().get(part_number)
-
         if (
                 self.control_plan is None
-                or self.part_model in
-                self.control_plan.inputs['part_group'].part_models):
+                or self.part_model not in
+                self.control_plan.outputs):
             self.control_plan = (self.db.ControlPlans()
                                  .get_by(self.part_model, self.location))
 
@@ -282,6 +289,7 @@ class Inspector(threading.Thread):
                 )
                 self.part = None
         except Exception as e:
+            self.part = None
             trc = sys.exc_info()
             self.update('crash', e, traceback.format_tb(trc[2]))
             raise e

@@ -37,14 +37,21 @@ class Session:
                 else:
                     parameter[parameter[0]] = parameter[1]
 
-            clear = parameters.get('clear', False)
-            self.test_saver = TestSaver(file_name, clear)
+            create_schema = parameters.get('create_schema', False)
+            keep_data = parameters.get('keep_data', False)
+
+            self.test_saver = TestSaver(file_name, create_schema,
+                                    keep_data)
 
     def commit(self):
         if self.test_saver:
             for test in self._tests:
                 if not hasattr(test, '_id'):
                     self.test_saver.save(test)
+
+    def rollback(self):
+        pass
+
 
 class Repository:
     def __init__(self, session):
@@ -146,10 +153,9 @@ class PartRepo(Repository):
             if part.tracking == serial_number:
                 return part
 
-    def get_last_serial_number(self, part_model, sn_filter):
-
-        for parts in self.session._parts.values():
-            pass
+    def get_last_serial_number(self, part_model, batch_number, pos):
+        if hasattr(self, 't'):
+            return self.test_saver.get_max_part_sn(part_model, batch_number, pos)
 
 
 class ControlPlanRepo(Repository):

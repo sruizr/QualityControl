@@ -13,6 +13,11 @@ class ControlPlan(Route):
 
 
 class Test(Operation):
+    def start(self, **kwargs):
+        if 'part' in kwargs:
+            self.part = kwargs['part']
+        super().start(**kwargs)
+
     def close(self):
         if self.state in ('done', 'walking'):
             if self.state == 'walking':
@@ -33,6 +38,14 @@ class Check(Action):
         super().__init__(operation, control, update)
         self.measurements = []
         self.defects = []
+
+    @property
+    def description(self):
+        return self.control.requirement.description
+
+    @property
+    def test(self):
+        return self.operation
 
     @property
     def control(self):
@@ -101,7 +114,7 @@ class Measurement:
         subject.measurements.append(self)
 
         self.characteristic = characteristic
-        self.trackig = tracking
+        self.tracking = tracking
         self.value = value
 
     def eval_value(self, limits,  uncertainty=0):
@@ -174,6 +187,11 @@ class FailureMode:
     def __str__(self):
         return '{} {} @ {}'.format(self.mode.name, self.characteristic.attribute.name,
                                    self.characteristic.element.name)
+
+    @property
+    def description(self):
+        return str(self)
+
 
 class Mode:
     def __init__(self, key, name):

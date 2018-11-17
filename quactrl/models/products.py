@@ -45,6 +45,13 @@ class Requirement:
         result = re.findall('.*>(.*)', self.key)
         return result[0] if result else ''
 
+    @property
+    def description(self):
+        char = self.characteristic
+        value = '{} [{}]'.format(char.description,
+                                      self.eid)
+        return value
+
 
 class Characteristic:
     """Attribute on an element
@@ -58,6 +65,10 @@ class Characteristic:
 
     def __str__(self):
         return '{} @ {}'.format(self.attribute.name, self.element.name)
+
+    @property
+    def description(self):
+        return str(self)
 
 
 class Element:

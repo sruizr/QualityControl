@@ -62,9 +62,9 @@ class Handling:
 class Part:
     """Part with unique serial number
     """
-    def __init__(self, model, tracking, location=None, pars=None):
+    def __init__(self, model, serial_number, location=None, pars=None):
         self.model = model
-        self.tracking = tracking
+        self.serial_number = serial_number
         self.location = location
         self.defects = []
         self.measurements = []
@@ -83,6 +83,10 @@ class Action(Handling):
         self.operation = operation
         self.step = step
         self.inbox = {}
+
+    @property
+    def description(self):
+        return self.step.method_name
 
     def start(self, **inputs):
         super().start()
@@ -214,6 +218,7 @@ class Step:
     def __init__(self, route, method_name, method_pars):
         self.route = route
         self.sequence = 0 if not route.steps else route.steps[-1].sequence + 5
+        self.method_name = method_name
         self.method = get_function(method_name) if method_name else None
         self.method_pars = method_pars if method_pars else {}
 
