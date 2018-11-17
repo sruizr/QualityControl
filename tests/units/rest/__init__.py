@@ -1,5 +1,5 @@
 import cherrypy
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 
 class TestResource:
@@ -13,7 +13,7 @@ class TestResource:
             'tools.sessions.on': True,
             'tools.response_headers.on': True
         }}
-        cls.resource = Resource()
+        cls.resource = Resource(Mock())
         cherrypy.tree.mount(cls.resource, '/', conf)
         cls.url = 'http://127.0.0.1:8080'
         cherrypy.engine.start()

@@ -1,183 +1,186 @@
 import pytest
+from tests.units.rest import TestResource
 import requests
 from queue import Queue
 from unittest.mock import Mock
-from quactrl.rest.testing import AuTestResource
-from quactrl.managers.testing import TestManager
-from tests.rest import TestResource
+import quactrl.rest.testing as t
 
 
-class An_AuTestResource(TestResource):
+class A_CavitiesResource(TestResource):
     def setup_class(cls):
-        TestResource.setup_class(AuTestResource)
+        TestResource.setup_class(t.CavitiesResource)
 
     def setup_method(self, method):
         # Patch manager
         self.create_patches([
-            'quactrl.rest.testing.TestManager',
-            'quactrl.rest.testing.parsing'
+            'quactrl.rest.testing.parse'
         ])
-        self.manager = self.resource.manager = self.TestManager.return_value
+        self.service = self.resource.service
+        self.parse.return_value = lambda obj: {'key': obj.key}
 
-        self.manager.testers = [Mock() for _ in range(3)]  # 3 cavities
-        self.parsing.parse.return_value = lambda obj: {'key': obj.key}
+    def should_start_cavity(self):
+        requests.put(self.url + '/1')
+        self.service.start.assert_called_with(1)
 
-    @pytest.mark.current
-    def should_setup_from_PUT_request(self):
-        data = {'par': 'value'}
-        url = self.url + '/database'
-        response = requests.put(url, json=data)
 
-        assert response.status_code == 200
-        self.manager.connect.assert_called_with(**data)
+# class An_AuTestResource(TestResource):
 
-        url = self.url + '/setup'
-        data = {'location_key': 'loc', 'process_key': 'keyp'}
-        response = requests.put(url, json=data)
-        assert response.status_code == 200
-        self.manager.setup.assert_called_with(**data)
+#     @pytest.mark.current
+#     def should_setup_from_PUT_request(self):
+#         data = {'par': 'value'}
+#         url = self.url + '/database'
+#         response = requests.put(url, json=data)
 
-        response = requests.put(self.url + '/invalid', json=data)
-        assert response.status_code == 404
+#         assert response.status_code == 200
+#         self.manager.connect.assert_called_with(**data)
 
-        self.manager.connect.side_effect = [Exception()]
-        response = requests.put(self.url + '/database', json=data)
-        assert response.status_code == 500
+#         url = self.url + '/setup'
+#         data = {'location_key': 'loc', 'process_key': 'keyp'}
+#         response = requests.put(url, json=data)
+#         assert response.status_code == 200
+#         self.manager.setup.assert_called_with(**data)
 
-    @pytest.mark.current
-    def should_begin_test_from_order_on_cavity_1(self):
-        order = ({
-            'tracking': '123456789',
-            'part_name': 'part_name',
-            'part_number': 'part_number'},
-            'sruiz'
-        )
+#         response = requests.put(self.url + '/invalid', json=data)
+#         assert response.status_code == 404
 
-        response = requests.post(self.url + '/1',
-                                json=order)
+#         self.manager.connect.side_effect = [Exception()]
+#         response = requests.put(self.url + '/database', json=data)
+#         assert response.status_code == 500
 
-        assert response.status_code == 200
-        self.resource.manager.start_test.assert_called_with(
-            *order, 1
-        )
+#     @pytest.mark.current
+#     def should_begin_test_from_order_on_cavity_1(self):
+#         order = ({
+#             'tracking': '123456789',
+#             'part_name': 'part_name',
+#             'part_number': 'part_number'},
+#             'sruiz'
+#         )
 
-    def should_stop_tests_on_multiple_cavities(self):
-        self.manager.cavities = 3
-        for index, tester in enumerate(self.manager.testers):
-            tester.stop.return_value = [index]
+#         response = requests.post(self.url + '/1',
+#                                 json=order)
 
-        response = requests.delete(self.url + '/2')
-        assert response.status_code == 200
-        self.manager.testers[0].stop.assert_not_called()
-        self.manager.testers[1].stop.assert_called_with()
-        assert response.json() == [1]
+#         assert response.status_code == 200
+#         self.resource.manager.start_test.assert_called_with(
+#             *order, 1
+#         )
 
-        response = requests.delete(self.url)
-        assert response.json() == [[0], [1], [2]]
+#     def should_stop_tests_on_multiple_cavities(self):
+#         self.manager.cavities = 3
+#         for index, tester in enumerate(self.manager.testers):
+#             tester.stop.return_value = [index]
 
-    def should_stop_test_on_single_cavity_tool(self):
-        self.manager.cavities = 1
-        self.manager.testers[0].stop.return_value = 'foo'
-        response = requests.delete(self.url)
+#         response = requests.delete(self.url + '/2')
+#         assert response.status_code == 200
+#         self.manager.testers[0].stop.assert_not_called()
+#         self.manager.testers[1].stop.assert_called_with()
+#         assert response.json() == [1]
 
-        assert response.status_code == 200
-        assert response.json() == 'foo'
+#         response = requests.delete(self.url)
+#         assert response.json() == [[0], [1], [2]]
 
-    def should_list_all_events_of_all_cavities(self):
-        backup = self.resource.handle_get_events
-        self.resource.handle_get_events = Mock()
-        self.manager.cavities = 3
-        self.resource.handle_get_events.return_value = 'response'
+#     def should_stop_test_on_single_cavity_tool(self):
+#         self.manager.cavities = 1
+#         self.manager.testers[0].stop.return_value = 'foo'
+#         response = requests.delete(self.url)
 
-        response = requests.get(self.url + '/events')
+#         assert response.status_code == 200
+#         assert response.json() == 'foo'
 
-        assert response.status_code == 200
-        assert response.json() == 'response'
-        self.resource.handle_get_events.assert_called_with(None, False)
+#     def should_list_all_events_of_all_cavities(self):
+#         backup = self.resource.handle_get_events
+#         self.resource.handle_get_events = Mock()
+#         self.manager.cavities = 3
+#         self.resource.handle_get_events.return_value = 'response'
 
-        self.manager.cavities = 1
-        response = requests.get(self.url + '/events')
+#         response = requests.get(self.url + '/events')
 
-        assert response.status_code == 200
-        self.resource.handle_get_events.assert_called_with(1, False)
-        self.resource.handle_get_events = backup
+#         assert response.status_code == 200
+#         assert response.json() == 'response'
+#         self.resource.handle_get_events.assert_called_with(None, False)
 
-    def should_list_all_events_of_a_cavity(self):
-        backup = self.resource.handle_get_events
-        self.resource.handle_get_events = Mock()
-        self.manager.cavities = 3
-        self.resource.handle_get_events.return_value = 'response'
+#         self.manager.cavities = 1
+#         response = requests.get(self.url + '/events')
 
-        response = requests.get(self.url + '/events/2')
+#         assert response.status_code == 200
+#         self.resource.handle_get_events.assert_called_with(1, False)
+#         self.resource.handle_get_events = backup
 
-        self.resource.handle_get_events.assert_called_with(2, False)
-        assert response.status_code == 200
-        assert response.json() == 'response'
-        self.resource.handle_get_events = backup
+#     def should_list_all_events_of_a_cavity(self):
+#         backup = self.resource.handle_get_events
+#         self.resource.handle_get_events = Mock()
+#         self.manager.cavities = 3
+#         self.resource.handle_get_events.return_value = 'response'
 
-    def should_list_last_events(self):
-        backup = self.resource.handle_get_events
-        self.resource.handle_get_events = Mock()
-        self.resource.handle_get_events.return_value = 'response'
-        self.manager.cavities = 3
+#         response = requests.get(self.url + '/events/2')
 
-        response = requests.get(self.url + '/events?last')
+#         self.resource.handle_get_events.assert_called_with(2, False)
+#         assert response.status_code == 200
+#         assert response.json() == 'response'
+#         self.resource.handle_get_events = backup
 
-        assert response.status_code == 200
-        self.resource.handle_get_events.assert_called_with(None, True)
-        self.resource.handle_get_events = backup
+#     def should_list_last_events(self):
+#         backup = self.resource.handle_get_events
+#         self.resource.handle_get_events = Mock()
+#         self.resource.handle_get_events.return_value = 'response'
+#         self.manager.cavities = 3
 
-    def should_report_test_status(self):
-        backup = self.resource.handle_get_tests
-        self.resource.handle_get_tests = Mock()
-        self.resource.handle_get_tests.return_value = 'response'
-        self.manager.cavities = 3
+#         response = requests.get(self.url + '/events?last')
 
-        response = requests.get(self.url)
+#         assert response.status_code == 200
+#         self.resource.handle_get_events.assert_called_with(None, True)
+#         self.resource.handle_get_events = backup
 
-        assert response.status_code == 200
-        assert response.json() == 'response'
-        self.resource.handle_get_tests.assert_called_with(None)
+#     def should_report_test_status(self):
+#         backup = self.resource.handle_get_tests
+#         self.resource.handle_get_tests = Mock()
+#         self.resource.handle_get_tests.return_value = 'response'
+#         self.manager.cavities = 3
 
-        self.manager.cavities = 1
-        response = requests.get(self.url)
-        self.resource.handle_get_tests.assert_called_with(1)
+#         response = requests.get(self.url)
 
-        self.manager.cavities = 3
-        response = requests.get(self.url + '/2')
-        self.resource.handle_get_tests.assert_called_with(2)
+#         assert response.status_code == 200
+#         assert response.json() == 'response'
+#         self.resource.handle_get_tests.assert_called_with(None)
 
-        self.resource.handle_get_tests = backup
+#         self.manager.cavities = 1
+#         response = requests.get(self.url)
+#         self.resource.handle_get_tests.assert_called_with(1)
 
-    def should_handle_get_events(self):
-        self.manager.events = [_ for _ in range(3)]
-        self.manager.download_events.return_value = 'events'
+#         self.manager.cavities = 3
+#         response = requests.get(self.url + '/2')
+#         self.resource.handle_get_tests.assert_called_with(2)
 
-        events = self.resource.handle_get_events(1, True)
-        self.manager.download_events.assert_called_with(1)
-        self.parsing.parse.assert_called_with('events', 4)
-        assert events == self.parsing.parse.return_value
+#         self.resource.handle_get_tests = backup
 
-        events = self.resource.handle_get_events(2, False)
-        self.parsing.parse.assert_called_with(1, 4)
-        assert events == self.parsing.parse.return_value
+#     def should_handle_get_events(self):
+#         self.manager.events = [_ for _ in range(3)]
+#         self.manager.download_events.return_value = 'events'
 
-        events = self.resource.handle_get_events(None, False)
-        self.parsing.parse.assert_called_with([0, 1, 2], 4)
-        assert events == self.parsing.parse.return_value
+#         events = self.resource.handle_get_events(1, True)
+#         self.manager.download_events.assert_called_with(1)
+#         self.parsing.parse.assert_called_with('events', 4)
+#         assert events == self.parsing.parse.return_value
 
-    def should_handle_get_tests(self):
-        self.manager.cavities = 3
+#         events = self.resource.handle_get_events(2, False)
+#         self.parsing.parse.assert_called_with(1, 4)
+#         assert events == self.parsing.parse.return_value
 
-        response = self.resource.handle_get_tests(None)
+#         events = self.resource.handle_get_events(None, False)
+#         self.parsing.parse.assert_called_with([0, 1, 2], 4)
+#         assert events == self.parsing.parse.return_value
 
-        tests = [tester.test for tester in self.manager.testers]
-        self.parsing.parse.assert_called_with(tests, 3)
-        assert response == self.parsing.parse.return_value
+#     def should_handle_get_tests(self):
+#         self.manager.cavities = 3
 
-        response = self.resource.handle_get_tests(2)
-        self.parsing.parse.assert_called_with(self.manager.testers[1].test, 3)
+#         response = self.resource.handle_get_tests(None)
 
-        self.manager.cavities = 1
-        response = self.resource.handle_get_tests(None)
-        self.parsing.parse.assert_called_with(self.manager.testers[0].test, 3)
+#         tests = [tester.test for tester in self.manager.testers]
+#         self.parsing.parse.assert_called_with(tests, 3)
+#         assert response == self.parsing.parse.return_value
+
+#         response = self.resource.handle_get_tests(2)
+#         self.parsing.parse.assert_called_with(self.manager.testers[1].test, 3)
+
+#         self.manager.cavities = 1
+#         response = self.resource.handle_get_tests(None)
+#         self.parsing.parse.assert_called_with(self.manager.testers[0].test, 3)
