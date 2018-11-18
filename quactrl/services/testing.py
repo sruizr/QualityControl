@@ -48,7 +48,7 @@ class Service:
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
 
-    def start(self, cavity=None):
+    def start_inspector(self, cavity=None):
         """Start a cavity asigning an inspector
         """
         if type(cavity) is list:
@@ -65,7 +65,7 @@ class Service:
             inspector.setDaemon(True)
             inspector.start()
 
-    def stop(self, cavity=None):
+    def stop_inspector(self, cavity=None):
         """Stop a concrete inspector or all inspectors"""
         if cavity in self.inspectors.keys():
             inspector = self.inspectors.pop(cavity)
@@ -79,7 +79,7 @@ class Service:
                     pending_orders[cavity] = inspector.stop()
             return pending_orders
 
-    def restart(self, cavity=None, reinsert_orders=True):
+    def restart_inspector(self, cavity=None, reinsert_orders=True):
         """Restart cavity inspection, all if None
         """
         if cavity in self.active_cavities:

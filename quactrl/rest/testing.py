@@ -13,22 +13,11 @@ class Resource:
 
     def OPTIONS(self, key, word):
         cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Access-Control-Allow-Origin'
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
 
         possible_methods = ('PUT', 'DELETE', 'PATCH')
         methods =[http_method for http_method in possible_methods
                   if hasattr(self, http_method)]
         cherrypy.response.headers['Access-Control-Allow-Methods'] = ','.join(methods)
-
-
-class RootResource(Resource):
-    def __init__(self, service):
-        super().__init__(service)
-
-    def DELETE(self):
-        self.service.stop()
-        os.system('shutdown now')
-        cherrypy.response.status = 501
 
 
 class CavitiesResource(Resource):
@@ -51,9 +40,9 @@ class CavitiesResource(Resource):
         """Active cavity by key
         """
         if is_num(key):
-            self.service.start(int(key))
+            self.service.start_inspector(int(key))
         elif key is None:
-            self.service.start()
+            self.service.start_inspector()
         else:
             cherrypy.response.status_code = 400
 
@@ -62,9 +51,9 @@ class CavitiesResource(Resource):
         """Deactive cavity by key, all if None
         """
         if is_num(key):
-            return self.service.stop(int(key))
+            return self.service.stop_inspector(int(key))
         elif key is None:
-            return self.service.stop()
+            return self.service.stop_inspector()
         else:
             cherrypy.response.status_code = 400
 
@@ -84,7 +73,7 @@ class PartModelResource(Resource):
             cherrypy.response.status = 404
 
 
-class Batch(Resource):
+class BatchResource(Resource):
     def PUT(self, key):
         try:
             self.service.set_batch(key)
@@ -98,7 +87,7 @@ class Batch(Resource):
         return output
 
 
-class PartResouce(Resource):
+class PartResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self, cavity):
         if is_num(cavity):
@@ -150,3 +139,23 @@ class ResponsibleResource(Resource):
 
     def DELETE(self):
         self.service.set_responsible(None)
+
+_RESOURCES = {
+    'events': EventsResource,
+    'cavities': CavitiesResource,
+    'part': PartResource,
+    'part_model': PartModelResource,
+    'batch': BatchResource
+}
+
+
+class RootResource(Resource):
+    def __init__(self, service, resources):
+        super().__init__(service)
+        for resource in resources:
+            setattr(self, resource, _RESOURCES[resource](service))
+
+    def DELETE(self):
+        self.service.stop()
+        os.system('shutdown now')
+        cherrypy.response.status = 501
