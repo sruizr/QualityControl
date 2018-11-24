@@ -5,7 +5,7 @@ from unittest.mock import patch, Mock
 class TestResource:
     """Framework for testing API Rest Resources"""
     @classmethod
-    def setup_class(cls, Resource):
+    def setup_class(cls, Resource, *args):
         cls.Resource = Resource
 
         conf = {'/': {
@@ -13,7 +13,7 @@ class TestResource:
             'tools.sessions.on': True,
             'tools.response_headers.on': True
         }}
-        cls.resource = Resource(Mock())
+        cls.resource = Resource(Mock(), *args)
         cherrypy.tree.mount(cls.resource, '/', conf)
         cls.url = 'http://127.0.0.1:8080'
         cherrypy.engine.start()

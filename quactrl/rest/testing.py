@@ -34,9 +34,9 @@ class CavitiesResource(Resource):
                     for cavity in self.service.active_cavities
                 }
         else:
-            cherrypy.response.status_code = 400
+            cherrypy.response.status = 400
 
-    def PUT(self, key):
+    def PUT(self, key=None):
         """Active cavity by key
         """
         if is_num(key):
@@ -44,7 +44,7 @@ class CavitiesResource(Resource):
         elif key is None:
             self.service.start_inspector()
         else:
-            cherrypy.response.status_code = 400
+            cherrypy.response.status = 400
 
     @cherrypy.tools.json_out()
     def DELETE(self, key=None):
@@ -55,7 +55,7 @@ class CavitiesResource(Resource):
         elif key is None:
             return self.service.stop_inspector()
         else:
-            cherrypy.response.status_code = 400
+            cherrypy.response.status = 400
 
 
 class PartModelResource(Resource):
@@ -139,6 +139,7 @@ class ResponsibleResource(Resource):
 
     def DELETE(self):
         self.service.set_responsible(None)
+
 
 _RESOURCES = {
     'events': EventsResource,

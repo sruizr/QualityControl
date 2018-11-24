@@ -21,14 +21,21 @@ class PartModel(PartGroup):
     """Abstraction of part, type of part
     """
     def __init__(self, part_number, description=None, name=None,
-                 device_class=None):
+                 device_class_name=None, pars=None):
         self.key = part_number
         self.name = name
         self.description = description
-        self.device_class = get_class(device_class) if device_class else None
+        self.device_class_name = device_class_name
+        self.pars = pars if pars else {}
+
+        self.Device = get_class(device_class_name) if device_class_name else None
 
         self.part_groups = []
         self.requirements = {}
+
+    def create_dut(self, connection):
+        if self.Device:
+            return self.Device(connection, **self.pars)
 
 
 class Requirement:

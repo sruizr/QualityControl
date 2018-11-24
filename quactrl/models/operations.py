@@ -66,13 +66,14 @@ class Part:
         self.model = model
         self.serial_number = serial_number
         self.location = location
+        self.pars = pars if pars else {}
         self.defects = []
         self.measurements = []
-        self.pars = pars if pars else {}
+
         self.dut = None
 
     def set_dut(self, connection):
-        self.dut = self.model.device_class(connection, self.pars)
+        self.dut = self.model.create_dut(connection)
 
 
 class Action(Handling):
