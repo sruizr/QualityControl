@@ -4,6 +4,11 @@ from quactrl.rest.parsing import parse
 from quactrl.helpers import is_num
 
 
+def try_int(cavity):
+    if is_num(cavity):
+        return int(cavity)
+
+
 @cherrypy.expose
 class Resource:
     def __init__(self, service):
@@ -150,13 +155,23 @@ _RESOURCES = {
 }
 
 
+
 class RootResource(Resource):
     def __init__(self, service, resources):
         super().__init__(service)
         for resource in resources:
             setattr(self, resource, _RESOURCES[resource](service))
 
-    def DELETE(self):
+    @cherrypy.tools.json_in()
+    def PUT(self, cavity=None):
+        dyncir = self.service.dev_container.dyncir()
+        kwargs = cherrypy.response.json()
+        voltage = int(kwargs.get('voltage', 230))
+
+        dyncir.swicth_on_dut(cavity=try_int(cavity), voltage=voltage)
+
+    def DELETE(self, cavity=None):
+
         self.service.stop()
         os.system('shutdown now')
         cherrypy.response.status = 501

@@ -1,5 +1,5 @@
 from unittest.mock import patch, Mock
-from quactrl.domain.devices import DeviceContainer
+from quactrl.models.devices import DeviceContainer
 
 
 class FakeDevice:
@@ -16,11 +16,11 @@ class OtherFakeDevice:
 
 
 class A_DeviceContainer:
-    def setup_dependencies(self, repo, get_class):
+    def setup_dependencies(self, get_class):
         classes = {'FakeDevice': FakeDevice, 'OtherFakeDevice': OtherFakeDevice}
         get_class.side_effect = lambda class_name: classes[class_name]
 
-        devices = {
+        self.devices = {
             'a_device': {
                 '_strategy': 'factory', 'class': 'FakeDevice',
                 '_args': ['lorem', '>other_device'],
@@ -28,21 +28,14 @@ class A_DeviceContainer:
             'other_device': {'class': 'OtherFakeDevice',
                              'par_1': 'dolor'}
         }
-        repo.get_all_names_by_location.return_value = devices.keys()
-        repo.get_by_name_location.side_effect = lambda name, loc: devices[name]
 
-    @patch('quactrl.domain.devices.get_class')
+    @patch('quactrl.models.devices.get_class')
     def should_inject_devices_from_repository(self, get_class):
-        repo = Mock()
-        self.setup_dependencies(repo, get_class)
+        self.setup_dependencies(get_class)
 
-        container = DeviceContainer(repo)
-
-        location = Mock()
-        container.set_location(location)
+        container = DeviceContainer(self.devices)
 
         # Correct injection of attributes
-        assert container.location == location
         assert container.a_device()
         assert container.a_device().par_1 == 'lorem'
         assert container.a_device().par_2 == container.other_device()

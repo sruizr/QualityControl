@@ -2,6 +2,8 @@ import re
 from dependency_injector import providers
 from dependency_injector import containers
 from quactrl.helpers import get_class
+from threading import Lock
+from types import MethodType
 
 
 class DeviceModel:
@@ -69,3 +71,50 @@ class DeviceContainer(containers.DynamicContainer):
             setattr(self, dev_name, Provider(DeviceClass, *args,
                                              **kwargs))
         return getattr(self, dev_name)
+
+
+class DeviceRack(list):
+    """Not thread safe list of devices
+    """
+    def __init__(self, *devices):
+        super().__init__(devices)
+
+
+class ExclusiveDeviceRack(DeviceRack):
+    """List of devices where one can not execute method when other
+    is executing
+    """
+    def __init__(self, *devices):
+        self._lock = Lock()
+        elements = [LocableDecorator(device, self._lock)
+                    for device in devices
+        ]
+        super().__init__(*elements)
+
+
+class LockableDecorator:
+    def __init__(self, decorated, lock):
+        self._lock = lock
+        self._decorated = decorated
+
+    def __getattr__(self, name):
+        def locking(attr):
+            def method(*args, **kwargs):
+                with self._lock:
+                    result = attr(*args, **kwargs)
+                return result
+            return method
+
+        if name[0] != '_':  # Private attributes are not get from decorated object
+            attr = getattr(self._decorated, name)
+            if type(attr) is MethodType:
+                return locking(attr)
+            return attr
+
+    def __setattr__(self, name, value):
+        """New attributes are stored in decorator
+        """
+        if hasattr(self._decorated, name):
+            setattr(self._decorated, name, value)
+        else:
+            setattr(self, name, value)
