@@ -1,9 +1,17 @@
 import threading
+import sys
+import traceback
 from queue import Queue
 from quactrl.models.devices import DeviceContainer
+import quactrl.models.operations as op
+from quactrl.models.quality import DefectFound
 
 
-class NotFoundPart(Exception):
+class WrongLocationError(Exception):
+    pass
+
+
+class IncorrectSetup(Exception):
     pass
 
 
@@ -13,22 +21,18 @@ class InspectorException(Exception):
 
 class Service:
     """Test parts from a location"""
-    def __init__(self, database, location, cavities=None,
-                 till_first_failure=True, sn_compose=None):
+    def __init__(self, database, location, till_first_failure=True):
+
         self.db = database
         self.tff = till_first_failure
         self.location_key = location
-        self.sn_compose = None
 
         self.events = {}
         self.inspectors = {}
-
-        self.dev_container = DeviceContainer(self.db.DeviceDefs())
-        self.dev_container.set_location(location)
-        self._start_inspectors(cavities)
-
-        self._production_orders = {}
         self._lock = threading.Lock()
+
+        all_devices = self.db.Devices().get_all_from(location)
+        self.dev_container = DeviceContainer(all_devices)
 
     @property
     def cavities(self):
@@ -44,96 +48,115 @@ class Service:
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
 
-    def gen_sn(self, po_number, part_number):
-        if self.sn_compose is None:
-            raise Exception('No sn_compose function is defined')
-
-        with self._lock:
-            if po_number not in self._batches:
-                self._production_orders[po_number] = self.db.ProdOrders().get_or_create(
-                    part_number, po_number
-                )
-            batch = self._production_orders[po_number]
-            counter = batch.qty = batch.qty + 1
-            self.db.session().commit()
-
-        return self.sn_compose(po_number, counter)
-
-    def _start_inspectors(self, cavities):
-        if cavities is None:
-            active_cavities = [None]
-        else:
-            if type(cavities) is int:
-                active_cavities = list(range(cavities))
-            elif type(cavities) is list:
-                active_cavities = cavities
-
-        for cavity in active_cavities:
-            inspector = Inspector(self.db, self.dev_container,
-                                  self.location_key, cavity, self.tff)
-            inspector.start()
-            self.inspectors[cavity] = inspector
-
-    def restart(self, cavities=None, clean_orders=False):
-        """Restart inspectors
+    def start_inspector(self, cavity=None):
+        """Start a cavity asigning an inspector
         """
-        if cavities is None:
-            cavities = self.active_cavities
-
-        for cavity in cavities:
-            pending_orders = self.stop(cavity)
-            inspector = Inspector(self.db, self.dev_container,
-                                  self.location_key, cavity, self.ttf)
-            self.inspectors[cavity] = inspector
-            inspector.start()
-            if not clean_orders:
-                for order in pending_orders:
-                    inspector.orders.put(order)
-
-    def stop(self, cavity=None):
-        """Stop a concrete inspector or all inspectors"""
-        pending_orders = []
-        if cavity is None:
-            for inspector in self.inspectors.values():
-                if inspector:
-                    pending_orders.extend(inspector.stop())
+        if type(cavity) is list:
+            for cavity_ in cavity:
+                self.start(cavity_)
+        elif cavity in self.inspectors:
+            self.restart(cavity)
         else:
-            if cavity in self.inspectors.keys():
-                inspector = self.inspectors[cavity]
-                pending_orders.extend(inspector.stop())
+            self.inspectors[cavity] = inspector = Inspector(
+                self.db, self.dev_container,
+                self.location_key, cavity, self.tff
+            )
+            self.events[cavity] = []
+            inspector.setDaemon(True)
+            inspector.start()
 
-        return pending_orders
+    def stop_inspector(self, cavity=None):
+        """Stop a concrete inspector or all inspectors"""
+        if cavity in self.inspectors.keys():
+            inspector = self.inspectors.pop(cavity)
+            return inspector.stop()
+        elif cavity is None:  # All cavities will stop
+            pending_orders = {}
+            cavities = list(self.inspectors.keys())
+            for cavity in cavities:
+                inspector = self.inspectors.pop(cavity)
+                if inspector:
+                    pending_orders[cavity] = inspector.stop()
+            return pending_orders
+
+    def restart_inspector(self, cavity=None, reinsert_orders=True):
+        """Restart cavity inspection, all if None
+        """
+        if cavity in self.active_cavities:
+            pending_orders = self.stop(cavity)
+            self.start(cavity)
+
+            if reinsert_orders:
+                for order in pending_orders:
+                    self.inspectors[cavity].orders.put(order)
+            else:
+                return pending_orders
+
+        elif cavity is None:  # All active cavities will restart
+            all_orders = {}
+            for cavity in self.active_cavities:
+                pending_orders = self.restart(cavity, reinsert_orders)
+                if not reinsert_orders:
+                    all_orders[cavity] = pending_orders
+            if not reinsert_orders:
+                return all_orders
 
     def stack_part(self, part_info, responsible_key, cavity=None):
         """Start part for testing on an order process parameters"""
         inspector = self.inspectors[cavity]
         inspector.orders.put((part_info, responsible_key))
 
-    def notify(self, info, cavity=None):
-        """Transfer notification from client to inspector"""
-        self.inspectors[cavity].notify(info)
+    # def notify(self, info, cavity=None):
+    #     """Transfer notification from client to inspector"""
+    #     self.inspectors[cavity].notify(info)
 
     def get_events(self, cavity=None):
-        """Get events from inspector and store them to manager.events"""
-        events = []
-
-        if cavity is None:
-            for _cavity in range(self.cavities):
-                events.append(self.download_events(_cavity + 1))
-        elif self.inspectors[cavity - 1]:
-                events = self.inspectors[cavity - 1].empty_events()
-                self.events[cavity - 1].extend(events)
-        return events
+        """Get events from inspector from current test"""
+        if cavity not in self.active_cavities:
+            for _cavity in self.active_cavities:
+                self.get_events(_cavity)
+            return self.events
+        else:
+            self.get_last_events(cavity)
+            return self.events.get(cavity)
 
     def get_last_events(self, cavity=None):
-        pass
+        """Retrieve last events since previous call
+        """
+        if cavity not in self.active_cavities:  # Asking to all cavities
+            last_events = {}
+            for _cavity in self.active_cavities:
+                last_events[_cavity] = self.get_last_events(_cavity)
+        else:
+            last_events = self.inspectors[cavity].get_last_events()
+            if self.test_has_finished(cavity) and last_events:
+                self.events[cavity] = last_events
+            else:
+                self.events[cavity].extend(last_events)
+
+        return last_events
+
+    def test_has_finished(self, cavity):
+        if cavity not in self.events:
+            return True
+
+        if not self.events[cavity]:
+            return True
+
+        event = self.events[cavity][-1]
+        is_finished = event[0] in ('success', 'failed', 'cancelled')
+        is_finished &= event[1].__class__.__name__ == 'Test'
+        return is_finished
+
+    def __del__(self):
+        self.stop()
 
 
 class Inspector(threading.Thread):
-    """Inspector of one unique part sharing some devices on a location
+    """Inspector of one cavity sharing some devices on a location
     """
     def __init__(self, database, dev_container, location_key,
-                 cavity=None, tff=True, gen_sn=None):
+                 cavity=None, tff=True):
         """Args:
         database(Container): Persistence layer container of providers
         dev_container(Container): Container of devices
@@ -144,13 +167,14 @@ class Inspector(threading.Thread):
         name = 'Inspector'
         if cavity is not None:
             name += '_{}'.format(cavity)
+
         super().__init__(name=name)
+
         self.db = database
         self.dev_container = dev_container
-        self.location = self.db.Locations().get_by_key(location_key)
+        self.location = self.db.Locations().get(location_key)
         self.cavity = cavity
         self.tff = tff
-        self.gen_sn = gen_sn
 
         # Inputs and Outputs of inspector
         self.orders = Queue()
@@ -160,7 +184,8 @@ class Inspector(threading.Thread):
         # Batch variables
         self.responsible = None
         self.part_model = None
-        self.route = None
+        self.part = None
+        self.control_plan = None
 
         self._stop_event = threading.Event()
 
@@ -168,21 +193,18 @@ class Inspector(threading.Thread):
         """Loads responsible if it has changed
         """
         if self.responsible is None or self.responsible.key != responsible_key:
-            self.responsible = self.db.Persons().get_by_key(responsible_key)
+            self.responsible = self.db.Persons().get(responsible_key)
 
-    def set_route_for(self, part_number):
+    def set_part_model(self, part_number):
+        if (self.part_model is None
+                or self.part_model.key != part_number):
+            self.part_model = self.db.PartModels().get(part_number)
         if (
-                self.part_model is None
-                or self.part_model.part_number != part_number):
-            self.part_model = self.db.PartModels().get_by_part_number(
-                part_number)
-
-        if (
-                self.route is None
-                or self.part_model in
-                self.route.inputs['part_group'].part_models):
-            self.route = self.db.Routes().get_by_part_model_and_location(
-                self.part_model, self.location)
+                self.control_plan is None
+                or self.part_model not in
+                self.control_plan.outputs):
+            self.control_plan = (self.db.ControlPlans()
+                                 .get_by(self.part_model, self.location))
 
     def run(self):
         """Thread activation processing order by order"""
@@ -199,39 +221,85 @@ class Inspector(threading.Thread):
 
         self.state = 'stopped'
 
+    def get_part(self, serial_number, pars):
+        """Get part from data layer if exist or create a new one
+        """
+
+        # if not serial_number:
+        #     serial_number = self.sn_generator.get_serial_number(
+        #         self.part_model.key,
+        #         part_info.pop('batch_number')
+        #     )
+
+        part = self.db.Parts().get_by(self.part_model, serial_number)
+
+        if part is None:
+            part = op.Part(self.part_model, serial_number,
+                           location=self.location, pars=pars)
+
+        if part.location != self.location:
+            raise WrongLocationError(
+                'Part {} with sn {} found on {}'.format(
+                    part.model.key, part.tracking, part.location.key
+                )
+            )
+
+        connection = self.dev_container.modbus_conn()
+        connection = connection if self.cavity is None \
+            else connection[self.cavity]
+        part.set_dut(connection)
+        return part
+
     def run_test(self, order):
         """Process a full test  from an order
         """
-        part_info, responsible_key = order
-        if 'serial_number' not in part_info:
-            part_info['serial_number'] = self.gen_sn(
-                part_info['part_number'],
-                part_info['batch_number'])
-
-        part = self.db.Parts().get_or_create(self.location, **part_info)
-        self.set_responsible(responsible_key)
-        self.set_route_for(part)
-
-        self.test = test = self.route.create_operation(self.responsible)
-        self.db.Tests().add(test)
-
-        test.start(subject=part, dev_container=self.dev_container,
-                   cavity=self.cavity, tff=self.tff, update=self.update)
         try:
-            test.walk()
-            test.execute()
-            test.close()
+            part_info, responsible_key = order
+            self.set_responsible(responsible_key)
+
+            part_number = part_info.pop('part_number')
+            self.set_part_model(part_number)
+            serial_number = part_info.pop('serial_number')
+            self.part = part = self.get_part(serial_number, part_info)
+
+            self.test = test = self.control_plan.implement(self.responsible,
+                                                           self.update)
+            self.db.Tests().add(test)
+            test.start(part=part, dev_container=self.dev_container,
+                       cavity=self.cavity, tff=self.tff)
+            try:
+                self.dev_container.dyncir().switch_on_dut(
+                    voltage=part.dut.supply_voltage,
+                    wait_after=1, cavity=self.cavity
+                )
+                test.walk()
+                test.execute()
+                test.close()
+            except DefectFound:
+                test.close()
+            except Exception as e:
+                trc = sys.exc_info()
+                self.update('test_error', e, traceback.format_tb(trc[2]))
+                test.cancel()
+            finally:
+                self.db.Session().commit()
+                self.dev_container.dyncir().switch_off_dut(
+                    voltage=part.dut.supply_voltage,
+                    wait_after=0, cavity=self.cavity
+                )
+                self.part = None
         except Exception as e:
-            self.update('exception', e)
-            test.cancel()
-            self.state = 'cancelled'
-        finally:
-            self.db.Session().commit()
+            self.part = None
+            trc = sys.exc_info()
+            self.update('crash', e, traceback.format_tb(trc[2]))
+            raise e
 
     def update(self, state, obj, *args):
         """Receive from test notications of states
         """
-        self.events.put((state, obj, *args))
+        self.events.put(
+            (state, obj, *args)
+        )
 
     def stop(self):
         """Stop thread and return unprocessed orders"""
@@ -241,14 +309,31 @@ class Inspector(threading.Thread):
         if self.orders.qsize() != 0:
             while not self.orders.empty():
                 pending_orders.append(self.orders.get())
+        else:
+            self.orders.put(None)
 
         return pending_orders
 
     def ask(self, message, *args):
+        """Ask a question to the client, waiting the result
+        """
         question = Question()
         self.events.put(('waiting', question))
         question.ask(message, *args)
         return question
+
+    def get_last_events(self):
+        """Retrieve a list of last events of current test
+        """
+        events = []
+        for _ in range(self.events.qsize()):
+            event = self.events.get()
+            events.append(event)
+            if event[0] in ('success', 'failed', 'cancelled') \
+               and event[1].__class__.__name__ == 'Test':
+                break
+
+        return events
 
 
 class Question(threading.Event):

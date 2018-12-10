@@ -1,126 +1,177 @@
 import cherrypy
-import quactrl.helpers.parsing as parsing
-from quactrl.managers.testing import TestManager
+import os
+from quactrl.rest.parsing import parse
+from quactrl.helpers import is_num
+
+
+def try_int(cavity):
+    if is_num(cavity):
+        return int(cavity)
 
 
 @cherrypy.expose
-class AuTestResource:
-    def __init__(self):
-        self.manager = TestManager()
+class Resource:
+    def __init__(self, service):
+        """Resource avalaible with API REST and CORS security solved
+        """
+        self.service = service
+
+    def OPTIONS(self, key, word):
+        cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Access-Control-Allow-Origin'
+
+        possible_methods = ('PUT', 'DELETE', 'PATCH')
+        methods =[http_method for http_method in possible_methods
+                  if hasattr(self, http_method)]
+        cherrypy.response.headers['Access-Control-Allow-Methods'] = ','.join(methods)
+
+
+class CavitiesResource(Resource):
+    @cherrypy.tools.json_out()
+    def GET(self, key=None):
+        if is_num(key):
+            return parse(self.service.inspectors[int(key)])
+        elif key is None:
+            if key in self.service.active_cavities:
+                return parse(self.service.inspectors[None])
+            else:
+                return {
+                    cavity: parse(self.service.inspectors[cavity])
+                    for cavity in self.service.active_cavities
+                }
+        else:
+            cherrypy.response.status = 400
+
+    def PUT(self, key=None):
+        """Active cavity by key
+        """
+        if is_num(key):
+            self.service.start_inspector(int(key))
+        elif key is None:
+            self.service.start_inspector()
+        else:
+            cherrypy.response.status = 400
 
     @cherrypy.tools.json_out()
-    @cherrypy.popargs('arg_1', 'arg_2')
-    def GET(self, arg_1=None, arg_2=None, last=False):
-        """ Retrieve status of testing processes:
-        - /events: List all events of all cavities
-        - /events/{cavity}: List all events of /cavity/
-        - /events/{cavity}?last: List last events since last query
-        - /{cavity}: Show test at cavity
-        - /: Show all tests on each cavity"""
-
-        if arg_1 is None:  # /
-            cavity = 1 if self.manager.cavities == 1 else None
-            return self.handle_get_tests(cavity)
-        elif self._is_num(arg_1):  # /{cavity}
-            cavity = int(arg_1)
-            return self.handle_get_tests(cavity)
-        elif arg_1 == 'events':
-            cavity = None
-            if arg_2 is None and self.manager.cavities == 1:
-                cavity = 1
-            elif self._is_num(arg_2):
-                cavity = int(arg_2)
-            last = last == ''
-            return self.handle_get_events(cavity, last)
-
-    def handle_get_events(self, cavity, only_last):
-
-        events = self.manager.download_events(cavity)
-        if only_last:
-            return parsing.parse(events, 4)
+    def DELETE(self, key=None):
+        """Deactive cavity by key, all if None
+        """
+        if is_num(key):
+            return self.service.stop_inspector(int(key))
+        elif key is None:
+            return self.service.stop_inspector()
         else:
-            if cavity is None:
-                return parsing.parse(self.manager.events, 4)
-            else:
-                return parsing.parse(self.manager.events[cavity - 1], 4)
+            cherrypy.response.status = 400
 
-    def handle_get_tests(self, cavity):
-        if not self.manager.testers:
-            return
-        if cavity is None:
-            result = [tester.test for tester in self.manager.testers] \
-                     if self.manager.cavities > 1 else \
-                     self.manager.testers[0].test
-        else:
-            result = self.manager.testers[cavity - 1].test
-        if result is None:
-            return
-        return parsing.parse(result, 3)
 
-    def _is_num(self, value):
+class PartModelResource(Resource):
+    @cherrypy.tools.json_out()
+    def GET(self):
         try:
-            int(value)
-            return True
-        except Exception:
-            return False
-
-    # def _parse_events(self, only_last=True):
-    #     events = self.manager.events
-    #     res = []
-    #     for _ in range(events.qsize()):
-    #         event = events.get()
-    #         res.append(parsing.parse(event))
-
-    #     return res
-
-    @cherrypy.tools.json_in()
-    def PATCH(self, cavity=1):
-        """Send responsible feedback to cavity tester"""
-        feedback = cherrypy.request.json
-        self.manager.testers[cavity - 1].set_feedback(feedback)
-
-    @cherrypy.tools.json_in()
-    @cherrypy.popargs('cavity')
-    def POST(self, cavity=1):
-        """Send part for testing
-        - /: Send part to tester 1
-        - /{cavity}: send part to tester of /cavity/"""
-        cavity = int(cavity)
-        order = cherrypy.request.json
-        part_info, responsible_key = order
-        self.manager.start_test(
-            part_info, responsible_key, cavity)
-
-    @cherrypy.popargs('command')
-    @cherrypy.tools.json_in()
-    def PUT(self, command):
-        """Config testing process:
-        - /database: Setups database layer
-        - /setup: Setups testing process """
-        data = cherrypy.request.json
-        if command == 'database':
-            self.manager.connect(**data)
-        elif command == 'setup':
-            self.manager.setup(**data)
-        else:
+            return parse(self.service.part_model)
+        except:
             cherrypy.response.status = 404
 
-    @cherrypy.popargs('cavity')
+    def PUT(self, key):
+        try:
+            self.service.set_part_model(key)
+        except:
+            cherrypy.response.status = 404
+
+
+class BatchResource(Resource):
+    def PUT(self, key):
+        try:
+            self.service.set_batch(key)
+        except ValueError:
+            cherrypy.response.status = 400
+
     @cherrypy.tools.json_out()
-    def DELETE(self, cavity=None):
-        """ Stops testers:
-        - /: Stops all testers
-        - /{cavity}: Stop tester of cavity /cavity/"""
+    def GET(self):
+        output = {'class': 'Batch',
+                  'batch_number': self.service.batch_number}
+        return output
 
-        if cavity is None:
-            if self.manager.cavities == 1:
-                pending_orders = self.manager.testers[0].stop()
-            else:
-                pending_orders = [None] * self.manager.cavities
-                for index, tester in enumerate(self.manager.testers):
-                    pending_orders[index] = self.manager.testers[index].stop()
-        else:
+
+class PartResource(Resource):
+    @cherrypy.tools.json_out()
+    def GET(self, cavity):
+        if is_num(cavity):
             cavity = int(cavity)
-            pending_orders = self.manager.testers[cavity - 1].stop()
+            return parse(self.service.get_part(cavity))
 
-        return pending_orders
+    @cherrypy.tools.json_in()
+    def POST(self, cavity):
+        pass
+
+
+class EventsResource(Resource):
+    @cherrypy.tools.json_out()
+    def GET(self, cavity=None, word=None):
+        get = self.service.get_events
+        if cavity == 'last' or word == 'last':
+            get = self.service.get_last_events
+
+        cavity = int(cavity) if is_num(cavity) else None
+        events = get(cavity)
+        return self._parse_events(events)
+
+    def _parse_events(self, events):
+        if events is dict:
+            result = {cavity: self._parse_events(cav_events)
+                      for cavity, cav_events in events}
+        else:
+            result = []
+            for event in events:
+                if event[0] not in ('done', 'walking', 'walked'):
+                    event_dict = {'state': event[0],
+                                  'obj': parse(event[1])}
+                    if len(event) > 2:  # Event is an exception
+                        event_dict['trace'] = '/n'.join(event[2])
+                    result.append(event_dict)
+        return result
+
+
+class ResponsibleResource(Resource):
+    @cherrypy.tools.json_out()
+    def GET(self, key):
+        return parse(self.service.responsible)
+
+    def PUT(self, key):
+        try:
+            self.service.set_responsible(key)
+        except:
+            cherrypy.NotFound()
+
+    def DELETE(self):
+        self.service.set_responsible(None)
+
+
+_RESOURCES = {
+    'events': EventsResource,
+    'cavities': CavitiesResource,
+    'part': PartResource,
+    'part_model': PartModelResource,
+    'batch': BatchResource
+}
+
+
+
+class RootResource(Resource):
+    def __init__(self, service, resources):
+        super().__init__(service)
+        for resource in resources:
+            setattr(self, resource, _RESOURCES[resource](service))
+
+    @cherrypy.tools.json_in()
+    def PUT(self, cavity=None):
+        dyncir = self.service.dev_container.dyncir()
+        kwargs = cherrypy.response.json()
+        voltage = int(kwargs.get('voltage', 230))
+
+        dyncir.swicth_on_dut(cavity=try_int(cavity), voltage=voltage)
+
+    def DELETE(self, cavity=None):
+
+        self.service.stop()
+        os.system('shutdown now')
+        cherrypy.response.status = 501

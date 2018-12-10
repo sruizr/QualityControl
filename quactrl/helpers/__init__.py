@@ -22,3 +22,11 @@ def _get(component_name):
     module = importlib.import_module('.'.join(packages))
 
     return getattr(module, name)
+
+
+def is_num(value):
+    try:
+        int(value)
+        return True
+    except Exception:
+        return False

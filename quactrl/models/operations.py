@@ -1,71 +1,28 @@
 import datetime
-import sys
+from collections import namedtuple
 from quactrl.helpers import get_function
-
-
-class Person:
-    pass
 
 
 class Location:
     """Site of products
     """
-    pass
+    def __init__(self, key, name, description=None):
+        self.key = key
+        self.name = name
+        self.description = description
 
 
-class ProductionOrder:
-    """Plan of part production
-    """
-    def __init__(self, part_model, order_number, qty=None):
-        self.part_model = part_model
-        self.order_number = order_number
-        self.planned_qty = qty
-        self.produced_qty = 0
-        self.product_number = 0
-
-    def get_product_number(self):
-        self.product_number += 1
-        return self._product_number
-
-    def count(self):
-        self.produced_qty += 1
+Motion = namedtuple('Motion', 'type item location qty')
 
 
-class Part:
-    """Part with unique serial number
-    """
-    def __init__(self, model, tracking, location=None, responsible=None):
-        self.model = model
-        self.tracking = tracking
-        self.defects = []
-        self.measures = []
-        self.location = location
+class Handling:
+    def __init__(self, responsible, update=None):
         self.responsible = responsible
-
-
-class IncorrectOperationState(Exception):
-    pass
-
-
-class Operation:
-    """Add value stream action over a batch
-    """
-    def __init__(self, route, parent=None, responsible=None):
-        self.route = route
-        self.responsible = responsible
-
-        self.parent = parent
-        if parent:
-            self.parent.add_action(self)
-            self.responsible = parent.responsible
-
-        self.operations = []
-        self.inbox = {}
-        self.outbox = {}
-        self.udpate = None
+        self.motions = []
+        self.started_on = None
+        self.finished_on = None
+        self.update = update
         self._state = 'open'
-        self._cancel = False
-        self.on_op = None
 
     @property
     def state(self):
@@ -74,62 +31,143 @@ class Operation:
     @state.setter
     def state(self, state):
         self._state = state
-        if self.udpate:
+        if self.update:
             self.update(state, self)
 
-    def start(self, **inputs):
-        self.update = inputs.get('update')
-        self.cavity = inputs.get('cavity')
-
-        self.inbox.update(inputs)
-        self.started_on = datetime.datetime.now()
+    def start(self):
         self.state = 'started'
+        self.started_on = datetime.datetime.now()
+
+    def get(self, item, from_location=None, qty=1):
+        if not self.started_on:
+            self.start()
+
+        if from_location is not None and from_location != item.location:
+            raise Exception()
+
+        self.motions.append(Motion('GET', item, item.location, qty))
+        item.location = None
+
+    def put(self, item, to_location, qty=1):
+        self.motions.append(Motion('PUT', item, item.location, qty))
+        item.location = to_location
+        if item.qty != qty:
+            raise Exception()
+
+    def close(self):
+        self.state = 'closed'
+        self.finished_on = datetime.datetime.now()
+
+
+class Part:
+    """Part with unique serial number
+    """
+    def __init__(self, model, serial_number, location=None, pars=None):
+        self.model = model
+        self.serial_number = serial_number
+        self.location = location
+        self.pars = pars if pars else {}
+        self.defects = []
+        self.measurements = []
+
+        self.dut = None
+
+    def set_dut(self, connection):
+        self.dut = self.model.create_dut(connection)
+
+
+class Action(Handling):
+    """Implementation of a step from a route
+    """
+    def __init__(self, operation, step, update=None):
+        super().__init__(operation.responsible, update)
+        self.operation = operation
+        self.step = step
+        self.inbox = {}
+
+    @property
+    def description(self):
+        return self.step.method_name
+
+    def start(self, **inputs):
+        super().start()
+        self.cavity = inputs.pop('cavity')
+        self.inbox.update(inputs)
+
+    def execute(self):
+        """Execute method asociated to route
+        """
+        if (self.state == 'started'):
+            if self.step.method:
+                self.step.method(self, **self.step.method_pars)
+                if hasattr(self, 'thread'):
+                    self.state = 'ongoing'
+                else:
+                    self.state = 'done'
+
+    def cancel(self):
+        """Cancel execution of operation
+        """
+        if self.state == 'ongoing':
+            self.thread.cancel()
+        self.state = 'cancelled'
+        self.finished_on = datetime.datetime.now()
+
+
+class Operation(Handling):
+    """Add value stream action over a batch
+    """
+    def __init__(self, route, responsible, update=None):
+        super().__init__(responsible, update)
+        self.route = route
+
+        self.actions = []
+        self.inbox = {}
+        self.outbox = {}
+        self._cancel = False
+        self.on_action = None
+
+    def start(self, **inputs):
+        super().start()
+        self.cavity = inputs.pop('cavity')
+        self.inbox.update(inputs)
 
     def execute(self):
         """Execute method asociated to route
         """
         if (self.state == 'started'
-            or self.state == 'walked'):
-            method = self.route.get_method()
-            if method:
-                method(self, **self.route.method_pars)
+                or self.state == 'walked'):
+            if self.route.method:
+                self.route.method(self, **self.route.method_pars)
                 if hasattr(self, 'thread'):
                     self.state = 'ongoing'
-                else:
-                    self.state = 'finished'
+
+            self.state = 'done'
 
     def walk(self):
-        """Execute each child operation
+        """Execute each child action
         """
         self.state = 'walking'
-        for op in self._list_subops():
-            if op:  # step could no create operation!
-                self.on_op = op
-                op.start(update=self.update, **self.inbox)
-                try:
-                    op.execute()
-                    if op.state == 'ongoing':
-                        op.thread.join()
-                    op.close()
-                except Exception as e:
-                    if self.update:
-                        self.update(*sys.exc_info())
-                    raise e
+        self.on_action = None
+        for action in self.action_iterator():
+            if action:  # step could no create operation!
+                self.on_action = action
+                self.actions.append(action)
+                action.start(cavity=self.cavity, **self.inbox)
+                action.execute()
+                if action.state == 'ongoing':
+                    action.thread.join()
+                action.close()
+            self.on_action = None
 
-                self.on_op = None
         self.state = 'walked'
 
-    def _list_subops(self):
+    def action_iterator(self):
         for step in self.route.steps:
             if self._cancel:
                 break
             else:
-                yield step.create_operation(self)
-
-    def close(self):
-        if self.state == 'finished':
-            self.state = 'closed'
-            self.finished_on = datetime.datetime.now()
+                yield step.implement(self)
 
     def cancel(self):
         """Cancel execution of operation
@@ -138,7 +176,8 @@ class Operation:
             self.thread.cancel()
         elif self.state == 'walking':
             self._cancel = True
-            self.current_op.cancel()
+        if self.on_action:
+            self.on_action.cancel()
         self.state = 'cancelled'
         self.finished_on = datetime.datetime.now()
 
@@ -150,35 +189,39 @@ class WrongInboxContent(Exception):
 class Route:
     """Planning of an operation over resources
     """
-    def __init__(self, role, source=None, destination=None, inputs=None, outputs=None, parent=None,
-                 method=None, method_pars=None):
+    def __init__(self, role, source=None, destination=None,
+                 outputs=None, parent=None,
+                 method_name=None, method_pars=None):
         """Create route from planned inputs and outputs, can be embebed
         """
         self.parent = parent
         self.sequence = 0
         self.source = source
         self.destination = destination
+        self.steps = []
 
-        if parent:
-            self.sequence = (parent.steps[-1].sequence + 5
-                             if parent.steps else 0)
-            parent.steps.append(self)
-
-        self.inputs = inputs if inputs else {}
-        self.outputs = outputs if outputs else {}
-        self.method_name = method
+        self.outputs = outputs if outputs else []
+        self.method = get_function(method_name) if method_name else None
         self.method_pars = method_pars if method_pars else {}
 
-    def create_operation(self, parent=None, responsible=None):
+    def implement(self, responsible, update=None):
         """Returns operation instance from parent or responsible
         """
-        return Operation(self, parent, responsible)
-
-
-    def get_method(self):
-        """Return a method to be executable by check
-        """
-        return get_function(self.method_name)
+        return Operation(self, responsible, update)
 
     def validate_inbox(self, inbox):
         pass
+
+
+class Step:
+    """Planning of a sub action for a Route
+    """
+    def __init__(self, route, method_name, method_pars):
+        self.route = route
+        self.sequence = 0 if not route.steps else route.steps[-1].sequence + 5
+        self.method_name = method_name
+        self.method = get_function(method_name) if method_name else None
+        self.method_pars = method_pars if method_pars else {}
+
+    def implement(self, operation):
+        return Action(operation, self, operation.update)

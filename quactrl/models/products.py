@@ -1,4 +1,5 @@
 import re
+from quactrl.helpers import get_class
 
 
 class PartGroup:
@@ -11,16 +12,30 @@ class PartGroup:
         self.part_models = []
         self.requirements = {}
 
+    def add_part_model(self, part_model):
+        self.part_models.append(part_model)
+        part_model.groups.append(self)
+
 
 class PartModel(PartGroup):
     """Abstraction of part, type of part
     """
-    def __init__(self, part_number, description, name=None):
+    def __init__(self, part_number, description=None, name=None,
+                 device_class_name=None, pars=None):
         self.key = part_number
         self.name = name
         self.description = description
+        self.device_class_name = device_class_name
+        self.pars = pars if pars else {}
+
+        self.Device = get_class(device_class_name) if device_class_name else None
+
         self.part_groups = []
         self.requirements = {}
+
+    def create_dut(self, connection):
+        if self.Device:
+            return self.Device(connection, **self.pars)
 
 
 class Requirement:
@@ -34,7 +49,15 @@ class Requirement:
 
     @property
     def eid(self):
-        return re.findall('.*>(.*)', self.key)[0]
+        result = re.findall('.*>(.*)', self.key)
+        return result[0] if result else ''
+
+    @property
+    def description(self):
+        char = self.characteristic
+        value = '{} [{}]'.format(char.description,
+                                      self.eid)
+        return value
 
 
 class Characteristic:
@@ -47,13 +70,22 @@ class Characteristic:
         self.element = element
         self.failure_modes = {}
 
+    def __str__(self):
+        return '{} @ {}'.format(self.attribute.name, self.element.name)
+
+    @property
+    def description(self):
+        return str(self)
+
 
 class Element:
     """Abstract subsystem or component
     """
-    def __init__(self, key, name=None, parent=None):
+    def __init__(self, key, name, description=None, parent=None):
         self.key = key
         self.name = name
+        self.description = description
+
         self.parent = parent
         if parent:
             self.parent.components = self
@@ -62,7 +94,7 @@ class Element:
         return '{}/{}'.format(self.parent.path(), self.key)
 
 
-class  Attribute:
+class Attribute:
     """Evaluable attribute of an element
     """
     def __init__(self, key, name, description=None):
