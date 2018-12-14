@@ -70,8 +70,9 @@ def _parse_check(check):
 
 def _parse_measurement(measurement):
     result = {
-        'failure_description': defect.failure_mode.description,
-        'tracking': defect.tracking
+        'characteristic': '{}>{}'.format(measurement.characteristic.key,
+                                         measurement.tracking),
+        'value': measurement.value
     }
     _parse_id(measurement, result)
     return result
@@ -110,7 +111,7 @@ def _parse_location(location):
     return result
 
 
-def _parse_part(part, result):
+def _parse_part(part):
     result = {
         'class': 'Part',
         'part_number': part.model.key,
@@ -122,7 +123,7 @@ def _parse_part(part, result):
     return result
 
 
-def _parse_part_model(model, result):
+def _parse_part_model(model):
     result = {
         'class': 'PartModel',
         'part_number': model.key,

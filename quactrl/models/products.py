@@ -35,7 +35,7 @@ class PartModel(PartGroup):
 
     def create_dut(self, connection):
         if self.Device:
-            return self.Device(connection, **self.pars)
+            return self.Device(connection, self.pars)
 
 
 class Requirement:
@@ -56,7 +56,7 @@ class Requirement:
     def description(self):
         char = self.characteristic
         value = '{} [{}]'.format(char.description,
-                                      self.eid)
+                                self.eid)
         return value
 
 

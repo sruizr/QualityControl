@@ -3,6 +3,7 @@ from quactrl.helpers import get_function
 from quactrl.models.operations import Step, Action, Operation, Route
 
 
+
 class DefectFound(Exception):
     pass
 
@@ -127,8 +128,9 @@ class Measurement:
         if low_limit is not None and self.value <= low_limit + uncertainty:
             mode_key = 'lo' if self.value < low_limit else 'slo'
 
-        if low_limit > high_limit:
-            mode_key = None if mode_key else 'lo'
+        if not (low_limit is None or high_limit is None):
+            if low_limit > high_limit:
+                mode_key = None if mode_key else 'lo'
 
         return mode_key
 
