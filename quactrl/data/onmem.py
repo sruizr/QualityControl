@@ -41,7 +41,7 @@ class Session:
             keep_data = parameters.get('keep_data', False)
 
             self.test_saver = TestSaver(file_name, create_schema,
-                                    keep_data)
+                                        keep_data)
 
     def commit(self):
         if self.test_saver:
@@ -114,6 +114,11 @@ class AttributeRepo(KeyRepo):
 class PartModelRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, session._part_models)
+
+
+class PartGroupRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._part_groups)
 
 
 class DeviceModelRepo(KeyRepo):

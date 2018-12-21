@@ -4,13 +4,12 @@ from quactrl.helpers import get_class
 
 class Data(containers.DynamicContainer):
     """Data layer with all repositories and a session provider
-
     All is ThreadLocalSingleton
     """
     _MODELS = [
         'hhrr.Person', 'hhrr.Role',
         'operations.Location', 'operations.Part', 'quality.ControlPlan',
-        'products.Characteristic', 'products.PartModel',
+        'products.Characteristic', 'products.PartModel', 'products.PartGroup',
         'products.Element', 'products.Attribute', 'products.Characteristic',
         'products.Requirement',
         'quality.Test', 'quality.Mode',

@@ -61,7 +61,7 @@ class Service:
             for cavity_ in cavity:
                 self.start(cavity_)
         elif cavity in self.inspectors:
-            self.restart(cavity)
+            self.restart_inspector(cavity)
         else:
             self.inspectors[cavity] = inspector = Inspector(
                 self.db, self.dev_container,
@@ -255,7 +255,7 @@ class Inspector(threading.Thread):
         if part.model.device_class_name:
             connection = self.dev_container.modbus_conn()
             connection = connection if self.cavity is None \
-                         else connection[self.cavity]
+                else connection[self.cavity]
             part.set_dut(connection)
 
         return part

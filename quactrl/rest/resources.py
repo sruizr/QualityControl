@@ -16,28 +16,26 @@ class Resource:
         """
         self.service = service
 
-    def OPTIONS(self, key, word):
+    def OPTIONS(self, key=None, word=None):
         cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Access-Control-Allow-Origin'
-
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
         possible_methods = ('PUT', 'DELETE', 'PATCH')
-        methods =[http_method for http_method in possible_methods
-                  if hasattr(self, http_method)]
+        methods = [http_method for http_method in possible_methods
+                   if hasattr(self, http_method)]
         cherrypy.response.headers['Access-Control-Allow-Methods'] = ','.join(methods)
 
 
 class CavitiesResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self, key=None):
-        if is_num(key):
-            return parse(self.service.inspectors[int(key)])
-        elif key is None:
-            if key in self.service.active_cavities:
-                return parse(self.service.inspectors[None])
-            else:
-                return {
-                    cavity: parse(self.service.inspectors[cavity])
-                    for cavity in self.service.active_cavities
-                }
+        cavity = try_int(key)
+        if cavity in self.service.active_cavities:
+            return parse(self.service.inspectors[cavity])
+        elif cavity is None:
+            return {
+                cavity: parse(self.service.inspectors[cavity])
+                for cavity in self.service.active_cavities
+            }
         else:
             cherrypy.response.status = 400
 
@@ -66,16 +64,10 @@ class CavitiesResource(Resource):
 class PartModelResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self):
-        try:
-            return parse(self.service.part_model)
-        except:
-            cherrypy.response.status = 404
+        return parse(self.service.part_model)
 
     def PUT(self, key):
-        try:
-            self.service.set_part_model(key)
-        except:
-            cherrypy.response.status = 404
+        self.service.set_part_model(key)
 
 
 class BatchResource(Resource):
@@ -104,6 +96,7 @@ class PartResource(Resource):
 
 
 class EventsResource(Resource):
+
     @cherrypy.tools.json_out()
     def GET(self, cavity=None, word=None):
         get_events = self.service.get_events
@@ -137,7 +130,7 @@ class ResponsibleResource(Resource):
     def PUT(self, key):
         try:
             self.service.set_responsible(key)
-        except:
+        except ValueError:
             cherrypy.NotFound()
 
     def DELETE(self):
@@ -152,7 +145,6 @@ _RESOURCES = {
     'batch': BatchResource,
     'responsible': ResponsibleResource
 }
-
 
 
 class RootResource(Resource):

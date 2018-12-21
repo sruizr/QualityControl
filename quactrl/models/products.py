@@ -5,37 +5,51 @@ from quactrl.helpers import get_class
 class PartGroup:
     """Clasification of part models
     """
-    def __init__(self, key, description, name=None):
+    def __init__(self, key, name, description=None,
+                 pars=None):
         self.key = key
         self.name = name
         self.description = description
+        self.pars = pars if pars else {}
+
+        self.kwargs = self.pars.get('kwargs', {})
+        device_class = self.pars.get('device_class')
+        self.Device = get_class(device_class) if device_class else None
+
         self.part_models = []
         self.requirements = {}
 
-    def add_part_model(self, part_model):
+    def add_model(self, part_model):
         self.part_models.append(part_model)
-        part_model.groups.append(self)
+        if self not in part_model.part_groups:
+            part_model.add_group(self)
 
 
 class PartModel(PartGroup):
     """Abstraction of part, type of part
     """
-    def __init__(self, part_number, description=None, name=None,
-                 device_class_name=None, pars=None):
-        self.key = part_number
-        self.name = name
-        self.description = description
-        self.device_class_name = device_class_name
-        self.pars = pars if pars else {}
-
-        self.Device = get_class(device_class_name) if device_class_name else None
-
+    def __init__(self, part_number, name=None, description=None, pars=None):
+        super().__init__(part_number, name, description, pars)
         self.part_groups = []
-        self.requirements = {}
+
+    def _find_Device(self):
+        for group in self.part_groups:
+            if group.Device:
+                return group.Device, group.kwargs.copy()
+        return None, None
 
     def create_dut(self, connection):
         if self.Device:
-            return self.Device(connection, self.pars)
+            return self.Device(connection, **self.kwargs)
+        else:
+            Device, kwargs = self._find_Device()
+            if Device:
+                return Device(connection, **kwargs.update(self.kwargs))
+
+    def add_group(self, group):
+        self.part_groups.append(group)
+        if self not in group.part_models:
+            group.add_model(self)
 
 
 class Requirement:
@@ -56,7 +70,7 @@ class Requirement:
     def description(self):
         char = self.characteristic
         value = '{} [{}]'.format(char.description,
-                                self.eid)
+                                 self.eid)
         return value
 
 
