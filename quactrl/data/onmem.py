@@ -177,13 +177,17 @@ class ControlPlanRepo(Repository):
                 self.session._control_plans[(resource, location)] = control_plan
 
     def get_by(self, part_model, location):
+        """Return control plan for a part_model on a location
+        """
         key = (part_model.key, location.key)
+        print(key)
         if key in self.session._control_plans:
             return self.session._control_plans[key]
 
+        #If there is no control_plan for specific part_model...
         for group in part_model.part_groups:
-            key = (group, location)
-            if key in self.sessionn._control_plans:
+            key = (group.key, location.key)
+            if key in self.session._control_plans.keys():
                 return self.session._control_plans[key]
 
 

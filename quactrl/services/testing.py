@@ -49,6 +49,8 @@ class Service:
                 for cavity, inspector in self.inspectors.items()}
 
     def start(self, cavities):
+        """Start the testing service from cavity
+        """
         if type(cavities) is int:
             cavities = [cavities]
         for cavity in cavities:
@@ -89,8 +91,8 @@ class Service:
         """Restart cavity inspection, all if None
         """
         if cavity in self.active_cavities:
-            pending_orders = self.stop(cavity)
-            self.start(cavity)
+            pending_orders = self.stop_inspector(cavity)
+            self.start_inspector(cavity)
 
             if reinsert_orders:
                 for order in pending_orders:
@@ -120,7 +122,7 @@ class Service:
         """Get events from inspector from current test"""
         if cavity not in self.active_cavities:
             for _cavity in self.active_cavities:
-                self.get_events(_cavity)
+                self.get_last_events(_cavity)
             return self.events
         else:
             self.get_last_events(cavity)
@@ -252,7 +254,7 @@ class Inspector(threading.Thread):
                 )
             )
 
-        if part.model.device_class_name:
+        if part.model.is_device():
             connection = self.dev_container.modbus_conn()
             connection = connection if self.cavity is None \
                 else connection[self.cavity]
@@ -271,7 +273,6 @@ class Inspector(threading.Thread):
             self.set_part_model(part_number)
             serial_number = part_info.pop('serial_number')
             self.part = part = self.get_part(serial_number, part_info)
-
             self.test = test = self.control_plan.implement(self.responsible,
                                                            self.update)
             self.db.Tests().add(test)

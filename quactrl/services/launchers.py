@@ -7,6 +7,8 @@ class SetupException(Exception):
 
 
 class MonoLauncher(threading.Thread):
+    """Launcher for a tool with only one cavity
+    """
     def __init__(self, service, presence_input, refresh_time):
         super().__init__()
         self.service = service
@@ -28,6 +30,8 @@ class MonoLauncher(threading.Thread):
 
 
 class MultiLauncher(threading.Thread):
+    """Launcher for a tool with multiple cavities
+    """
     def __init__(self, service, presence_input, refresh_time):
         super().__init__()
         self.service = service
@@ -65,8 +69,11 @@ class MultiLauncher(threading.Thread):
         else:
             self.responsible = self.data.Persons().get(key)
 
-    def get_events(self, last):
-        return self.service.get_events()
+    def get_events(self, cavity=None):
+        return self.service.get_events(cavity)
+
+    def get_last_events(self, cavity=None):
+        return self.service.get_last_events(cavity)
 
     def get_responsible(self):
         return self.responsible
@@ -113,17 +120,13 @@ class MultiLauncher(threading.Thread):
         for cavity in self.service.active_cavities:
             last_state = self.cavity_states.get(cavity)
             inspector_state = self._get_inspector_state(cavity)
+            state = inspector_state
             if last_state in ('success', 'failed', 'cancelled'):
                 if not self.presence_input(cavity):
                     state = 'empty'
-                else:
-                    state = inspector_state
             elif last_state == 'empty':
                 if self.presence_input(cavity):
                     state = 'loaded'
-            else:
-                state = inspector_state
-
             if state != last_state:
                 self.update_cavity(cavity, state)
                 self.cavity_states[cavity] = state

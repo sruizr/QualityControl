@@ -39,12 +39,22 @@ class PartModel(PartGroup):
         return None, None
 
     def create_dut(self, connection):
+        """Return a device instance if part model is a device
+        """
         if self.Device:
-            return self.Device(connection, **self.kwargs)
+            return self.Device(connection, self.kwargs)
         else:
             Device, kwargs = self._find_Device()
             if Device:
-                return Device(connection, **kwargs.update(self.kwargs))
+                kwargs.update(self.kwargs)
+                return Device(connection, kwargs)
+
+    def is_device(self):
+        if self.Device:
+            return True
+        else:
+            Device, kwargs = self._find_Device()
+            return Device is not None
 
     def add_group(self, group):
         self.part_groups.append(group)

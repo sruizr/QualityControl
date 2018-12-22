@@ -103,6 +103,7 @@ class EventsResource(Resource):
         if cavity == 'last' or word == 'last':
             get_events = self.service.get_last_events
         cavity = try_int(cavity)
+        print(cavity, get_events)
         events = get_events(cavity)
         return self._parse_events(events)
 
