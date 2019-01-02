@@ -41,7 +41,7 @@ class Session:
             keep_data = parameters.get('keep_data', False)
 
             self.test_saver = TestSaver(file_name, create_schema,
-                                    keep_data)
+                                        keep_data)
 
     def commit(self):
         if self.test_saver:
@@ -116,6 +116,11 @@ class PartModelRepo(KeyRepo):
         super().__init__(session, session._part_models)
 
 
+class PartGroupRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, session._part_groups)
+
+
 class DeviceModelRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, session._device_models)
@@ -172,13 +177,17 @@ class ControlPlanRepo(Repository):
                 self.session._control_plans[(resource, location)] = control_plan
 
     def get_by(self, part_model, location):
+        """Return control plan for a part_model on a location
+        """
         key = (part_model.key, location.key)
+        print(key)
         if key in self.session._control_plans:
             return self.session._control_plans[key]
 
+        #If there is no control_plan for specific part_model...
         for group in part_model.part_groups:
-            key = (group, location)
-            if key in self.sessionn._control_plans:
+            key = (group.key, location.key)
+            if key in self.session._control_plans.keys():
                 return self.session._control_plans[key]
 
 

@@ -48,6 +48,14 @@ class Service:
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
 
+    def start(self, cavities):
+        """Start the testing service from cavity
+        """
+        if type(cavities) is int:
+            cavities = [cavities]
+        for cavity in cavities:
+            self.start_inspector(cavity)
+
     def start_inspector(self, cavity=None):
         """Start a cavity asigning an inspector
         """
@@ -55,7 +63,7 @@ class Service:
             for cavity_ in cavity:
                 self.start(cavity_)
         elif cavity in self.inspectors:
-            self.restart(cavity)
+            self.restart_inspector(cavity)
         else:
             self.inspectors[cavity] = inspector = Inspector(
                 self.db, self.dev_container,
@@ -83,8 +91,8 @@ class Service:
         """Restart cavity inspection, all if None
         """
         if cavity in self.active_cavities:
-            pending_orders = self.stop(cavity)
-            self.start(cavity)
+            pending_orders = self.stop_inspector(cavity)
+            self.start_inspector(cavity)
 
             if reinsert_orders:
                 for order in pending_orders:
@@ -114,7 +122,7 @@ class Service:
         """Get events from inspector from current test"""
         if cavity not in self.active_cavities:
             for _cavity in self.active_cavities:
-                self.get_events(_cavity)
+                self.get_last_events(_cavity)
             return self.events
         else:
             self.get_last_events(cavity)
@@ -149,7 +157,8 @@ class Service:
         return is_finished
 
     def __del__(self):
-        self.stop()
+        for inspector in self.inspectors.values():
+            inspector.stop()
 
 
 class Inspector(threading.Thread):
@@ -186,6 +195,7 @@ class Inspector(threading.Thread):
         self.part_model = None
         self.part = None
         self.control_plan = None
+        self.test = None
 
         self._stop_event = threading.Event()
 
@@ -244,10 +254,12 @@ class Inspector(threading.Thread):
                 )
             )
 
-        connection = self.dev_container.modbus_conn()
-        connection = connection if self.cavity is None \
-            else connection[self.cavity]
-        part.set_dut(connection)
+        if part.model.is_device():
+            connection = self.dev_container.modbus_conn()
+            connection = connection if self.cavity is None \
+                else connection[self.cavity]
+            part.set_dut(connection)
+
         return part
 
     def run_test(self, order):
@@ -261,17 +273,17 @@ class Inspector(threading.Thread):
             self.set_part_model(part_number)
             serial_number = part_info.pop('serial_number')
             self.part = part = self.get_part(serial_number, part_info)
-
             self.test = test = self.control_plan.implement(self.responsible,
                                                            self.update)
             self.db.Tests().add(test)
             test.start(part=part, dev_container=self.dev_container,
                        cavity=self.cavity, tff=self.tff)
             try:
-                self.dev_container.dyncir().switch_on_dut(
-                    voltage=part.dut.supply_voltage,
-                    wait_after=1, cavity=self.cavity
-                )
+                if part.dut:
+                    self.dev_container.dyncir().switch_on_dut(
+                        voltage=part.dut.supply_voltage,
+                        wait_after=1, cavity=self.cavity
+                    )
                 test.walk()
                 test.execute()
                 test.close()
@@ -283,10 +295,11 @@ class Inspector(threading.Thread):
                 test.cancel()
             finally:
                 self.db.Session().commit()
-                self.dev_container.dyncir().switch_off_dut(
-                    voltage=part.dut.supply_voltage,
-                    wait_after=0, cavity=self.cavity
-                )
+                if part.dut:
+                    self.dev_container.dyncir().switch_off_dut(
+                        voltage=part.dut.supply_voltage,
+                        wait_after=0, cavity=self.cavity
+                    )
                 self.part = None
         except Exception as e:
             self.part = None
