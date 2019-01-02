@@ -279,7 +279,7 @@ class Inspector(threading.Thread):
             test.start(part=part, dev_container=self.dev_container,
                        cavity=self.cavity, tff=self.tff)
             try:
-                if part.dut:
+                if part.dut and hasattr(part.dut, 'supply_voltage'):
                     self.dev_container.dyncir().switch_on_dut(
                         voltage=part.dut.supply_voltage,
                         wait_after=1, cavity=self.cavity
@@ -295,7 +295,7 @@ class Inspector(threading.Thread):
                 test.cancel()
             finally:
                 self.db.Session().commit()
-                if part.dut:
+                if part.dut and hasattr(part.dut, 'supply_voltage'):
                     self.dev_container.dyncir().switch_off_dut(
                         voltage=part.dut.supply_voltage,
                         wait_after=0, cavity=self.cavity
@@ -352,6 +352,8 @@ class Inspector(threading.Thread):
 class Question(threading.Event):
 
     def ask(self, message, *args):
+        """Wait until answer is done by other thread
+        """
         self.request = (message, *args)
         self.wait()
 

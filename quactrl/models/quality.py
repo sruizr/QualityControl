@@ -79,9 +79,10 @@ class Check(Action):
             tracking = '{}_{}'.format(tracking, index)
         measurement = Measurement(self.inbox['part'],
                                   requirement.characteristic, tracking, value)
-        mode_key = measurement.eval_value(requirement.specs['limits'])
-        if mode_key:
-            self.add_defect(requirement, mode_key, tracking, 1)
+        if requirement.specs.get('limits', False):
+            mode_key = measurement.eval_value(requirement.specs['limits'])
+            if mode_key:
+                self.add_defect(requirement, mode_key, tracking, 1)
 
         self.measurements.append(measurement)
 

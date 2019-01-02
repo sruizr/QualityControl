@@ -57,6 +57,7 @@ class DeviceContainer(containers.DynamicContainer):
             config = device.config_pars.copy()
             Provider = self._strategies[config.pop('_strategy', 'thread_safe_sing')]
             DeviceClass = device.model.get_class()
+
             args = config.pop('_args', [])
             for index in range(len(args)):
                 value = args[index]
@@ -67,9 +68,12 @@ class DeviceContainer(containers.DynamicContainer):
                 value = kwargs[key]
                 if type(value) is str and value[0] == '>':
                     kwargs[key] = self._inject_provider(value[1:])
+            if device.tracking:
+                kwargs['tracking'] = device.tracking
 
-            setattr(self, dev_name, Provider(DeviceClass, *args,
-                                             **kwargs))
+            device_ =  Provider(DeviceClass, *args, **kwargs)
+            setattr(self, dev_name, device_)
+
         return getattr(self, dev_name)
 
 
