@@ -69,10 +69,11 @@ class Check(Action):
         # for defect in self.defects:
         #     self.put(defect, self.parent.route.destination)
 
-    def add_measurement(self, requirement, value, index=None):
+    def add_measurement(self, requirement, value, index=None, ms_tracking=None):
         """Add measurement of a characteristic to check
         """
-        tracking = requirement.eid
+        tracking = '{}*'.format(ms_tracking) if ms_tracking else ''
+        tracking += requirement.eid
         if index is not None:
             tracking = '{}_{}'.format(tracking, index)
         measurement = Measurement(self.inbox['part'],
