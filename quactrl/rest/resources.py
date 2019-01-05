@@ -11,10 +11,10 @@ def try_int(cavity):
 
 @cherrypy.expose
 class Resource:
-    def __init__(self, service):
+    def __init__(self, part_manager):
         """Resource avalaible with API REST and CORS security solved
         """
-        self.service = service
+        self.part_manager = part_manager
 
     def OPTIONS(self, key=None, word=None):
         cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Access-Control-Allow-Origin'
@@ -29,12 +29,12 @@ class CavitiesResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self, key=None):
         cavity = try_int(key)
-        if cavity in self.service.active_cavities:
-            return parse(self.service.inspectors[cavity])
+        if cavity in self.part_manager.active_cavities:
+            return parse(self.part_manager.inspectors[cavity])
         elif cavity is None:
             return {
-                cavity: parse(self.service.inspectors[cavity])
-                for cavity in self.service.active_cavities
+                cavity: parse(self.part_manager.inspectors[cavity])
+                for cavity in self.part_manager.active_cavities
             }
         else:
             cherrypy.response.status = 400
@@ -43,9 +43,9 @@ class CavitiesResource(Resource):
         """Active cavity by key
         """
         if is_num(key):
-            self.service.start_inspector(int(key))
+            self.part_manager.start_inspector(int(key))
         elif key is None:
-            self.service.start_inspector()
+            self.part_manager.start_inspector()
         else:
             cherrypy.response.status = 400
 
@@ -54,9 +54,9 @@ class CavitiesResource(Resource):
         """Deactive cavity by key, all if None
         """
         if is_num(key):
-            return self.service.stop_inspector(int(key))
+            return self.part_manager.stop_inspector(int(key))
         elif key is None:
-            return self.service.stop_inspector()
+            return self.part_manager.stop_inspector()
         else:
             cherrypy.response.status = 400
 
@@ -64,23 +64,23 @@ class CavitiesResource(Resource):
 class PartModelResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self):
-        return parse(self.service.part_model)
+        return parse(self.part_manager.part_model)
 
     def PUT(self, key):
-        self.service.set_part_model(key)
+        self.part_manager.set_part_model(key)
 
 
 class BatchResource(Resource):
     def PUT(self, key):
         try:
-            self.service.set_batch(key)
+            self.part_manager.set_batch(key)
         except ValueError:
             cherrypy.response.status = 400
 
     @cherrypy.tools.json_out()
     def GET(self):
         output = {'class': 'Batch',
-                  'batch_number': self.service.batch_number}
+                  'batch_number': self.part_manager.batch_number}
         return output
 
 
@@ -88,7 +88,7 @@ class PartResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self, cavity):
         cavity = try_int(cavity)
-        return parse(self.service.get_part(cavity))
+        return parse(self.part_manager.get_part(cavity))
 
     @cherrypy.tools.json_in()
     def POST(self, cavity):
@@ -99,9 +99,9 @@ class EventsResource(Resource):
 
     @cherrypy.tools.json_out()
     def GET(self, cavity=None, word=None):
-        get_events = self.service.get_events
+        get_events = self.part_manager.get_events
         if cavity == 'last' or word == 'last':
-            get_events = self.service.get_last_events
+            get_events = self.part_manager.get_last_events
         cavity = try_int(cavity)
         print(cavity, get_events)
         events = get_events(cavity)
@@ -126,16 +126,16 @@ class EventsResource(Resource):
 class ResponsibleResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self):
-        return parse(self.service.responsible)
+        return parse(self.part_manager.responsible)
 
     def PUT(self, key):
         try:
-            self.service.set_responsible(key)
+            self.part_manager.set_responsible(key)
         except ValueError:
             cherrypy.NotFound()
 
     def DELETE(self):
-        self.service.set_responsible(None)
+        self.part_manager.set_responsible(None)
 
 
 _RESOURCES = {
@@ -149,14 +149,14 @@ _RESOURCES = {
 
 
 class RootResource(Resource):
-    def __init__(self, service, resources):
-        super().__init__(service)
+    def __init__(self, part_manager, resources):
+        super().__init__(part_manager)
         for resource in resources:
-            setattr(self, resource, _RESOURCES[resource](service))
+            setattr(self, resource, _RESOURCES[resource](part_manager))
 
     @cherrypy.tools.json_in()
     def PUT(self, cavity=None):
-        dyncir = self.service.dev_container.dyncir()
+        dyncir = self.part_manager.dev_container.dyncir()
         kwargs = cherrypy.request.json
         voltage = int(kwargs.get('voltage', 230))
 
@@ -164,6 +164,6 @@ class RootResource(Resource):
 
     def DELETE(self, cavity=None):
 
-        self.service.stop()
+        self.part_manager.stop()
         os.system('shutdown now')
         cherrypy.response.status = 501

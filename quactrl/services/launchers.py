@@ -1,9 +1,22 @@
 import time
 import threading
+import logging
+
+
+logger  = logging.getLogger(__name__)
 
 
 class SetupException(Exception):
     pass
+
+
+class Cavity:
+
+    def __init__(self, service, part_is_present, key=None, observer=None):
+        self.service = service
+        self.part_is_present = part_is_present
+        self.key = key
+        self.observer = observer
 
 
 class MonoLauncher(threading.Thread):
@@ -118,15 +131,25 @@ class MultiLauncher(threading.Thread):
     def refresh_states(self):
         self.presence_input.read()
         for cavity in self.service.active_cavities:
-            last_state = self.cavity_states.get(cavity)
-            inspector_state = self._get_inspector_state(cavity)
-            state = inspector_state
-            if last_state in ('success', 'failed', 'cancelled'):
-                if not self.presence_input(cavity):
-                    state = 'empty'
-            elif last_state == 'empty':
-                if self.presence_input(cavity):
+            last_state = self.cavity_states.get(cavity, 'empty')
+            inspector = self.service.inspectors[cavity]
+            state = inspector.state
+            if self.presence_input(cavity):
+                if last_state == 'empty':
                     state = 'loaded'
+                elif last_state in ('cancelled', 'success', 'failed'):
+                    state = last_state
+                elif last_state == 'stacked' and state != 'iddle':
+                    state = 'stacked'
+                elif last_state == 'iddle' and state == 'waiting':
+                    state = inspector.test.state
+            else:  # No device on cavity
+                if state == 'iddle':
+                    inspector.cancel()
+                elif state == 'waiting':
+                    state = 'empty'
+
+            # logger.debug('State on cavity {} is {} and was {}'.format(cavity, state, last_state))
             if state != last_state:
                 self.update_cavity(cavity, state)
                 self.cavity_states[cavity] = state

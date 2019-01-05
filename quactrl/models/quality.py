@@ -70,7 +70,8 @@ class Check(Action):
         # for defect in self.defects:
         #     self.put(defect, self.parent.route.destination)
 
-    def add_measurement(self, requirement, value, index=None, ms_tracking=None):
+    def add_measurement(self, requirement, value, index=None, ms_tracking=None,
+                        uncertainty=0):
         """Add measurement of a characteristic to check
         """
         tracking = '{}*'.format(ms_tracking) if ms_tracking else ''
@@ -80,7 +81,8 @@ class Check(Action):
         measurement = Measurement(self.inbox['part'],
                                   requirement.characteristic, tracking, value)
         if requirement.specs.get('limits', False):
-            mode_key = measurement.eval_value(requirement.specs['limits'])
+            mode_key = measurement.eval_value(requirement.specs['limits'],
+                                              uncertainty=uncertainty)
             if mode_key:
                 self.add_defect(requirement, mode_key, tracking, 1)
 
@@ -181,6 +183,8 @@ class Sampling:
 
 
 class FailureMode:
+    """Mode of failing a characteristic
+    """
     def __init__(self, characteristic, mode):
         self.characteristic = characteristic
         self.mode = mode
@@ -198,6 +202,8 @@ class FailureMode:
 
 
 class Mode:
+    """Modes clasification of failing a characteristic
+    """
     def __init__(self, key, name):
         self.key = key
         self.name = name

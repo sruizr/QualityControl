@@ -311,7 +311,7 @@ class Inspector(threading.Thread):
         """Receive from test notications of states
         """
         self.events.put(
-            (state, obj, *args)
+            [state, obj] + list(args)
         )
 
     def stop(self):
@@ -348,13 +348,17 @@ class Inspector(threading.Thread):
 
         return events
 
+    def cancel(self):
+        if self.state == 'iddle':
+            self.test.cancel()
+
 
 class Question(threading.Event):
 
     def ask(self, message, *args):
         """Wait until answer is done by other thread
         """
-        self.request = (message, *args)
+        self.request = [message] + list(args)
         self.wait()
 
     def answer(self, *args):
