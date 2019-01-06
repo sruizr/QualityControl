@@ -28,37 +28,31 @@ class Resource:
 class CavitiesResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self, key=None):
-        cavity = try_int(key)
-        if cavity in self.part_manager.active_cavities:
-            return parse(self.part_manager.inspectors[cavity])
-        elif cavity is None:
-            return {
-                cavity: parse(self.part_manager.inspectors[cavity])
-                for cavity in self.part_manager.active_cavities
-            }
+        key = try_int(key)
+        if key in self.part_manager.cavities:
+            return parse(self.part_manager.cavities[cavity_key])
         else:
-            cherrypy.response.status = 400
+            return {
+                key: parse(cavity)
+                for key, cavity in self.part_manager.cavities.items()
+            }
 
     def PUT(self, key=None):
         """Active cavity by key
         """
-        if is_num(key):
-            self.part_manager.start_inspector(int(key))
-        elif key is None:
-            self.part_manager.start_inspector()
-        else:
-            cherrypy.response.status = 400
+        key = try_int(key)
+        self.part_manager.add_cavity(key)
 
     @cherrypy.tools.json_out()
     def DELETE(self, key=None):
         """Deactive cavity by key, all if None
         """
-        if is_num(key):
-            return self.part_manager.stop_inspector(int(key))
-        elif key is None:
-            return self.part_manager.stop_inspector()
-        else:
+        key = try_int(key)
+        try:
+            self.part_manager.remove_cavity(key)
+        except Exception as e:
             cherrypy.response.status = 400
+            cherrypy.response.body = str(e)
 
 
 class PartModelResource(Resource):
@@ -87,8 +81,8 @@ class BatchResource(Resource):
 class PartResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self, cavity):
-        cavity = try_int(cavity)
-        return parse(self.part_manager.get_part(cavity))
+        key = try_int(cavity)
+        return parse(self.part_manager.cavities[key].part)
 
     @cherrypy.tools.json_in()
     def POST(self, cavity):
@@ -99,12 +93,13 @@ class EventsResource(Resource):
 
     @cherrypy.tools.json_out()
     def GET(self, cavity=None, word=None):
-        get_events = self.part_manager.get_events
+        service = self.part_manager.test_service
+        get_events = service.get_events
         if cavity == 'last' or word == 'last':
-            get_events = self.part_manager.get_last_events
-        cavity = try_int(cavity)
-        print(cavity, get_events)
+            get_events = service.get_last_events
+        key = try_int(cavity)
         events = get_events(cavity)
+
         return self._parse_events(events)
 
     def _parse_events(self, events):
@@ -156,14 +151,13 @@ class RootResource(Resource):
 
     @cherrypy.tools.json_in()
     def PUT(self, cavity=None):
-        dyncir = self.part_manager.dev_container.dyncir()
+        dyncir = self.part_manager.test_service.dev_container.dyncir()
         kwargs = cherrypy.request.json
         voltage = int(kwargs.get('voltage', 230))
 
         dyncir.switch_on_dut(cavity=try_int(cavity), voltage=voltage)
 
     def DELETE(self, cavity=None):
-
         self.part_manager.stop()
         os.system('shutdown now')
         cherrypy.response.status = 501

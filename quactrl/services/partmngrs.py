@@ -1,0 +1,133 @@
+import time
+import threading
+import logging
+
+
+logger  = logging.getLogger(__name__)
+
+
+class SetupException(Exception):
+    pass
+
+
+class Cavity:
+    """Cavity where a part is allocated to test
+    """
+    def __init__(self, part_manager, key=None):
+        self.key = key
+        self.state = 'empty'
+
+        if key not in self.test_service.inspectors.keys():
+            part_manager.test_service.start_inspector(key)
+
+        self.inspector = part_manager.test_service.inspectors[key]
+        self.get_part_info = lambda key: part_manager.get_part_info(key)
+        self.part_is_present = lambda key: part_manager.part_is_present(key)
+        self.part_manager = part_manager
+        self.part = None
+
+    def restart(self, reinsert_orders=True):
+        self.part_manager.test_service.restart_inspector(self.key,
+                                                         reinsert_orders)
+
+    def refresh(self):
+        """Refresh state of cavity
+        """
+        state = self.state
+        if self.state == 'empty' and self.part_is_present(self.key):
+            state = 'loaded'
+        elif self.state == 'loaded' and inspector.state == 'waiting':
+            self.service.stack_part(
+                self.get_part_info(self.key),
+                self.part_manager.responsible
+            )
+            state = 'stacked'
+        elif self.state == 'stacked' and self.inspector.state == 'iddle':
+            state = 'iddle'
+        elif self.state == 'iddle' and self.inspector.state == 'waiting':
+            state = self.inspector.test.state
+            self.part = self.inspector.part
+        elif self.state in ('success', 'failed', 'cancelled') and not self.part_is_present(self.key):
+            state = 'empty'
+            self.part = None
+
+        if state != self.state:
+            self.part_manager.cavity_state_has_changed(self.key)
+            self.state = state
+
+    def __del__(self):
+        self.inspector.stop()
+
+
+class MultiPartManager(threading):
+    """Base class for all part managers
+    """
+    def __init__(self, test_service, refresh_time=0):
+        super().__init__()
+        self.test_service = test_service
+        self.data = test_service.data
+        self.refresh_time = refresh_time
+
+        self._continue = True
+        self.setDaemon(True)
+
+        self.responsible = None
+        self.cavities = {}
+
+    def add_cavity(self, key=None):
+        self.cavities[key] = Cavity(self, key)
+
+    def remove_cavity(self, key=None):
+        cavity = self.cavities.pop(key)
+        del(cavity)
+
+    def run(self):
+        while self._continue:
+            if self.is_ready():
+                for cavity in self.cavities.values():
+                    cavity.refresh()
+            time.sleep(self.refresh_time)
+
+    def stop(self):
+        self._continue = False
+        self.join()
+
+    def is_ready():
+        """Return true if it's properly configured
+        """
+        return self.responsible is not None
+
+    def part_is_present(self, cavity_key):
+        """Retrieve true if the part is on the cavity
+        """
+        raise NotImplementedError()
+
+    def get_part_info(self, cavity_key):
+        """Retrieves part number and serial number of loaded part
+        """
+        raise NotImplementedError()
+
+    def cavity_state_has_changed(self, cavity):
+        "Called by cavity when it's state has changed"
+        pass
+
+    def set_responsible(self, key):
+        if key is None:
+            self.responsible = None
+        else:
+            self.responsible = self.data.Persons().get(key)
+
+    def __del__(self):
+        self.stop()
+
+
+class MonoPartManager(MultiPartManager):
+    """Launcher for a tool with only one cavity
+    """
+    def __init__(self, test_service, refresh_time=0):
+        super().__init__(test_service, refresh_time)
+        self.add_cavity(None)
+
+    @property
+    def cavity(self):
+        return self.cavities[None] if None in self.cavities else None

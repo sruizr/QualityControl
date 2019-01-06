@@ -39,10 +39,10 @@ def _parse_test(test):
     return result
 
 
-def _parse_inspector(inspector):
+def _parse_cavity(cavity):
     result = {
-        'state': inspector.state,
-        'part': parse(inspector.part)
+        'state': cavity.state,
+        'part': parse(cavity.part)
     }
     return result
 
@@ -151,6 +151,6 @@ _PARSES = {
     'Measurement': _parse_measurement,
     'Defect': _parse_defect,
     'PartModel': _parse_part_model,
-    'Inspector': _parse_inspector,
+    'Cavity': _parse_cavity,
     'Part': _parse_part
 }

@@ -35,14 +35,6 @@ class Service:
         self.dev_container = DeviceContainer(all_devices)
 
     @property
-    def cavities(self):
-        return len(self.inspectors)
-
-    @property
-    def active_cavities(self):
-        return list(self.inspectors.keys())
-
-    @property
     def tests(self):
         """List tests by cavity"""
         return {cavity: inspector.test
