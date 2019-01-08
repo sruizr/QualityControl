@@ -26,15 +26,34 @@ class Device:
         self.model = device_model
         self.tracking = tracking
         self.config_pars = config_pars if config_pars else {}
+        self._name = self.config_pars.pop('_name', None)
         self.location = location
 
     @property
     def name(self):
+        if self._name:
+            return self._name
+
         value = re.findall('(.*)>.*', self.tracking)
         if value:
             return value[0]
 
         return self.model.name
+
+
+class DeviceProvider(providers.ThreadSafeSingleton):
+    def __init__(self, device, *args, **kwargs):
+        "docstring"
+        Device = device.get_class()
+        self.tracking = device.tracking
+        super().__init__(Device, *args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        device = super().__call__(*args, **kwargs)
+        if not hasattr(device, 'tracking'):
+            device.tracking = self.tracking
+
+        return device
 
 
 class DeviceContainer(containers.DynamicContainer):

@@ -30,7 +30,7 @@ class CavitiesResource(Resource):
     def GET(self, key=None):
         key = try_int(key)
         if key in self.part_manager.cavities:
-            return parse(self.part_manager.cavities[cavity_key])
+            return parse(self.part_manager.cavities[key])
         else:
             return {
                 key: parse(cavity)
