@@ -135,11 +135,7 @@ class DeviceRepo(Repository):
             self.session._devices[key].append(device)
 
     def get_all_from(self, location_key):
-        devices = {}
-        all_devices = self.session._devices[location_key]
-        for device in all_devices:
-            devices[device.name] = device
-        return devices
+        return  self.session._devices[location_key]
 
 
 class PartRepo(Repository):
