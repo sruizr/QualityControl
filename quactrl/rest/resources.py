@@ -1,5 +1,6 @@
-import cherrypy
 import os
+import time
+import cherrypy
 from quactrl.rest.parsing import parse
 from quactrl.helpers import is_num
 
@@ -143,9 +144,16 @@ _RESOURCES = {
 }
 
 
+class Time:
+    @cherrypy.tools.json_out()
+    def GET(self):
+        return {'now': datetime.datetime.now()}
+
+
 class RootResource(Resource):
     def __init__(self, part_manager, resources):
         super().__init__(part_manager)
+        self.time = Time()
         for resource in resources:
             setattr(self, resource, _RESOURCES[resource](part_manager))
 
