@@ -99,7 +99,7 @@ class Service:
         elif cavity is None:  # All active cavities will restart
             all_orders = {}
             for cavity in self.active_cavities:
-                pending_orders = self.restart(cavity, reinsert_orders)
+                pending_orders = self.restart_inspector(cavity, reinsert_orders)
                 if not reinsert_orders:
                     all_orders[cavity] = pending_orders
             if not reinsert_orders:
