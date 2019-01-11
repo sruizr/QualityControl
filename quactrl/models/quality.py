@@ -23,13 +23,18 @@ class Test(Operation):
         if self.state in ('done', 'walking'):
             if self.state == 'walking':
                 self._cancel = True
-            state = 'success'
-            for action in self.actions:
-                if action.state == 'nok':
-                    state = 'failed'
-                    break
+            state = 'failed' if self.has_failed() else 'success'
+
             self.state = state
             self.finished_on = datetime.datetime.now()
+
+    def has_failed(self):
+        """Even is not finished returns if test is nok
+        """
+        for action in self.actions:
+            if action.state in ('nok', 'cancelled'):
+                return True
+        return False
 
 
 class Check(Action):

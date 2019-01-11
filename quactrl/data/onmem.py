@@ -159,8 +159,10 @@ class PartRepo(Repository):
                 return part
 
     def get_last_serial_number(self, part_model, batch_number, pos):
-        if hasattr(self, 't'):
-            return self.test_saver.get_max_part_sn(part_model, batch_number, pos)
+        """Retrieve the last serial number from database (if exists...)
+        """
+        if hasattr(self.session, 'test_saver'):
+            return self.session.test_saver.get_max_part_sn(part_model, batch_number, pos)
 
 
 class ControlPlanRepo(Repository):

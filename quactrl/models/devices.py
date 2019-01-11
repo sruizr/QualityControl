@@ -30,6 +30,9 @@ class Device:
 
     @property
     def name(self):
+        if '_name' in self.config_pars:
+            return self.config_pars['_name'][1:]
+
         value = re.findall('(.*)>.*', self.tracking)
         if value:
             return value[0]
@@ -82,6 +85,7 @@ class DeviceRack(list):
     """
     def __init__(self, *devices):
         super().__init__(devices)
+
 
 
 class ExclusiveDeviceRack(DeviceRack):

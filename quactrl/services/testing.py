@@ -79,6 +79,10 @@ class Service:
                     pending_orders[cavity] = inspector.stop()
             return pending_orders
 
+    @property
+    def active_cavities(self):
+        return list(self.inspectors.keys())
+
     def restart_inspector(self, cavity=None, reinsert_orders=True):
         """Restart cavity inspection, all if None
         """
@@ -105,7 +109,7 @@ class Service:
         """Start part for testing on an order process parameters"""
         inspector = self.inspectors[cavity]
         inspector.orders.put((part_info, responsible_key))
-
+        print('Part info is:{}'.format(part_info))
     # def notify(self, info, cavity=None):
     #     """Transfer notification from client to inspector"""
     #     self.inspectors[cavity].notify(info)
@@ -151,6 +155,7 @@ class Service:
     def __del__(self):
         for inspector in self.inspectors.values():
             inspector.stop()
+
 
 
 class Inspector(threading.Thread):

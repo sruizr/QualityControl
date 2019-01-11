@@ -17,8 +17,9 @@ class Cavity:
         self.key = key
         self.state = 'empty'
 
+        self.test_service = part_manager.test_service
         if key not in self.test_service.inspectors.keys():
-            part_manager.test_service.start_inspector(key)
+            self.test_service.start_inspector(key)
 
         self.inspector = part_manager.test_service.inspectors[key]
         self.get_part_info = lambda key: part_manager.get_part_info(key)
@@ -33,13 +34,16 @@ class Cavity:
     def refresh(self):
         """Refresh state of cavity
         """
+
         state = self.state
+        inspector_state = self.inspector.state
         if self.state == 'empty' and self.part_is_present(self.key):
             state = 'loaded'
-        elif self.state == 'loaded' and inspector.state == 'waiting':
-            self.service.stack_part(
+        elif self.state == 'loaded' and self.inspector.state == 'waiting':
+            self.test_service.stack_part(
                 self.get_part_info(self.key),
-                self.part_manager.responsible
+                self.part_manager.responsible.key,
+                self.key
             )
             state = 'stacked'
         elif self.state == 'stacked' and self.inspector.state == 'iddle':
@@ -52,20 +56,20 @@ class Cavity:
             self.part = None
 
         if state != self.state:
-            self.part_manager.cavity_state_has_changed(self.key)
             self.state = state
+            self.part_manager.cavity_state_has_changed(self.key)
 
     def __del__(self):
         self.inspector.stop()
 
 
-class MultiPartManager(threading):
+class MultiPartManager(threading.Thread):
     """Base class for all part managers
     """
     def __init__(self, test_service, refresh_time=0):
         super().__init__()
         self.test_service = test_service
-        self.data = test_service.data
+        self.data = test_service.db
         self.refresh_time = refresh_time
 
         self._continue = True
@@ -84,7 +88,8 @@ class MultiPartManager(threading):
     def run(self):
         while self._continue:
             if self.is_ready():
-                for cavity in self.cavities.values():
+                cavities = list(self.cavities.values())
+                for cavity in cavities:
                     cavity.refresh()
             time.sleep(self.refresh_time)
 
@@ -92,7 +97,7 @@ class MultiPartManager(threading):
         self._continue = False
         self.join()
 
-    def is_ready():
+    def is_ready(self):
         """Return true if it's properly configured
         """
         return self.responsible is not None
