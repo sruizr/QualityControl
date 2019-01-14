@@ -3,6 +3,7 @@ from quactrl.helpers import get_function
 from quactrl.models.operations import Step, Action, Operation, Route
 
 
+
 class DefectFound(Exception):
     pass
 
@@ -22,13 +23,18 @@ class Test(Operation):
         if self.state in ('done', 'walking'):
             if self.state == 'walking':
                 self._cancel = True
-            state = 'success'
-            for action in self.actions:
-                if action.state == 'nok':
-                    state = 'failed'
-                    break
+            state = 'failed' if self.has_failed() else 'success'
+
             self.state = state
             self.finished_on = datetime.datetime.now()
+
+    def has_failed(self):
+        """Even is not finished returns if test is nok
+        """
+        for action in self.actions:
+            if action.state in ('nok', 'cancelled'):
+                return True
+        return False
 
 
 class Check(Action):
@@ -69,17 +75,21 @@ class Check(Action):
         # for defect in self.defects:
         #     self.put(defect, self.parent.route.destination)
 
-    def add_measurement(self, requirement, value, index=None):
+    def add_measurement(self, requirement, value, index=None, ms_tracking=None,
+                        uncertainty=0):
         """Add measurement of a characteristic to check
         """
-        tracking = requirement.eid
+        tracking = '{}*'.format(ms_tracking) if ms_tracking else ''
+        tracking += requirement.eid
         if index is not None:
             tracking = '{}_{}'.format(tracking, index)
         measurement = Measurement(self.inbox['part'],
                                   requirement.characteristic, tracking, value)
-        mode_key = measurement.eval_value(requirement.specs['limits'])
-        if mode_key:
-            self.add_defect(requirement, mode_key, tracking, 1)
+        if requirement.specs.get('limits', False):
+            mode_key = measurement.eval_value(requirement.specs['limits'],
+                                              uncertainty=uncertainty)
+            if mode_key:
+                self.add_defect(requirement, mode_key, tracking, 1)
 
         self.measurements.append(measurement)
 
@@ -127,8 +137,9 @@ class Measurement:
         if low_limit is not None and self.value <= low_limit + uncertainty:
             mode_key = 'lo' if self.value < low_limit else 'slo'
 
-        if low_limit > high_limit:
-            mode_key = None if mode_key else 'lo'
+        if not (low_limit is None or high_limit is None):
+            if low_limit > high_limit:
+                mode_key = None if mode_key else 'lo'
 
         return mode_key
 
@@ -177,6 +188,8 @@ class Sampling:
 
 
 class FailureMode:
+    """Mode of failing a characteristic
+    """
     def __init__(self, characteristic, mode):
         self.characteristic = characteristic
         self.mode = mode
@@ -194,6 +207,8 @@ class FailureMode:
 
 
 class Mode:
+    """Modes clasification of failing a characteristic
+    """
     def __init__(self, key, name):
         self.key = key
         self.name = name

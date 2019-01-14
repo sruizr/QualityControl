@@ -39,10 +39,10 @@ def _parse_test(test):
     return result
 
 
-def _parse_inspector(inspector):
+def _parse_cavity(cavity):
     result = {
-        'state': inspector.state,
-        'part': parse(inspector.part)
+        'state': cavity.state,
+        'part': parse(cavity.part)
     }
     return result
 
@@ -70,8 +70,9 @@ def _parse_check(check):
 
 def _parse_measurement(measurement):
     result = {
-        'failure_description': defect.failure_mode.description,
-        'tracking': defect.tracking
+        'characteristic': '{}>{}'.format(measurement.characteristic.key,
+                                         measurement.tracking),
+        'value': measurement.value
     }
     _parse_id(measurement, result)
     return result
@@ -110,7 +111,7 @@ def _parse_location(location):
     return result
 
 
-def _parse_part(part, result):
+def _parse_part(part):
     result = {
         'class': 'Part',
         'part_number': part.model.key,
@@ -122,7 +123,7 @@ def _parse_part(part, result):
     return result
 
 
-def _parse_part_model(model, result):
+def _parse_part_model(model):
     result = {
         'class': 'PartModel',
         'part_number': model.key,
@@ -150,6 +151,6 @@ _PARSES = {
     'Measurement': _parse_measurement,
     'Defect': _parse_defect,
     'PartModel': _parse_part_model,
-    'Inspector': _parse_inspector,
+    'Cavity': _parse_cavity,
     'Part': _parse_part
 }

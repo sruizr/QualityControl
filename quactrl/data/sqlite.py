@@ -4,8 +4,9 @@ import sqlite3
 
 class TestSaver:
     def __init__(self, file_name=':memory:', create_schema=False, keep_data=False):
-        "docstring"
-        self.conn = sqlite3.connect(file_name)
+        """Test saver using sqlite database(to be obsolete)
+        """
+        self.conn = sqlite3.connect(file_name, check_same_thread=False)
         self.c = self.conn.cursor()
         if os.path.exists(file_name):
             if create_schema:
@@ -33,6 +34,7 @@ class TestSaver:
 
     def create_schema(self):
         try:
+
             self.c.execute("select * from Parts where id=0")
             return
         except Exception:
@@ -185,9 +187,9 @@ class TestSaver:
         (part_number =?) and (batch_number=?) order by sn desc limit 1
         """
         sql = sql.format(pos+1, len(batch_number))
-
-        self.c.execute(sql, (part_number, batch_number))
-        result = self.c.fetchone()
+        cursor = self.conn.cursor()
+        cursor.execute(sql, (part_number, batch_number))
+        result = cursor.fetchone()
 
         if result:
             return result[0]

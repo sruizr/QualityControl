@@ -141,7 +141,6 @@ class Operation(Handling):
                 self.route.method(self, **self.route.method_pars)
                 if hasattr(self, 'thread'):
                     self.state = 'ongoing'
-
             self.state = 'done'
 
     def walk(self):
@@ -157,6 +156,10 @@ class Operation(Handling):
                 action.execute()
                 if action.state == 'ongoing':
                     action.thread.join()
+                    if hasattr(action, 'exception'):
+                    # The thread has raised an exception
+                        raise action.exception
+                    action.state = 'done'
                 action.close()
             self.on_action = None
 
