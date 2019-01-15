@@ -1,7 +1,7 @@
 import datetime
+import threading
 from quactrl.helpers import get_function
 from quactrl.models.operations import Step, Action, Operation, Route
-
 
 
 class DefectFound(Exception):
@@ -82,14 +82,15 @@ class Check(Action):
         tracking = '{}*'.format(ms_tracking) if ms_tracking else ''
         tracking += requirement.eid
         if index is not None:
-            tracking = '{}_{}'.format(tracking, index)
+            tracking += '_{}'.format(index)
+
         measurement = Measurement(self.inbox['part'],
                                   requirement.characteristic, tracking, value)
-        if requirement.specs.get('limits', False):
-            mode_key = measurement.eval_value(requirement.specs['limits'],
-                                              uncertainty=uncertainty)
-            if mode_key:
-                self.add_defect(requirement, mode_key, tracking, 1)
+
+        mode_key = measurement.eval_value(requirement.specs,
+                                          uncertainty=uncertainty)
+        if mode_key:
+            self.add_defect(requirement, mode_key, tracking, 1)
 
         self.measurements.append(measurement)
 
@@ -127,15 +128,21 @@ class Measurement:
         self.tracking = tracking
         self.value = value
 
-    def eval_value(self, limits,  uncertainty=0):
+    def eval_value(self, specs, uncertainty=0):
         mode_key = None
-        low_limit, high_limit = limits
+        low_limit = high_limit = None
+        if 'limits' in specs:
+            low_limit, high_limit = specs['limits']
+            value = self.value
+        elif 'max_abs' in specs:
+            high_limit = specs['max_abs']
+            value = abs(self.value)
 
         if high_limit is not None and self.value >= high_limit - uncertainty:
-            mode_key = 'hi' if self.value > high_limit else 'shi'
+            mode_key = 'hi' if value > high_limit else 'shi'
 
         if low_limit is not None and self.value <= low_limit + uncertainty:
-            mode_key = 'lo' if self.value < low_limit else 'slo'
+            mode_key = 'lo' if value < low_limit else 'slo'
 
         if not (low_limit is None or high_limit is None):
             if low_limit > high_limit:

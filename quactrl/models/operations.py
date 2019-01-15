@@ -187,9 +187,9 @@ class Operation(Handling):
         self.finished_on = datetime.datetime.now()
 
     def ask(self, key, **kwargs):
-        self.update('question', self.question)
         self.question = Question()
         self.question.ask(key, **kwargs)
+        self.update('question', self.question)
 
     def answer(self, **kwargs):
         self.question.answer(**kwargs)
@@ -238,6 +238,7 @@ class Step:
 
     def implement(self, operation):
         return Action(operation, self, operation.update)
+
 
 
 class Question(threading.Event):

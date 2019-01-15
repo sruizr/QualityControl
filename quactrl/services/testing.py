@@ -99,7 +99,8 @@ class Service:
         elif cavity is None:  # All active cavities will restart
             all_orders = {}
             for cavity in self.active_cavities:
-                pending_orders = self.restart_inspector(cavity, reinsert_orders)
+                pending_orders = self.restart_inspector(cavity,
+                                                        reinsert_orders)
                 if not reinsert_orders:
                     all_orders[cavity] = pending_orders
             if not reinsert_orders:
@@ -324,7 +325,7 @@ class Inspector(threading.Thread):
         return pending_orders
 
     def answer(self, **kwargs):
-        if hasattr(self.test.question):
+        if hasattr(self.test, 'question'):
             self.test.question.answer(**kwargs)
 
     def get_last_events(self):

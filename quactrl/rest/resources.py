@@ -1,5 +1,5 @@
 import os
-import time
+import datetime
 import cherrypy
 from quactrl.rest.parsing import parse
 from quactrl.helpers import is_num
@@ -43,6 +43,16 @@ class CavitiesResource(Resource):
         """
         key = try_int(key)
         self.part_manager.add_cavity(key)
+
+    @cherrypy.tools.json_in()
+    def POST(self, key=None):
+        """Returns answer to question if there is
+        """
+        key = try_int(key)
+        inspector = self.part_manager.test_service.inspectors[key]
+
+        kwargs = cherrypy.request.json
+        inspector.test.answer(**kwargs)
 
     @cherrypy.tools.json_out()
     def DELETE(self, key=None):
@@ -144,10 +154,11 @@ _RESOURCES = {
 }
 
 
+@cherrypy.expose
 class Time:
     @cherrypy.tools.json_out()
     def GET(self):
-        return {'now': datetime.datetime.now()}
+        return {'now': datetime.datetime.now().isoformat()}
 
 
 class RootResource(Resource):
