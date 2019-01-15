@@ -157,7 +157,6 @@ class Service:
             inspector.stop()
 
 
-
 class Inspector(threading.Thread):
     """Inspector of one cavity sharing some devices on a location
     """
@@ -324,13 +323,9 @@ class Inspector(threading.Thread):
 
         return pending_orders
 
-    def ask(self, message, *args):
-        """Ask a question to the client, waiting the result
-        """
-        question = Question()
-        self.events.put(('waiting', question))
-        question.ask(message, *args)
-        return question
+    def answer(self, **kwargs):
+        if hasattr(self.test.question):
+            self.test.question.answer(**kwargs)
 
     def get_last_events(self):
         """Retrieve a list of last events of current test
@@ -348,16 +343,3 @@ class Inspector(threading.Thread):
     def cancel(self):
         if self.state == 'iddle':
             self.test.cancel()
-
-
-class Question(threading.Event):
-
-    def ask(self, message, *args):
-        """Wait until answer is done by other thread
-        """
-        self.request = [message] + list(args)
-        self.wait()
-
-    def answer(self, *args):
-        self.response = [arg for arg in args]
-        self.set()

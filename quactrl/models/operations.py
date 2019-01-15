@@ -1,4 +1,5 @@
 import datetime
+import threading
 from collections import namedtuple
 from quactrl.helpers import get_function
 
@@ -27,6 +28,7 @@ class Handling:
     @property
     def state(self):
         return self._state
+
 
     @state.setter
     def state(self, state):
@@ -184,6 +186,14 @@ class Operation(Handling):
         self.state = 'cancelled'
         self.finished_on = datetime.datetime.now()
 
+    def ask(self, key, **kwargs):
+        self.update('question', self.question)
+        self.question = Question()
+        self.question.ask(key, **kwargs)
+
+    def answer(self, **kwargs):
+        self.question.answer(**kwargs)
+
 
 class WrongInboxContent(Exception):
     pass
@@ -228,3 +238,16 @@ class Step:
 
     def implement(self, operation):
         return Action(operation, self, operation.update)
+
+
+class Question(threading.Event):
+    def ask(self, key, **kwargs):
+        """Wait until answer is done by other thread
+        """
+        self.key = key
+        self.request_pars = kwargs
+        self.wait()
+
+    def answer(self, **kwargs):
+        self.response = kwargs
+        self.set()

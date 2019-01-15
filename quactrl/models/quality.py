@@ -198,7 +198,8 @@ class FailureMode:
         self.characteristic.failure_modes[mode.key] = self
 
     def __str__(self):
-        return '{} {} @ {}'.format(self.mode.name, self.characteristic.attribute.name,
+        return '{} {} @ {}'.format(self.mode.name,
+                                   self.characteristic.attribute.name,
                                    self.characteristic.element.name)
 
     @property
