@@ -14,40 +14,17 @@ class Location(Node):
         self.description = description
 
 
-Motion = namedtuple('Motion', 'type item location qty')
-
-
-class Handling(Flow):
-    def __init__(self, responsible, update=None):
-        self.responsible = responsible
-        self.motions = []
-        self.started_on = None
-        self.finished_on = None
-        self.update = update
-        self._state = 'open'
-
-    @property
-    def state(self):
-        return self._state
-
-    @state.setter
-    def state(self, state):
-        self._state = state
-        if self.update:
-            self.update(state, self)
-
-
 class Part(UnitaryItem):
     """Part with unique serial number
     """
     def __init__(self, model, serial_number, location=None, pars=None):
         self.model = model
         self.serial_number = serial_number
-        self.location = location
         self.pars = pars if pars else {}
         self.defects = []
         self.measurements = []
 
+        self.add(location)
         self.dut = None
 
     def set_dut(self, connection):
@@ -60,7 +37,7 @@ class Part(UnitaryItem):
         return locations[0] if len(locations) == 1 else locations
 
 
-class Action(Flow, Handling):
+class Action(Flow):
     """Implementation of a step from a route
     """
     def __init__(self, operation, step, update=None):
@@ -98,7 +75,7 @@ class Action(Flow, Handling):
         self.finished_on = datetime.datetime.now()
 
 
-class Operation(Flow, Handling):
+class Operation(Flow):
     """Add value stream action over a batch
     """
     def __init__(self, route, responsible, update=None):

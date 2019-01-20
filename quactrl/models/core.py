@@ -90,7 +90,8 @@ class Token:
 
 
 class UnitaryItem(Item):
-
+    """Item which has only 1 unit as qty
+    """
     def add(self, node, flow=None):
         if self.stocks:
             raise Exception('Unitary item can not add more quantity to any node')
@@ -103,8 +104,6 @@ class UnitaryItem(Item):
         super().move(from_node, to_node, flow, 1)
 
 
-
-
 class ItemLink:
     pass
 
@@ -114,6 +113,16 @@ class Path:
 
 
 class Flow:
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, state):
+        self._state = state
+        if hasattr(self, 'update'):
+            self.update(state, self)
+
     def start(self):
         self.state = 'started'
         self.started_on = datetime.datetime.now()

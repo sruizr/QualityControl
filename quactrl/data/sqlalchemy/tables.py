@@ -2,9 +2,8 @@ from datetime import datetime
 from sqlalchemy import (Table, MetaData, Column, Integer, String, ForeignKey,
                         DateTime, Float)
 from .types import JsonEncodedDict
+from quactrl.data.sqlalchemy import metadata
 
-
-metadata = MetaData()
 
 
 node_table = Table('node', metadata,
@@ -42,7 +41,7 @@ path_table = Table('path', metadata,
                    Column('id', Integer, primary_key=True),
                    Column('is_a', String(50)),
                    Column('parent', Integer, ForeignKey('path.id')),
-                   Column('prev', Integer, ForeignKey('path.id')),
+                   Column('seq', Integer),
                    Column('from_node', Integer, ForeignKey('node.id')),
                    Column('to_node', Integer, ForeignKey('node.id')),
                    Column('method_name', String(255)),
@@ -54,6 +53,7 @@ flow_table = Table('flow', metadata,
                    Column('id', Integer, primary_key=True),
                    Column('path_id', Integer, ForeignKey('path.id')),
                    Column('is_a', String(50)),
+                   Column('parent', Integer, ForeignKey('flow.id'))
                    Column('responsible', Integer, ForeignKey('node.id')),
                    Column('started_on', DateTime, default=datetime.now),
                    Column('finished_on', DateTime),
