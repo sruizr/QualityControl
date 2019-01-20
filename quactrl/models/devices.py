@@ -43,22 +43,28 @@ class Device(Item):
         return self.pars.get('kwargs', {})
 
 
-class DeviceProvider(providers.ThreadSafeSingleton):
+class DeviceProvider(providers.Provider):
+    """Provider of devices, with tracking attribute inserted
+    """
     def __init__(self, Device, *args, **kwargs):
         "docstring"
         args = list(args)
         self.tracking = args.pop(0)
-        print('Device is {}'.format(Device))
-        super().__init__(Device, *args, **kwargs)
+        print(' Created {} device'.format(self.tracking))
+        self._singleton = providers.ThreadSafeSingleton(Device, *args, **kwargs)
+        self._device = None
 
     def __call__(self, *args, **kwargs):
-        device = super().__call__(*args, **kwargs)
-        if not hasattr(device, 'tracking'):
-            device.tracking = self.tracking
-        return device
+        if not self._device:
+            self._device = self._singleton(*args, **kwargs)
+            self._device.tracking = self.tracking
+
+        return self._device
 
 
 class DeviceContainer(containers.DynamicContainer):
+    """Container of devices and its components
+    """
     _providers = {
         'singleton': providers.Singleton,
         'factory': providers.Factory,
@@ -107,7 +113,7 @@ class DeviceContainer(containers.DynamicContainer):
             'class': config.get('class'),
             'strategy': config.get('strategy', 'thread_safe_sing'),
             'args': args,
-            'kwargs:': kwargs,
+            'kwargs': kwargs,
         }
 
     def _process_value(self, value):
@@ -118,24 +124,24 @@ class DeviceContainer(containers.DynamicContainer):
             return value
 
     def _inject_provider(self, dev_name):
-        print(self._devices)
-        config = self._devices[dev_name]
+        if not hasattr(self, dev_name):
+            config = self._devices[dev_name]
 
-        Provider = self._providers[config['strategy']]
-        DeviceClass = get_class(config['class'])
+            Provider = self._providers[config['strategy']]
+            DeviceClass = get_class(config['class'])
 
-        args = config.get('args', [])
-        for index, value in enumerate(args):
-            if type(value) is str and value and value[0] == '>':
-                args[index] = self._inject_provider(value[1:])
+            args = config.get('args', [])
+            for index, value in enumerate(args):
+                if type(value) is str and value and value[0] == '>':
+                    args[index] = self._inject_provider(value[1:])
 
-        kwargs = config.get('kwargs', {})
-        for key in kwargs.keys():
-            value = kwargs[key]
-            if type(value) is str and value and value[0] == '>':
-                kwargs[key] = self._inject_provider(value[1:])
+            kwargs = config.get('kwargs', {})
+            for key in kwargs.keys():
+                value = kwargs[key]
+                if type(value) is str and value and value[0] == '>':
+                    kwargs[key] = self._inject_provider(value[1:])
 
-        setattr(self, dev_name, Provider(DeviceClass, *args, **kwargs))
+            setattr(self, dev_name, Provider(DeviceClass, *args, **kwargs))
 
         return getattr(self, dev_name)
 
@@ -161,6 +167,8 @@ class ExclusiveDeviceRack(DeviceRack):
 
 
 class LockableDecorator:
+    """Decorator with capacities of locking other when a method is executed
+    """
     def __init__(self, decorated, lock):
         self._lock = lock
         self._decorated = decorated

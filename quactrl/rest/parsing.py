@@ -2,8 +2,6 @@ def parse(obj):
     if obj is None:
         return None
 
-    result = {}
-
     name = obj.__class__.__name__
     if name in _PARSES:
         return _PARSES[name](obj)
@@ -37,7 +35,6 @@ def _parse_test(test):
     }
     _parse_id(test, result)
     return result
-
 
 def _parse_cavity(cavity):
     result = {
@@ -142,6 +139,14 @@ def _parse_error(error):
     }
     return result
 
+def _parse_question(question):
+    result = {
+        'class': 'Question',
+        'message_key': question.key,
+    }
+    result.update(question.kwargs)
+    return result
+
 
 _PARSES = {
     'Test': _parse_test,
@@ -152,5 +157,6 @@ _PARSES = {
     'Defect': _parse_defect,
     'PartModel': _parse_part_model,
     'Cavity': _parse_cavity,
-    'Part': _parse_part
+    'Part': _parse_part,
+    'Question': _parse_question
 }
