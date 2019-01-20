@@ -1,4 +1,7 @@
-class Person:
+from .core import Node
+
+
+class Person(Node):
     """Person with repsonability capbilities
     """
     def __init__(self, key, name, full_name):
@@ -9,7 +12,7 @@ class Person:
         self.roles = []
 
 
-class Role:
+class Role(Node):
     """Role linked to persons
     """
     def __init__(self, key, name, description=None):

@@ -4,9 +4,10 @@ from dependency_injector import containers
 from quactrl.helpers import get_class
 from threading import Lock
 from types import MethodType
+from quactrl.models.core import Resource, Item
 
 
-class DeviceModel:
+class DeviceModel(Resource):
     """Type of device, linked to a class with functionallity
     """
     def __init__(self, key, name, description=None, pars=None):
@@ -21,7 +22,7 @@ class DeviceModel:
         return self.pars['class']
 
 
-class Device:
+class Device(Item):
     def __init__(self, device_model, tracking, location=None,
                  pars=None):
         self.model = device_model
@@ -31,7 +32,7 @@ class Device:
 
     @property
     def name(self):
-        return  self.pars.get('name', self.model.name)
+        return self.pars.get('name', self.model.name)
 
     @property
     def args(self):

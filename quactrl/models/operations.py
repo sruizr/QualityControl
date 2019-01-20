@@ -2,9 +2,10 @@ import datetime
 import threading
 from collections import namedtuple
 from quactrl.helpers import get_function
+from .core import Node, Resource, UnitaryItem, Path, Flow, Token
 
 
-class Location:
+class Location(Node):
     """Site of products
     """
     def __init__(self, key, name, description=None):
@@ -16,7 +17,7 @@ class Location:
 Motion = namedtuple('Motion', 'type item location qty')
 
 
-class Handling:
+class Handling(Flow):
     def __init__(self, responsible, update=None):
         self.responsible = responsible
         self.motions = []
@@ -29,39 +30,14 @@ class Handling:
     def state(self):
         return self._state
 
-
     @state.setter
     def state(self, state):
         self._state = state
         if self.update:
             self.update(state, self)
 
-    def start(self):
-        self.state = 'started'
-        self.started_on = datetime.datetime.now()
 
-    def get(self, item, from_location=None, qty=1):
-        if not self.started_on:
-            self.start()
-
-        if from_location is not None and from_location != item.location:
-            raise Exception()
-
-        self.motions.append(Motion('GET', item, item.location, qty))
-        item.location = None
-
-    def put(self, item, to_location, qty=1):
-        self.motions.append(Motion('PUT', item, item.location, qty))
-        item.location = to_location
-        if item.qty != qty:
-            raise Exception()
-
-    def close(self):
-        self.state = 'closed'
-        self.finished_on = datetime.datetime.now()
-
-
-class Part:
+class Part(UnitaryItem):
     """Part with unique serial number
     """
     def __init__(self, model, serial_number, location=None, pars=None):
@@ -77,12 +53,18 @@ class Part:
     def set_dut(self, connection):
         self.dut = self.model.create_dut(connection)
 
+    @property
+    def location(self):
+        locations = [location
+                     for location in self.stocks.keys()]
+        return locations[0] if len(locations) == 1 else locations
 
-class Action(Handling):
+
+class Action(Flow, Handling):
     """Implementation of a step from a route
     """
     def __init__(self, operation, step, update=None):
-        super().__init__(operation.responsible, update)
+        super(Flow, self).__init__(operation.responsible, update)
         self.operation = operation
         self.step = step
         self.inbox = {}
@@ -116,7 +98,7 @@ class Action(Handling):
         self.finished_on = datetime.datetime.now()
 
 
-class Operation(Handling):
+class Operation(Flow, Handling):
     """Add value stream action over a batch
     """
     def __init__(self, route, responsible, update=None):
@@ -199,7 +181,7 @@ class WrongInboxContent(Exception):
     pass
 
 
-class Route:
+class Route(Path):
     """Planning of an operation over resources
     """
     def __init__(self, role, source=None, destination=None,
@@ -226,7 +208,7 @@ class Route:
         pass
 
 
-class Step:
+class Step(Path):
     """Planning of a sub action for a Route
     """
     def __init__(self, route, method_name, method_pars):
@@ -238,7 +220,6 @@ class Step:
 
     def implement(self, operation):
         return Action(operation, self, operation.update)
-
 
 
 class Question(threading.Event):

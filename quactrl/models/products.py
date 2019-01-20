@@ -1,8 +1,9 @@
 import re
 from quactrl.helpers import get_class
+from quactrl.models.core import Resource
 
 
-class PartGroup:
+class PartGroup(Resource):
     """Clasification of part models
     """
     def __init__(self, key, name, description=None,
@@ -62,7 +63,7 @@ class PartModel(PartGroup):
             group.add_model(self)
 
 
-class Requirement:
+class Requirement(Resource):
     """Requirement of PartModel, PartGroup or other requirements
     """
     def __init__(self, characteristic, key, specs=None):
@@ -84,7 +85,7 @@ class Requirement:
         return value
 
 
-class Characteristic:
+class Characteristic(Resource):
     """Attribute on an element
     """
     def __init__(self, attribute, element, key=None):
@@ -102,7 +103,7 @@ class Characteristic:
         return str(self)
 
 
-class Element:
+class Element(Resource):
     """Abstract subsystem or component
     """
     def __init__(self, key, name, description=None, parent=None):
@@ -118,7 +119,7 @@ class Element:
         return '{}/{}'.format(self.parent.path(), self.key)
 
 
-class Attribute:
+class Attribute(Resource):
     """Evaluable attribute of an element
     """
     def __init__(self, key, name, description=None):
