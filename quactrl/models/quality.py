@@ -1,5 +1,4 @@
 import datetime
-import threading
 from quactrl.helpers import get_function
 from quactrl.models.operations import Step, Action, Operation, Route
 
@@ -76,13 +75,13 @@ class Check(Action):
         #     self.put(defect, self.parent.route.destination)
 
     def add_measurement(self, requirement, value, index=None, ms_tracking=None,
-                        uncertainty=0):
+                        uncertainty=0, link_part=True):
         """Add measurement of a characteristic to check
         """
         tracking = '{}*'.format(ms_tracking) if ms_tracking else ''
-        tracking += requirement.eid
+        tracking = tracking + requirement.eid
         if index is not None:
-            tracking += '_{}'.format(index)
+            tracking = tracking + '_{}'.format(index)
 
         measurement = Measurement(self.inbox['part'],
                                   requirement.characteristic, tracking, value)

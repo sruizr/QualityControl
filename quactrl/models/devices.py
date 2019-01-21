@@ -1,9 +1,12 @@
-import re
 from dependency_injector import providers
 from dependency_injector import containers
 from quactrl.helpers import get_class
 from threading import Lock
 from types import MethodType
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class DeviceModel:
@@ -31,7 +34,7 @@ class Device:
 
     @property
     def name(self):
-        return  self.pars.get('name', self.model.name)
+        return self.pars.get('name', self.model.name)
 
     @property
     def args(self):
@@ -49,8 +52,9 @@ class DeviceProvider(providers.Provider):
         "docstring"
         args = list(args)
         self.tracking = args.pop(0)
-        print(' Created {} device'.format(self.tracking))
-        self._singleton = providers.ThreadSafeSingleton(Device, *args, **kwargs)
+        logger.debug(' Creating device with tracking {}'.format(self.tracking))
+        self._singleton = providers.ThreadSafeSingleton(Device, *args,
+                                                        **kwargs)
         self._device = None
 
     def __call__(self, *args, **kwargs):
@@ -96,9 +100,8 @@ class DeviceContainer(containers.DynamicContainer):
 
             self._load_component(config)
 
-
     def _load_component(self, config):
-        name = config.pop('name')
+        name = config.get('name')
         args = config.pop('args', [])
         for index, value in enumerate(args):
             args[index] = self._process_value(value)
@@ -107,16 +110,17 @@ class DeviceContainer(containers.DynamicContainer):
         for key, value in kwargs.items():
             kwargs[key] = self._process_value(value)
 
-
         self._devices[name] = {
             'class': config.get('class'),
             'strategy': config.get('strategy', 'thread_safe_sing'),
+            'name': name,
             'args': args,
             'kwargs': kwargs,
         }
 
     def _process_value(self, value):
         if (type(value) is dict) and ('class' in value) and ('name' in value):
+            print('Value is: {}'.format(value))
             self._load_component(value)
             return '>' + value['name']
         else:
@@ -152,19 +156,6 @@ class DeviceRack(list):
         super().__init__(devices)
 
 
-
-class ExclusiveDeviceRack(DeviceRack):
-    """List of devices where one can not execute method when other
-    is executing
-    """
-    def __init__(self, *devices):
-        self._lock = Lock()
-        elements = [LocableDecorator(device, self._lock)
-                    for device in devices
-        ]
-        super().__init__(*elements)
-
-
 class LockableDecorator:
     """Decorator with capacities of locking other when a method is executed
     """
@@ -193,3 +184,14 @@ class LockableDecorator:
             setattr(self._decorated, name, value)
         else:
             setattr(self, name, value)
+
+
+class ExclusiveDeviceRack(DeviceRack):
+    """List of devices where one can not execute method when other
+    is executing
+    """
+    def __init__(self, *devices):
+        self._lock = Lock()
+        elements = [LockableDecorator(device, self._lock)
+                    for device in devices]
+        super().__init__(*elements)

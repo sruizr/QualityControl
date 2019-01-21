@@ -216,15 +216,20 @@ class Inspector(threading.Thread):
     def run(self):
         """Thread activation processing order by order"""
         while not self._stop_event.is_set():
-            self.state = 'waiting'
-            order = self.orders.get()
-            if order is None:
-                self.orders.task_done()
-                break
-            else:
-                self.state = 'iddle'
-                self.run_test(order)
-                self.orders.task_done()
+            try:
+                self.state = 'idle'
+                order = self.orders.get()
+                if order is None:
+                    self.orders.task_done()
+                    break
+                else:
+                    self.state = 'busy'
+                    self.run_test(order)
+                    self.orders.task_done()
+            except Exception as e:
+                trc = sys.exc_info()
+                self.update('loop_error', e, traceback.format_tb(trc[2]))
+                raise e
 
         self.state = 'stopped'
 
@@ -342,5 +347,5 @@ class Inspector(threading.Thread):
         return events
 
     def cancel(self):
-        if self.state == 'iddle':
+        if self.state == 'busy':
             self.test.cancel()

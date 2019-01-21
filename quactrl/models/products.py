@@ -47,7 +47,7 @@ class PartModel(PartGroup):
             Device, kwargs = self._find_Device()
             if Device:
                 kwargs.update(self.kwargs)
-                return Device(connection, kwargs)
+                return Device(connection, **kwargs)
 
     def is_device(self):
         if self.Device:

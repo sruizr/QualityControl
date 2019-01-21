@@ -31,10 +31,12 @@ def _parse_test(test):
         'class': 'Test',
         'started_on': test.started_on.isoformat(),
         'part': parse(test.part),
-        'finished_on': test.finished_on.isoformat() if test.finished_on else None
+        'finished_on': test.finished_on.isoformat()
+        if test.finished_on else None
     }
     _parse_id(test, result)
     return result
+
 
 def _parse_cavity(cavity):
     result = {
@@ -52,7 +54,8 @@ def _parse_check(check):
         'measurements': [],
         'defects': [],
         'started_on': check.started_on.isoformat(),
-        'finished_on': check.finished_on.isoformat() if check.finished_on else None
+        'finished_on': check.finished_on.isoformat()
+        if check.finished_on else None
     }
     _parse_id(check, result)
 
@@ -139,12 +142,13 @@ def _parse_error(error):
     }
     return result
 
+
 def _parse_question(question):
     result = {
         'class': 'Question',
-        'message_key': question.key,
+        'request': question.request,
+        'response': question.response
     }
-    result.update(question.kwargs)
     return result
 
 
