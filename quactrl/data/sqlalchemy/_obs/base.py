@@ -89,6 +89,7 @@ class Resource(Base, Abstract):
 
     UniqueConstraint(key, Abstract.is_a, name='i_key')
 
+
 class ResourceRelation(Base, WithPars):
     __tablename__ = 'resource_relation'
 
@@ -397,6 +398,7 @@ class Flow(Abstract, Base):
 
     def throw(self):
         """Consume inputs and subinputs and produce outputs and suboutputs"""
+
 
         # Consume inputs
         if self.origin:

@@ -1,32 +1,49 @@
-class Repository:
-    def __init__(self, session):
-        self.session = session
-
-    def add(self, entity):
-        self.session.add(entity)
-
-    def remove(self, entity):
-        self.session.remove(entity)
+from dependency_injector import providers, containers
+from quactrl.helpers import get_class
 
 
-class PartRepo(Repository):
-    def get_or_create_part(self, location, responsible, **part_info):
-        pass
+class Data(containers.DynamicContainer):
+    """Data layer with all repositories and a session provider
+    All is ThreadLocalSingleton
+    """
+    _MODELS = [
+        'hhrr.Person', 'hhrr.Role',
+        'operations.Location', 'operations.Part', 'quality.ControlPlan',
+        'products.Characteristic', 'products.PartModel', 'products.PartGroup',
+        'products.Element', 'products.Attribute', 'products.Characteristic',
+        'products.Requirement',
+        'quality.Test', 'quality.Mode',
+        'devices.DeviceModel', 'devices.Device'
+    ]
 
+    def __init__(self, module_name, connection_string=None, **kwargs):
+        super().__init__()
+        self.connection_string = connection_string
+        self.module_name = 'quactrl.data.' + module_name
 
-class PartModelRepo(Repository):
-    def get_by_part_number(self, part_number):
-        pass
+        self.db = get_class('{}.Db'.format(self.module_name))(
+            connection_string, **kwargs
+        )
 
+        self.Session = providers.ThreadLocalSingleton(self.db.Session,
+                                                      connection_string)
+        self._load_repos()
 
-class RouteRepo(Repository):
-    def get_by_part_model_and_location(self, part_model, location):
-        pass
+    def _get_class(self, name):
+        full_class_name = '{}.{}Repo'.format(self.module_name, name)
+        ResultClass = get_class(full_class_name)
+        return ResultClass
 
+    def _load_repos(self):
+        for model in self._MODELS:
+            model_name = model.split('.')[1]
+            try:
+                RepoClass = self._get_class(model),
+            except ImportError:
+                RepoClass = self._get_class(model_name)
 
-class PersonRepo(Repository):
-    def get_by_key(self, key):
-        pass
-
-class CharacteristicRepo(Repository):
-    pass
+            Provider = providers.ThreadLocalSingleton(
+                RepoClass,
+                session=self.Session
+            )
+            setattr(self, model_name + 's', Provider)

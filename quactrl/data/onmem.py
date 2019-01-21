@@ -3,32 +3,42 @@ from quactrl.data.sqlite import TestSaver
 
 
 class Session:
-    _routes = {}
-    _persons = {}
-    _locations = {}
-    _part_models = {}
-    _attributes = {}
-    _elements = {}
-    _modes = {}
-    _locations = {}
-    _part_groups = {}
-    _control_plans = {}
-    _devices = {}
-    _device_models = {}
-    _tests = []
-    _roles = {}
-    _parts = {}
-    _requirements = {}
-    _characteristics = {}
+    def commit(self):
+        if self.db.testsaver:
+            for test in self.db.tests:
+                if not hasattr(test, 'id'):
+                    self.db.testsaver.save(test)
+
+    def rollback(self):
+        pass
+
+
+class Db:
+    routes = {}
+    persons = {}
+    locations = {}
+    partmodels = {}
+    attributes = {}
+    elements = {}
+    modes = {}
+    locations = {}
+    partgroups = {}
+    controlplans = {}
+    devices = {}
+    devicemodels = {}
+    tests = []
+    roles = {}
+    parts = {}
+    requirements = {}
+    characteristics = {}
     lock = Lock()
 
-    def __init__(self, string_connection):
-        """
-        """
-        self.test_saver = None
-        if string_connection:
-            pars = string_connection.split(';')
-            file_name = pars.pop(0)
+    def __init__(self, connectionstring=None):
+        "docstring"
+        self.testsaver = None
+        if stringconnection:
+            pars = stringconnection.split(';')
+            filename = pars.pop(0)
             parameters = {}
             for par in pars:
                 parameter = par.split('=')
@@ -37,159 +47,154 @@ class Session:
                 else:
                     parameter[parameter[0]] = parameter[1]
 
-            create_schema = parameters.get('create_schema', False)
-            keep_data = parameters.get('keep_data', False)
+            createschema = parameters.get('createschema', False)
+            keepdata = parameters.get('keepdata', False)
 
-            self.test_saver = TestSaver(file_name, create_schema,
-                                        keep_data)
+            self.testsaver = TestSaver(filename, createschema,
+                                        keepdata)
 
-    def commit(self):
-        if self.test_saver:
-            for test in self._tests:
-                if not hasattr(test, '_id'):
-                    self.test_saver.save(test)
-
-    def rollback(self):
-        pass
+    @property
+    def Session(self):
+        Session.db = self
+        return Session
 
 
 class Repository:
-    def __init__(self, session):
+    def init(self, session):
         self.session = session
 
 
 class KeyRepo:
-    def __init__(self, session, repo_dict):
+    def init(self, session, repodict):
         self.session = session
-        self._repo_dict = repo_dict
+        self.repodict = repodict
 
     def add(self, obj):
-        with self.session.lock:
-            self._repo_dict[obj.key] = obj
+        with self.session.db.lock:
+            self.repodict[obj.key] = obj
 
     def get(self, key):
-        return self._repo_dict[key]
+        return self.repodict[key]
 
 
 class RequirementRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._requirements)
+    def init(self, session):
+        super().init(session, session.db.requirements)
 
 
 class RoleRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._roles)
+    def init(self, session):
+        super().init(session, session.db.roles)
 
 
 class LocationRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._locations)
+    def init(self, session):
+        super().init(session, session.db.locations)
 
 
 class PersonRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._persons)
+    def init(self, session):
+        super().init(session, session.db.persons)
 
 
 class ModeRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._modes)
+    def init(self, session):
+        super().init(session, session.db.modes)
 
 
 class CharacteristicRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._characteristics)
+    def init(self, session):
+        super().init(session, session.db.characteristics)
 
 
 class ElementRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._elements)
+    def init(self, session):
+        super().init(session, session.db.elements)
 
 
 class AttributeRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._attributes)
+    def init(self, session):
+        super().init(session, session.db.attributes)
 
 
 class PartModelRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._part_models)
+    def init(self, session):
+        super().init(session, session.db.partmodels)
 
 
 class PartGroupRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._part_groups)
+    def init(self, session):
+        super().init(session, session.db.partgroups)
 
 
 class DeviceModelRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, session._device_models)
+    def init(self, session):
+        super().init(session, session.db.devicemodels)
 
 
 class DeviceRepo(Repository):
     def add(self, device):
-        with self.session.lock:
+        with self.session.db.lock:
             key = device.location.key
-            if key not in self.session._devices:
-                self.session._devices[key] = []
-            self.session._devices[key].append(device)
+            if key not in self.session.devices:
+                self.session.db.devices[key] = []
+            self.session.db.devices[key].append(device)
 
-    def get_all_from(self, location_key):
-        return  self.session._devices[location_key]
+    def getallfrom(self, locationkey):
+        return  self.session.db.devices[locationkey]
 
 
 class PartRepo(Repository):
     def add(self, part):
-        with self.session.lock:
-            if part.model not in self.session.parts:
-                self.session._parts[part.model] = []
-            self.session._parts[part.model].append(part)
+        with self.session.db.lock:
+            if part.model not in self.session.db.parts:
+                self.session.db.parts[part.model] = []
+            self.session.db.parts[part.model].append(part)
 
-    def get_by(self, part_model, serial_number):
-        if part_model not in self.session._parts:
+    def getby(self, partmodel, serialnumber):
+        if partmodel not in self.session.db.parts:
             return
 
-        parts = self.session._parts[part_model]
+        parts = self.session.db.parts[partmodel]
         for part in parts:
-            if part.tracking == serial_number:
+            if part.tracking == serialnumber:
                 return part
 
-    def get_last_serial_number(self, part_model, batch_number, pos):
+    def getlastserialnumber(self, partmodel, batchnumber, pos):
         """Retrieve the last serial number from database (if exists...)
         """
-        if hasattr(self.session, 'test_saver'):
-            return self.session.test_saver.get_max_part_sn(part_model, batch_number, pos)
+        if hasattr(self.session.db, 'testsaver'):
+            return self.session.db.testsaver.getmaxpartsn(partmodel, batchnumber, pos)
 
 
 class ControlPlanRepo(Repository):
-    def add(self, control_plan):
-        location = control_plan.source.key
+    def add(self, controlplan):
+        location = controlplan.source.key
         resources = []
 
-        for resource_map in control_plan.outputs:
-            key = resource_map.key
+        for resourcemap in controlplan.outputs:
+            key = resourcemap.key
             resources.append(key)
 
-        with self.session.lock:
+        with self.session.db.lock:
             for resource in resources:
-                self.session._control_plans[(resource, location)] = control_plan
+                self.session.db.controlplans[(resource, location)] = controlplan
 
-    def get_by(self, part_model, location):
-        """Return control plan for a part_model on a location
+    def getby(self, partmodel, location):
+        """Return control plan for a partmodel on a location
         """
-        key = (part_model.key, location.key)
-        print(key)
-        if key in self.session._control_plans:
-            return self.session._control_plans[key]
+        key = (partmodel.key, location.key)
+        if key in self.session.db.controlplans:
+            return self.session.db.controlplans[key]
 
-        #If there is no control_plan for specific part_model...
-        for group in part_model.part_groups:
+        #If there is no controlplan for specific partmodel...
+        for group in partmodel.partgroups:
             key = (group.key, location.key)
-            if key in self.session._control_plans.keys():
-                return self.session._control_plans[key]
+            if key in self.session.db.controlplans.keys():
+                return self.session.db.controlplans[key]
 
 
 class TestRepo(Repository):
     def add(self, test):
-        with self.session.lock:
-            self.session._tests.append(test)
+        with self.session.db.lock:
+            self.session.db.tests.append(test)

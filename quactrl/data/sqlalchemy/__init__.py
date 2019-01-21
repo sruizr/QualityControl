@@ -1,42 +1,128 @@
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column
-from sqlalchemy.types import Integer, String
-import importlib
+from sqlalchemy import MetaData, create_engine
+from sqlalchemy.orm import sessionmaker
+from quactrl.models.hhrr import Person, Role
+from quactrl.models.operations import Operation, Step, Location
+from quactrl.models.quality import Mode
+from quactrl.models.devices import Device, DeviceModel
+from quactrl.models.products import (Requirement, Element, Attribute,
+                                     PartModel, PartGroup, Characteristic)
 
 
-Base = declarative_base()
+metadata = MetaData()
 
 
-class Abstract:
-    """Hierarthical definition on is_a column"""
-    is_a = Column(String(30))
-    __mapper_args__ = {
-        'polymorphic_on': is_a
-    }
+class Db:
+    def __init__(self, connection_string, create_all=False):
+        self.engine = create_engine(connection_string)
+        metadata.bind = self.engine
+
+        import quactrl.data.sqlalchemy.tables
+        if create_all:
+            metadata.create_all()
+
+        # load all mappers
+        from quactrl.data.sqlalchemy.mappers import load_all_mappers
+        load_all_mappers()
+
+    @property
+    def Session(self):
+        return sessionmaker(bind=self.engine)
 
 
-def get_component(name):
-    modules = name.split('.')
-    try:
-        module = importlib.import_module('.'.join(modules[:-1]))
-    except ValueError:
-        return None
+class Repository:
+    def __init__(self, session):
+        self.session = session
 
-    return getattr(module, modules[-1], None)
+    def add(self, obj):
+        self.session.add(obj)
 
 
-class DeviceBase:
-    def __init__(self, **pars):
-        if pars:
-            self.pars = pars
-            for key, value in pars.items():
-                setattr(self, key, value)
+class KeyRepo(Repository):
+    def __init__(self, session, RepoClass):
+        super().__init__(session)
+        self.RepoClass = RepoClass
 
-    def assembly(self, devices):
-        if hasattr(self, 'connected_to'):
-            for key, value in self.connected_to.items():
-                if type(value) is list:
-                    att_value = [devices[tracking] for tracking in value]
-                else:
-                    att_value = devices[value]
-                setattr(self, key, att_value)
+    def get(self, key):
+        return self.session.query(self.RepoClass).filter(self.RepoClass.key==key).one()
+
+
+class RequirementRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Requirement)
+
+
+class RoleRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Role)
+
+
+class LocationRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Location)
+
+
+class PersonRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Person)
+
+
+class ModeRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Mode)
+
+
+class CharacteristicRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Characteristic)
+
+
+class ElementRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Element)
+
+
+class AttributeRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Attribute)
+
+
+class PartModelRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, PartModel)
+
+
+class PartGroupRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, PartGroup)
+
+
+class DeviceModelRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, DeviceModel)
+
+
+class DeviceRepo(Repository):
+    def __init__(self, session):
+        super().__init__(session)
+
+    def get_all_from(self, location_key):
+        pass
+
+
+class PartRepo(Repository):
+    def get_by(self, part_model, serial_number):
+        pass
+
+    def get_last_serial_number(self, part_model, batch_number, pos):
+        """Retrieve the last serial number from database (if exists...)
+        """
+        pass
+
+class ControlPlanRepo(Repository):
+    def get_by(self, part_model, location):
+        """Return control plan for a part_model on a location
+        """
+        pass
+
+class TestRepo(Repository):
+    pass
