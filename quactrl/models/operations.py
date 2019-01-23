@@ -118,7 +118,7 @@ class Operation(Flow):
                 if action.state == 'ongoing':
                     action.thread.join()
                     if hasattr(action, 'exception'):
-                    # The thread has raised an exception
+                        # The thread has raised an exception
                         raise action.exception
                     action.state = 'done'
                 action.close()
@@ -146,9 +146,8 @@ class Operation(Flow):
         self.finished_on = datetime.datetime.now()
 
     def ask(self, key, **kwargs):
-        self.question = Question()
+        self.question = Question(update=self.update)
         self.question.ask(key, **kwargs)
-        self.update('question', self.question)
 
     def answer(self, **kwargs):
         self.question.answer(**kwargs)
@@ -200,13 +199,24 @@ class Step(Path):
 
 
 class Question(threading.Event):
+    def __init__(self, update=None):
+        self.update = update
+        super().__init__()
+        self.request = {}
+        self.response = {}
+
     def ask(self, key, **kwargs):
         """Wait until answer is done by other thread
         """
-        self.key = key
-        self.request_pars = kwargs
+        self.request['key'] = key
+        self.request.update(kwargs)
+        if self.update:
+            self.update('asked', self)
+
         self.wait()
 
     def answer(self, **kwargs):
         self.response = kwargs
+        if self.update:
+            self.update('answered', self)
         self.set()

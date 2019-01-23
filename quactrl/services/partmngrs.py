@@ -3,7 +3,7 @@ import threading
 import logging
 
 
-logger  = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class SetupException(Exception):
@@ -37,21 +37,25 @@ class Cavity:
 
         state = self.state
         inspector_state = self.inspector.state
+        logger.debug('Inspector state is {} and state is  {}'.format(
+            inspector_state, state
+        ))
         if self.state == 'empty' and self.part_is_present(self.key):
             state = 'loaded'
-        elif self.state == 'loaded' and self.inspector.state == 'waiting':
+        elif self.state == 'loaded' and self.inspector.state == 'idle':
             self.test_service.stack_part(
                 self.get_part_info(self.key),
                 self.part_manager.responsible.key,
                 self.key
             )
             state = 'stacked'
-        elif self.state == 'stacked' and self.inspector.state == 'iddle':
-            state = 'iddle'
-        elif self.state == 'iddle' and self.inspector.state == 'waiting':
+        elif self.state == 'stacked' and self.inspector.state == 'busy':
+            state = 'busy'
+        elif self.state == 'busy' and self.inspector.state == 'idle':
             state = self.inspector.test.state
             self.part = self.inspector.part
-        elif self.state in ('success', 'failed', 'cancelled') and not self.part_is_present(self.key):
+        elif (self.state in ('success', 'failed', 'cancelled') and
+              not self.part_is_present(self.key)):
             state = 'empty'
             self.part = None
 
