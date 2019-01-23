@@ -74,61 +74,62 @@ class Check(Action):
         # for defect in self.defects:
         #     self.put(defect, self.parent.route.destination)
 
-    def add_measurement(self, requirement, value, index=None, ms_tracking=None,
-                        uncertainty=0, link_part=True):
+    def _get_tracking(self, requirement, index, ms_chain):
+        prefix = ms_chain.join('*') + '-' if ms_chain else ''
+        sufix = '_{}'.format(index) if index else ''
+        return prefix + requirement.eid + sufix
+
+    def add_measurement(self, requirement, value, index=None, ms_chain=None,
+                        link_part=True, uncertainty=0):
         """Add measurement of a characteristic to check
         """
-        tracking = '{}*'.format(ms_tracking) if ms_tracking else ''
-        tracking = tracking + requirement.eid
-        if index is not None:
-            tracking = tracking + '_{}'.format(index)
-
-        measurement = Measurement(self.inbox['part'],
-                                  requirement.characteristic, tracking, value)
+        subject = self.inbox['part'] if link_part else ms_chain[0]
+        tracking = self._get_tracking(requirement, index, ms_chain)
+        measurement = Measurement(requirement.characteristic, tracking, value,
+                                  subject)
 
         mode_key = measurement.eval_value(requirement.specs,
                                           uncertainty=uncertainty)
         if mode_key:
-            self.add_defect(requirement, mode_key, tracking, 1)
+            self.add_defect(requirement, mode_key, index, ms_chain, link_part)
 
         self.measurements.append(measurement)
 
-    def add_defect(self, requirement, mode_key, index=None, qty=1):
+    def add_defect(self, requirement, mode_key, index=None, ms_chain=None,
+                   link_part=True, qty=1):
         """Add defect of check
         """
         failure_mode = requirement.characteristic.failure_modes[mode_key]
-        tracking = requirement.eid
-        if index is not None:
-            tracking = '{}_{}'.format(tracking, index)
-        defect = Defect(self.inbox['part'], failure_mode, tracking, qty)
+        subject = self.inbox['part'] if link_part else ms_chain[0]
+        tracking = self._get_tracking(requirement, index, ms_chain)
+        defect = Defect(failure_mode, tracking, subject, qty)
         self.defects.append(defect)
 
 
 class Defect:
     """Defect on a subject found by a check action
     """
-    def __init__(self, subject, failure_mode, tracking, qty=1):
-        self.subject = subject
-        subject.defects.append(self)
-
+    def __init__(self, failure_mode, tracking, subject, qty=1):
         self.failure_mode = failure_mode
         self.tracking = tracking
+        self.subject = subject
         self.qty = qty
+
+        subject.defects.append(self)
 
 
 class Measurement:
     """Measurement of a subject done by a check action
     """
-    def __init__(self, subject, characteristic, tracking, value):
-        self.subject = subject
-        subject.measurements.append(self)
-
+    def __init__(self, characteristic, tracking, value, subject):
         self.characteristic = characteristic
         self.tracking = tracking
         self.value = value
 
+        subject.measurements.append(self)
+        self.subject = subject
+
     def eval_value(self, specs, uncertainty=0):
-        mode_key = None
         low_limit = high_limit = None
         if 'limits' in specs:
             low_limit, high_limit = specs['limits']
@@ -137,15 +138,19 @@ class Measurement:
             high_limit = specs['max_abs']
             value = abs(self.value)
 
-        if high_limit is not None and self.value >= high_limit - uncertainty:
+        mode_key = None
+        if high_limit is not None and value > high_limit - uncertainty:
             mode_key = 'hi' if value > high_limit else 'shi'
 
-        if low_limit is not None and self.value <= low_limit + uncertainty:
+        if low_limit is not None and value < low_limit + uncertainty:
             mode_key = 'lo' if value < low_limit else 'slo'
 
         if not (low_limit is None or high_limit is None):
             if low_limit > high_limit:
                 mode_key = None if mode_key else 'lo'
+
+        if mode_key and 'max_abs' in specs:
+            mode_key = list(self.characteristic.failure_modes.keys())[0]
 
         return mode_key
 
