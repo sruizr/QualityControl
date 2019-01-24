@@ -1,8 +1,8 @@
 import datetime
 import threading
-from collections import namedtuple
 from quactrl.helpers import get_function
 from .core import Node, Resource, UnitaryItem, Path, Flow, Token
+from .quality import QuaSubject
 
 
 class Location(Node):
@@ -14,15 +14,14 @@ class Location(Node):
         self.description = description
 
 
-class Part(UnitaryItem):
+class Part(QuaSubject):
     """Part with unique serial number
     """
     def __init__(self, model, serial_number, location=None, pars=None):
+        super().__init__()
         self.model = model
         self.serial_number = serial_number
         self.pars = pars if pars else {}
-        self.defects = []
-        self.measurements = []
 
         self.add(location)
         self.dut = None

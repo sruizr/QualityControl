@@ -19,6 +19,13 @@ class ResourceLink:
 
 
 class Item:
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        self.flow_qty = 0
+        self.tokens = []
+
     @property
     def qty(self):
         return sum([token.qty for token in self.tokens])

@@ -1,10 +1,50 @@
 import datetime
 from quactrl.helpers import get_function
 from quactrl.models.operations import Step, Action, Operation, Route
+from quactrl.models.core import Item
 
 
 class DefectFound(Exception):
     pass
+
+
+class QuaSubject(Item):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.measurements = []
+        self.defects = []
+
+    def add_measurement(self, characteristic, tracking, value):
+        for measurement in self.measurements:
+            if measurement.tracking == tracking:
+                measurement.flow_qty = value
+                return measurement
+
+        measurement = Measurement(characteristic, tracking, value, self)
+        self.measurements.append(measurement)
+        return measurement
+
+    def add_defect(self, failure_mode, tracking, qty=1):
+        """Add defect to subject if not exist and return it
+        """
+        for defect in self.defects:
+            if defect.tracking == tracking:
+                defect.qty = qty
+                return defect
+
+        defect = Defect(failure_mode, tracking, self, qty)
+        self.defects.append(defect)
+        return defect
+
+    def clear_defects(self, check):
+        self._clear_defects_by_requi(check.control.requirement, check)
+
+    def _clear_defects_by_requi(self, requirement, check):
+        for defect in self.defects:
+            if requirement.eid in defect.tracking:
+                defect.clear(check)
+            for requi in requirement.requirements.values():
+                self._clear_defects_by_requi(requi, check)
 
 
 class ControlPlan(Route):
@@ -83,17 +123,16 @@ class Check(Action):
                         link_part=True, uncertainty=0):
         """Add measurement of a characteristic to check
         """
-        subject = self.inbox['part'] if link_part else ms_chain[0]
         tracking = self._get_tracking(requirement, index, ms_chain)
-        measurement = Measurement(requirement.characteristic, tracking, value,
-                                  subject)
+        subject = self.inbox['part'] if link_part else ms_chain[0]
+        measurement = subject.add_measurement(requirement.characteristic,
+                                              tracking, value)
+        self.measurements.append(measurement)
 
         mode_key = measurement.eval_value(requirement.specs,
                                           uncertainty=uncertainty)
         if mode_key:
             self.add_defect(requirement, mode_key, index, ms_chain, link_part)
-
-        self.measurements.append(measurement)
 
     def add_defect(self, requirement, mode_key, index=None, ms_chain=None,
                    link_part=True, qty=1):
@@ -102,11 +141,11 @@ class Check(Action):
         failure_mode = requirement.characteristic.failure_modes[mode_key]
         subject = self.inbox['part'] if link_part else ms_chain[0]
         tracking = self._get_tracking(requirement, index, ms_chain)
-        defect = Defect(failure_mode, tracking, subject, qty)
+        defect = subject.add_defect(failure_mode, tracking, qty)
         self.defects.append(defect)
 
 
-class Defect:
+class Defect(Item):
     """Defect on a subject found by a check action
     """
     def __init__(self, failure_mode, tracking, subject, qty=1):
@@ -118,7 +157,7 @@ class Defect:
         subject.defects.append(self)
 
 
-class Measurement:
+class Measurement(Item):
     """Measurement of a subject done by a check action
     """
     def __init__(self, characteristic, tracking, value, subject):

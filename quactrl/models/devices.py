@@ -3,7 +3,8 @@ from dependency_injector import containers
 from quactrl.helpers import get_class
 from threading import Lock
 from types import MethodType
-from quactrl.models.core import Resource, Item
+from .core import Resource
+from .quality import QuaSubject
 import logging
 
 
@@ -25,9 +26,10 @@ class DeviceModel(Resource):
         return self.pars['class']
 
 
-class Device(Item):
+class Device(QuaSubject):
     def __init__(self, device_model, tracking, location=None,
                  pars=None):
+        super().__init__()
         self.model = device_model
         self.tracking = tracking
         self.location = location
@@ -172,7 +174,8 @@ class LockableDecorator:
                 return result
             return method
 
-        if name[0] != '_':  # Private attributes are not get from decorated object
+        if name[0] != '_':
+            #  Private attributes are not get from decorated object
             attr = getattr(self._decorated, name)
             if type(attr) is MethodType:
                 return locking(attr)
