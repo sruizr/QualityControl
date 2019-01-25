@@ -111,10 +111,6 @@ class UnitaryItem(Item):
         super().move(from_node, to_node, flow, 1)
 
 
-class ItemLink:
-    pass
-
-
 class Path:
     pass
 

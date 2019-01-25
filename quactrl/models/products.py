@@ -38,7 +38,6 @@ class PartModel(PartGroup):
             if group.Device:
                 return group.Device, group.kwargs.copy()
         return None, None
-
     def create_dut(self, connection):
         """Return a device instance if part model is a device
         """
