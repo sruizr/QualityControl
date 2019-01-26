@@ -6,8 +6,8 @@ import quactrl.models.quality as quality
 import quactrl.data.sqlalchemy.tables as tables
 
 
-mapper(products.PartGroup, tables.resource,
-       inherits=core.Resource, polymorphic_identity='part_group',
+mapper(products.PartGroup, inherits=core.Resource,
+       polymorphic_identity='part_group',
        properties={
            'models': relationship(
                products.PartModel,
@@ -23,12 +23,12 @@ mapper(products.PartGroup, tables.resource,
        })
 
 
-mapper(products.PartModel, tables.resource,
-       inherits=products.PartGroup, polymorphic_identity='part_model')
+mapper(products.PartModel, inherits=products.PartGroup,
+       polymorphic_identity='part_model')
 
 
-mapper(products.Requirement, tables.resource,
-       inherits=core.Resource, polymorphic_identity='requirement',
+mapper(products.Requirement, inherits=core.Resource,
+       polymorphic_identity='requirement',
        properties={
            'characteristic': relationship(
                products.Characteristic,
@@ -55,8 +55,8 @@ mapper(products.Requirement, tables.resource,
 )
 
 
-mapper(products.Characteristic, tables.resource,
-       inherits=core.Resource, polymorphic_identity='characteristic',
+mapper(products.Characteristic, inherits=core.Resource,
+       polymorphic_identity='characteristic',
        properties={
            'element': relationship(
                products.Element,
@@ -78,17 +78,23 @@ primaryjoin=(
                secondaryjoin=(
                    tables.resource.c.id == tables.resource_link.c.to_resource_id
                ),
-               uselist=False)
-
-           # ,
-           # 'failure_modes': relationship(quality.modes,
-           #                               secondary=tables.resource_link)
+               uselist=False),
+           'failure_modes': relationship(
+               quality.FailureMode,
+               secondary=tables.resource_link,
+               primaryjoin=(
+                   tables.resource.c.id == tables.resource_link.c.from_resource_id
+               ),
+               secondaryjoin=(
+                   tables.resource.c.id == tables.resource_link.c.to_resource_id
+               ),
+               collection_class=attribute_mapped_collection('key'))
        })
 
 
-mapper(products.Element, tables.resource,
-       inherits=core.Resource, polymorphic_identity='element')
+mapper(products.Element, inherits=core.Resource,
+       polymorphic_identity='element')
 
 
-mapper(products.Attribute, tables.resource,
-       inherits=core.Resource, polymorphic_identity='attribute')
+mapper(products.Attribute, inherits=core.Resource,
+       polymorphic_identity='attribute')

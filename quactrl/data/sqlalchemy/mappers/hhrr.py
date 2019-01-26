@@ -3,8 +3,7 @@ import quactrl.data.sqlalchemy.tables as tables
 import quactrl.models.hhrr as hhrr
 
 
-mapper(hhrr.Person, tables.node,
-       inherits=hhrr.Node, polymorphic_identity='person',
+mapper(hhrr.Person, inherits=hhrr.Node, polymorphic_identity='person',
        properties={
            'roles': relationship(
                hhrr.Role,
@@ -20,5 +19,4 @@ mapper(hhrr.Person, tables.node,
        },)
 
 
-mapper(hhrr.Role, tables.node,
-       inherits=hhrr.Node, polymorphic_identity='role')
+mapper(hhrr.Role, inherits=hhrr.Node, polymorphic_identity='role')

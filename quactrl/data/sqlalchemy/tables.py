@@ -76,5 +76,5 @@ token = Table(
 
 
 item_link = Table('item_link', metadata,
-                  Column('from_item', Integer, ForeignKey('item.id')),
-                  Column('to_item', Integer, ForeignKey('item.id')))
+                  Column('from_item_id', Integer, ForeignKey('item.id')),
+                  Column('to_item_id', Integer, ForeignKey('item.id')))

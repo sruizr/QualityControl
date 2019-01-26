@@ -1,6 +1,6 @@
 import datetime
 from quactrl.helpers import get_function
-from quactrl.models.core import Item
+from quactrl.models.core import Item, Resource
 import quactrl.models.operations as op
 
 
@@ -154,8 +154,6 @@ class Defect(Item):
         self.subject = subject
         self.qty = qty
 
-        subject.defects.append(self)
-
 
 class Measurement(Item):
     """Measurement of a subject done by a check action
@@ -237,7 +235,7 @@ class Sampling:
         return True
 
 
-class FailureMode:
+class FailureMode(Resource):
     """Mode of failing a characteristic
     """
     def __init__(self, characteristic, mode):
@@ -257,7 +255,7 @@ class FailureMode:
         return str(self)
 
 
-class Mode:
+class Mode(Resource):
     """Modes clasification of failing a characteristic
     """
     def __init__(self, key, name):

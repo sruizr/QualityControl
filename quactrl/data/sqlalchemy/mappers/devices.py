@@ -4,12 +4,12 @@ import quactrl.models.core as core
 import quactrl.data.sqlalchemy.tables as tables
 
 
-mapper(devices.DeviceModel, tables.resource,
-       inherits=devices.Resource, polymorphic_identity='device_model')
+mapper(devices.DeviceModel, inherits=devices.Resource,
+       polymorphic_identity='device_model')
 
 
-mapper(devices.Device, tables.item,
-       inherits=core.Item, polymorphic_identity='device',
+mapper(devices.Device, inherits=core.Item,
+       polymorphic_identity='device',
        properties={
            'model': synonym('resource')
        })

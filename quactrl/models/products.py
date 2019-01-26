@@ -94,6 +94,7 @@ class Requirement(Resource):
         self.key = key
         self.characteristic = characteristic
         self.specs = specs if specs else {}
+
         self.requirements = {}
 
     @property
@@ -107,6 +108,9 @@ class Requirement(Resource):
         value = '{} [{}]'.format(char.description,
                                  self.eid)
         return value
+
+    def add_requi(self, requirement):
+        self.requirements[requirement.key] = requirement
 
 
 class Characteristic(Resource):
@@ -125,6 +129,10 @@ class Characteristic(Resource):
     @property
     def description(self):
         return str(self)
+
+    def add_failure_mode(self, mode):
+        failure_mode = qua.FailureMode(self, mode)
+        self.failure_modes[failure_mode.key] = failure_mode
 
 
 class Element(Resource):
