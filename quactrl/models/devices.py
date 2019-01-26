@@ -4,7 +4,7 @@ from quactrl.helpers import get_class
 from threading import Lock
 from types import MethodType
 from .core import Resource
-from .quality import QuaSubject
+import quactrl.models.quality as qua
 import logging
 
 
@@ -26,12 +26,13 @@ class DeviceModel(Resource):
         return self.pars['class']
 
 
-class Device(QuaSubject):
+class Device(qua.Subject):
     def __init__(self, device_model, tracking, location=None,
                  pars=None):
         super().__init__()
         self.model = device_model
         self.tracking = tracking
+
         self.location = location
         self.pars = pars if pars else {}
 

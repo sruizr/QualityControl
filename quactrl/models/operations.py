@@ -2,7 +2,6 @@ import datetime
 import threading
 from quactrl.helpers import get_function
 from .core import Node, Resource, UnitaryItem, Path, Flow, Token
-from .quality import QuaSubject
 
 
 class Location(Node):
@@ -12,28 +11,6 @@ class Location(Node):
         self.key = key
         self.name = name
         self.description = description
-
-
-class Part(QuaSubject):
-    """Part with unique serial number
-    """
-    def __init__(self, model, serial_number, location=None, pars=None):
-        super().__init__()
-        self.model = model
-        self.serial_number = serial_number
-        self.pars = pars if pars else {}
-
-        self.add(location)
-        self.dut = None
-
-    def set_dut(self, connection):
-        self.dut = self.model.create_dut(connection)
-
-    @property
-    def location(self):
-        locations = [location
-                     for location in self.stocks.keys()]
-        return locations[0] if len(locations) == 1 else locations
 
 
 class Action(Flow):

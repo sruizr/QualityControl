@@ -5,19 +5,18 @@ from .types import JsonEncodedDict
 from quactrl.data.sqlalchemy import metadata
 
 
-
 node = Table('node', metadata,
-                   Column('id', Integer, primary_key=True),
-                   Column('is_a', String(50)),
-                   Column('key', String(15)),
-                   Column('name', String(50)),
-                   Column('description', String(255)))
+             Column('id', Integer, primary_key=True),
+             Column('is_a', String(50)),
+             Column('key', String(15)),
+             Column('name', String(50)),
+             Column('description', String(255)))
+
 
 node_link = Table('node_link', metadata,
-                        Column('from_node', Integer, ForeignKey('node.id')),
-                        Column('to_node', Integer, ForeignKey('node.id')),
-                        Column('relation', String(100))
-)
+                  Column('from_node_id', Integer, ForeignKey('node.id')),
+                  Column('to_node_id', Integer, ForeignKey('node.id')))
+
 
 resource = Table('resource', metadata,
                  Column('id', Integer, primary_key=True),
@@ -29,23 +28,20 @@ resource = Table('resource', metadata,
 
 
 resource_link = Table('resource_link', metadata,
-                      Column('from_resource', Integer,
-                                   ForeignKey('resource.id')),
-                      Column('to_resource', Integer,
-                                   ForeignKey('resource.id')),
-                      Column('relation', String(30)),
-                      Column('qty', Float))
-
+                      Column('from_resource_id', Integer,
+                             ForeignKey('resource.id')),
+                      Column('to_resource_id', Integer,
+                             ForeignKey('resource.id')))
 
 path = Table('path', metadata,
              Column('id', Integer, primary_key=True),
              Column('is_a', String(50)),
-             Column('parent', Integer, ForeignKey('path.id')),
+             Column('parent_id', Integer, ForeignKey('path.id')),
              Column('seq', Integer),
-             Column('from_node', Integer, ForeignKey('node.id')),
-             Column('to_node', Integer, ForeignKey('node.id')),
+             Column('from_node_id', Integer, ForeignKey('node.id')),
+             Column('to_node_id', Integer, ForeignKey('node.id')),
              Column('method_name', String(255)),
-             Column('role', Integer, ForeignKey('node.id')),
+             Column('role_id', Integer, ForeignKey('node.id')),
              Column('pars', JsonEncodedDict))
 
 
@@ -53,8 +49,8 @@ flow = Table('flow', metadata,
              Column('id', Integer, primary_key=True),
              Column('path_id', Integer, ForeignKey('path.id')),
              Column('is_a', String(50)),
-             Column('parent', Integer, ForeignKey('flow.id')),
-             Column('responsible', Integer, ForeignKey('node.id')),
+             Column('parent_id', Integer, ForeignKey('flow.id')),
+             Column('responsible_id', Integer, ForeignKey('node.id')),
              Column('started_on', DateTime, default=datetime.now),
              Column('finished_on', DateTime),
              Column('state', String(50)))
@@ -70,14 +66,15 @@ item = Table('item', metadata,
 
 token = Table(
     'token', metadata,
-    Column('flow_id', Integer, primary_key=True),
+    Column('id', Integer, primary_key=True),
+    Column('flow_id', Integer, ForeignKey('flow.id')),
     Column('item_id', Integer, ForeignKey('item.id'), index=True),
     Column('node_id', Integer, ForeignKey('node.id'), index=True),
     Column('qty', Float),
     Column('state', String(15))
 )
 
+
 item_link = Table('item_link', metadata,
                   Column('from_item', Integer, ForeignKey('item.id')),
-                  Column('to_item', Integer, ForeignKey('item.id')),
-                  Column('name', String(30)))
+                  Column('to_item', Integer, ForeignKey('item.id')))

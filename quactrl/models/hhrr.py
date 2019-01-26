@@ -11,6 +11,11 @@ class Person(Node):
 
         self.roles = []
 
+    def add_role(self, role):
+        if role not in self.roles:
+            self.roles.append(role)
+            role.add_person(self)
+
 
 class Role(Node):
     """Role linked to persons
@@ -21,3 +26,9 @@ class Role(Node):
         self.description = description
 
         self.persons = []
+
+
+    def add_person(self, person):
+        if person not in self.persons:
+            self.persons.append(person)
+            person.add_role(self)

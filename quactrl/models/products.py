@@ -1,6 +1,7 @@
 import re
 from quactrl.helpers import get_class
 from quactrl.models.core import Resource
+import quactrl.models.quality as qua
 
 
 class PartGroup(Resource):
@@ -17,12 +18,12 @@ class PartGroup(Resource):
         device_class = self.pars.get('device_class')
         self.Device = get_class(device_class) if device_class else None
 
-        self.part_models = []
+        self.models = []
         self.requirements = {}
 
     def add_model(self, part_model):
-        self.part_models.append(part_model)
-        if self not in part_model.part_groups:
+        if part_model not in self.models:
+            self.models.append(part_model)
             part_model.add_group(self)
 
 
@@ -31,13 +32,20 @@ class PartModel(PartGroup):
     """
     def __init__(self, part_number, name=None, description=None, pars=None):
         super().__init__(part_number, name, description, pars)
-        self.part_groups = []
+        self.groups = []
+
+
+    def add_group(self, part_group):
+        if part_group not in self.groups:
+            self.groups.append(part_group)
+            part_group.add_model(self)
 
     def _find_Device(self):
         for group in self.part_groups:
             if group.Device:
                 return group.Device, group.kwargs.copy()
         return None, None
+
     def create_dut(self, connection):
         """Return a device instance if part model is a device
         """
@@ -56,10 +64,27 @@ class PartModel(PartGroup):
             Device, kwargs = self._find_Device()
             return Device is not None
 
-    def add_group(self, group):
-        self.part_groups.append(group)
-        if self not in group.part_models:
-            group.add_model(self)
+
+class Part(qua.Subject):
+    """Part with unique serial number
+    """
+    def __init__(self, model, serial_number, location=None, pars=None):
+        super().__init__()
+        self.model = model
+        self.serial_number = serial_number
+        self.pars = pars if pars else {}
+
+        self.add(location)
+        self.dut = None
+
+    def set_dut(self, connection):
+        self.dut = self.model.create_dut(connection)
+
+    @property
+    def location(self):
+        locations = [location
+                     for location in self.stocks.keys()]
+        return locations[0] if len(locations) == 1 else locations
 
 
 class Requirement(Resource):

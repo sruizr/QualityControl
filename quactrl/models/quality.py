@@ -1,14 +1,14 @@
 import datetime
 from quactrl.helpers import get_function
-from quactrl.models.operations import Step, Action, Operation, Route
 from quactrl.models.core import Item
+import quactrl.models.operations as op
 
 
 class DefectFound(Exception):
     pass
 
 
-class QuaSubject(Item):
+class Subject(Item):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.measurements = []
@@ -47,12 +47,12 @@ class QuaSubject(Item):
                 self._clear_defects_by_requi(requi, check)
 
 
-class ControlPlan(Route):
+class ControlPlan(op.Route):
     def implement(self, responsible, update=None):
         return Test(self, responsible, update)
 
 
-class Test(Operation):
+class Test(op.Operation):
     def start(self, **kwargs):
         if 'part' in kwargs:
             self.part = kwargs['part']
@@ -76,7 +76,7 @@ class Test(Operation):
         return False
 
 
-class Check(Action):
+class Check(op.Action):
     """Verification of a characteristic on a part, outputs defects...
     """
     def __init__(self, operation, control, update=None):
@@ -194,7 +194,7 @@ class Measurement(Item):
         return mode_key
 
 
-class Control(Step):
+class Control(op.Step):
     """Plan for checking a characteristic on a subject
 
     A subject can be a machine, environment or material

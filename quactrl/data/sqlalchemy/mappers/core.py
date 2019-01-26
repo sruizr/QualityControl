@@ -1,4 +1,4 @@
-from sqlalchemy.orm import mapper
+from sqlalchemy.orm import mapper, relationship
 import quactrl.models.core as core
 import quactrl.data.sqlalchemy.tables as tables
 
@@ -16,11 +16,25 @@ mapper(core.Path, tables.path,
 
 
 mapper(core.Item, tables.item,
-       polymorphic_on=tables.item.c.is_a)
+       polymorphic_on=tables.item.c.is_a,
+       properties={
+           'resource': relationship(core.Resource),
+           'tokens': relationship(core.Token)
+       })
 
 
 mapper(core.Flow, tables.flow,
-       polymorphic_on=tables.flow.c.is_a)
+       polymorphic_on=tables.flow.c.is_a,
+       properties={
+           'responsible': relationship(core.Node),
+           'path': relationship(core.Path),
+           'parent': relationship(core.Flow)
+       })
 
 
-mapper(core.Token, tables.token)
+mapper(core.Token, tables.token,
+       properties={
+           'item': relationship(core.Item),
+           'node': relationship(core.Node),
+           'flow': relationship(core.Flow)
+       })
