@@ -14,25 +14,35 @@ class Subject(Item):
         self.measurements = []
         self.defects = []
 
-    def add_measurement(self, characteristic, tracking, value):
+    def get_measurement(self, characteristic, sufix=None, ms_chain=None):
+        tracking = '{}/{}'.format(self.tracking, characteristic.key)
+        if sufix:
+            tracking = '{}_{}'.format(tracking, sufix)
+        if ms_chain:
+            tracking = '{} [{}]'.format(
+                tracking, ', '.join([ms.tracking for ms in ms_chain])
+            )
+
         for measurement in self.measurements:
             if measurement.tracking == tracking:
-                measurement.flow_qty = value
                 return measurement
 
-        measurement = Measurement(characteristic, tracking, value, self)
+        measurement = Measurement(characteristic, tracking, self)
         self.measurements.append(measurement)
         return measurement
 
-    def add_defect(self, failure_mode, tracking, qty=1):
+    def get_defect(self, failure_mode, sufix=None):
         """Add defect to subject if not exist and return it
         """
+        tracking = '{}/{}'.format(self.tracking, failure_mode.key)
+        if sufix:
+            tracking = '{}_{}'.format(tracking, sufix)
+
         for defect in self.defects:
             if defect.tracking == tracking:
-                defect.qty = qty
                 return defect
 
-        defect = Defect(failure_mode, tracking, self, qty)
+        defect = Defect(failure_mode, tracking, self)
         self.defects.append(defect)
         return defect
 
@@ -114,59 +124,59 @@ class Check(op.Action):
         # for defect in self.defects:
         #     self.put(defect, self.parent.route.destination)
 
-    def _get_tracking(self, requirement, index, ms_chain):
-        prefix = ms_chain.join('*') + '-' if ms_chain else ''
-        sufix = '_{}'.format(index) if index else ''
-        return prefix + requirement.eid + sufix
-
-    def add_measurement(self, requirement, value, index=None, ms_chain=None,
+    def add_measurement(self, requirement, value, sufix=None, ms_chain=None,
                         link_part=True, uncertainty=0):
         """Add measurement of a characteristic to check
         """
-        tracking = self._get_tracking(requirement, index, ms_chain)
-        subject = self.inbox['part'] if link_part else ms_chain[0]
-        measurement = subject.add_measurement(requirement.characteristic,
-                                              tracking, value)
+        subject = self.test.part if link_part else ms_chain[0]
+        measurement = subject.get_measurement(requirement.characteristic,
+                                              sufix, ms_chain)
         self.measurements.append(measurement)
+        measurement.value = value
 
         mode_key = measurement.eval_value(requirement.specs,
                                           uncertainty=uncertainty)
         if mode_key:
-            self.add_defect(requirement, mode_key, index, ms_chain, link_part)
+            self.add_defect(requirement, mode_key, sufix, ms_chain, link_part)
 
-    def add_defect(self, requirement, mode_key, index=None, ms_chain=None,
+    def add_defect(self, requirement, mode_key, sufix=None, ms_chain=None,
                    link_part=True, qty=1):
         """Add defect of check
         """
         failure_mode = requirement.characteristic.failure_modes[mode_key]
-        subject = self.inbox['part'] if link_part else ms_chain[0]
-        tracking = self._get_tracking(requirement, index, ms_chain)
-        defect = subject.add_defect(failure_mode, tracking, qty)
+        subject = self.part if link_part else ms_chain[0]
+        defect = subject.get_defect(failure_mode, sufix)
+        defect.qty = qty
         self.defects.append(defect)
+
+    def close(self):
+        pass
 
 
 class Defect(Item):
     """Defect on a subject found by a check action
     """
-    def __init__(self, failure_mode, tracking, subject, qty=1):
+    def __init__(self, failure_mode, tracking, subject):
         self.failure_mode = failure_mode
         self.tracking = tracking
         self.subject = subject
-        self.qty = qty
 
 
 class Measurement(Item):
     """Measurement of a subject done by a check action
     """
-    def __init__(self, characteristic, tracking, value, subject):
+    def __init__(self, characteristic, tracking, subject):
         self.characteristic = characteristic
         self.tracking = tracking
-        self.value = value
+        self.value = None
 
         subject.measurements.append(self)
         self.subject = subject
 
     def eval_value(self, specs, uncertainty=0):
+        if self.value is None:
+            raise Exception('No value of measurement')
+
         low_limit = high_limit = None
         if 'limits' in specs:
             low_limit, high_limit = specs['limits']
@@ -243,8 +253,6 @@ class FailureMode(Resource):
         self.mode = mode
         self.key = "{}-{}".format(mode.key, characteristic.key)
 
-        self.characteristic.failure_modes[mode.key] = self
-
     def __str__(self):
         return '{} {} @ {}'.format(self.mode.name,
                                    self.characteristic.attribute.name,
@@ -258,6 +266,6 @@ class FailureMode(Resource):
 class Mode(Resource):
     """Modes clasification of failing a characteristic
     """
-    def __init__(self, key, name):
+    def __init__(self, key, name=None):
         self.key = key
-        self.name = name
+        self.name = name if name else key

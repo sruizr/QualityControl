@@ -132,15 +132,15 @@ class Characteristic(Resource):
 
     def add_failure_mode(self, mode):
         failure_mode = qua.FailureMode(self, mode)
-        self.failure_modes[failure_mode.key] = failure_mode
+        self.failure_modes[failure_mode.mode.key] = failure_mode
 
 
 class Element(Resource):
     """Abstract subsystem or component
     """
-    def __init__(self, key, name, description=None, parent=None):
+    def __init__(self, key, name=None, description=None, parent=None):
         self.key = key
-        self.name = name
+        self.name = name if name else key
         self.description = description
 
         self.parent = parent
@@ -154,7 +154,7 @@ class Element(Resource):
 class Attribute(Resource):
     """Evaluable attribute of an element
     """
-    def __init__(self, key, name, description=None):
+    def __init__(self, key, name=None, description=None):
         self.key = key
-        self.name = name
+        self.name = name if name else key
         self.description = description

@@ -1,10 +1,10 @@
-from sqlalchemy.orm import mapper, relationship, synonym
-from sqlalchemy.orm.collections import attribute_mapped_collection
+from sqlalchemy.orm import mapper, synonym
 import quactrl.models.core as core
 import quactrl.models.quality as qua
 import quactrl.models.products as prod
-import quactrl.data.sqlalchemy.tables as tables
-from quactrl.data.sqlalchemy.mappers.core import resource_relationship, item_relationship
+import quactrl.models.operations as op
+from quactrl.data.sqlalchemy.mappers.core import (resource_relationship,
+                                                  item_relationship)
 
 
 mapper(qua.Defect, inherits=core.Item,
@@ -26,8 +26,7 @@ mapper(qua.Subject, inherits=core.Item,
        properties={
            'measurements': item_relationship(qua.Measurement),
            'defects': item_relationship(qua.Defect)
-       }
-)
+       })
 
 
 mapper(qua.Mode, inherits=core.Resource,
@@ -38,6 +37,9 @@ mapper(qua.FailureMode, inherits=core.Resource,
        polymorphic_identity='failure_mode',
        properties={
            'characteristic': resource_relationship(prod.Characteristic,
-                                                   uselist=False)
-       }
-)
+                                                   uselist=False),
+           'mode': resource_relationship(qua.Mode, uselist=False)
+       })
+
+
+# mapper(qua.Check, inherits=op.Action)

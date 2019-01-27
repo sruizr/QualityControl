@@ -40,9 +40,9 @@ path = Table('path', metadata,
              Column('seq', Integer),
              Column('from_node_id', Integer, ForeignKey('node.id')),
              Column('to_node_id', Integer, ForeignKey('node.id')),
-             Column('method_name', String(255)),
              Column('role_id', Integer, ForeignKey('node.id')),
-             Column('pars', JsonEncodedDict))
+             Column('method_name', String(255)),
+             Column('method_pars', JsonEncodedDict))
 
 
 flow = Table('flow', metadata,

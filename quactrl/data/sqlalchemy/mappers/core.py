@@ -33,18 +33,32 @@ def item_relationship(*args, **kwargs):
 
 mapper(core.Node, tables.node,
        polymorphic_on=tables.node.c.is_a,
-       polymorphic_identity='node'
-)
+       polymorphic_identity='node')
 
 
 mapper(core.Resource, tables.resource,
        polymorphic_on=tables.resource.c.is_a,
-       polymorphic_identity='resource'
-)
+       polymorphic_identity='resource')
 
 
 mapper(core.Path, tables.path,
-       polymorphic_on=tables.path.c.is_a)
+       polymorphic_on=tables.path.c.is_a,
+       properties={
+           'from_node': relationship(
+               core.Node,
+               foreign_keys=[tables.path.c.from_node_id]
+           ),
+           'to_node': relationship(
+               core.Node,
+               foreign_keys=[tables.path.c.to_node_id]
+           ),
+           'role': relationship(
+               core.Node,
+               foreign_keys=[tables.path.c.role_id]
+           ),
+           'parent': relationship(core.Path),
+           'subflows': relationship(core.Path, )
+       })
 
 
 mapper(core.Item, tables.item,
@@ -58,9 +72,12 @@ mapper(core.Item, tables.item,
 mapper(core.Flow, tables.flow,
        polymorphic_on=tables.flow.c.is_a,
        properties={
-           'responsible': relationship(core.Node),
-           'path': relationship(core.Path),
-           'parent': relationship(core.Flow)
+           'responsible': relationship(
+               core.Node,
+               foreign_keys=[tables.flow.c.responsible_id]
+           ),
+           'parent': relationship(core.Flow),
+           'path': relationship(core.Path)
        })
 
 

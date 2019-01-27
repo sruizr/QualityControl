@@ -88,7 +88,7 @@ primaryjoin=(
                secondaryjoin=(
                    tables.resource.c.id == tables.resource_link.c.to_resource_id
                ),
-               collection_class=attribute_mapped_collection('key'))
+               collection_class=attribute_mapped_collection('mode.key'))
        })
 
 
