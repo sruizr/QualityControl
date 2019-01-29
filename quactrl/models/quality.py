@@ -1,6 +1,6 @@
 import datetime
 from quactrl.helpers import get_function
-from quactrl.models.core import Item, Resource
+from quactrl.models.core import Item, Resource, UnitaryItem, Token
 import quactrl.models.operations as op
 
 
@@ -8,42 +8,50 @@ class DefectFound(Exception):
     pass
 
 
-class Subject(Item):
+class Subject(UnitaryItem):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.measurements = []
         self.defects = []
 
-    def get_measurement(self, characteristic, sufix=None, ms_chain=None):
-        tracking = '{}/{}'.format(self.tracking, characteristic.key)
-        if sufix:
-            tracking = '{}_{}'.format(tracking, sufix)
-        if ms_chain:
-            tracking = '{} [{}]'.format(
-                tracking, ', '.join([ms.tracking for ms in ms_chain])
-            )
+    def get_measurement(self, requirement, index=None, ms_chain=None):
+
+        eid = '>{}'.format(requirement.eid) if requirement.eid else ''
+        sufix = '' if index is None else '_{:02d}'.format(index)
+        tracking = requirement.characteristic.key + eid + sufix
+        tracking = '{}/{}'.format(self.tracking, tracking)
+
+        # if ms_chain:
+        #     tracking = '{} [{}]'.format(
+        #         tracking, ', '.join([ms.tracking for ms in ms_chain])
+        #     )
 
         for measurement in self.measurements:
             if measurement.tracking == tracking:
                 return measurement
 
-        measurement = Measurement(characteristic, tracking, self)
-        self.measurements.append(measurement)
+        measurement = Measurement(requirement.characteristic, tracking, self)
+        if measurement not in self.measurements:
+            self.measurements.append(measurement)
         return measurement
 
-    def get_defect(self, failure_mode, sufix=None):
+    def get_defect(self, requirement, mode_key, index=None):
         """Add defect to subject if not exist and return it
         """
-        tracking = '{}/{}'.format(self.tracking, failure_mode.key)
-        if sufix:
-            tracking = '{}_{}'.format(tracking, sufix)
+        failure_mode = requirement.characteristic.failure_modes[mode_key]
+
+        eid = '>{}'.format(requirement.eid) if requirement.eid else ''
+        sufix = '' if index is None else '_{:02d}'.format(index)
+        tracking = failure_mode.key + eid + sufix
+        tracking = '{}/{}'.format(self.tracking, tracking)
 
         for defect in self.defects:
             if defect.tracking == tracking:
                 return defect
 
         defect = Defect(failure_mode, tracking, self)
-        self.defects.append(defect)
+        if defect not in self.defects:
+            self.defects.append(defect)
         return defect
 
     def clear_defects(self, check):
@@ -64,8 +72,6 @@ class ControlPlan(op.Route):
 
 class Test(op.Operation):
     def start(self, **kwargs):
-        if 'part' in kwargs:
-            self.part = kwargs['part']
         super().start(**kwargs)
 
     def close(self):
@@ -75,6 +81,10 @@ class Test(op.Operation):
             state = 'failed' if self.has_failed() else 'success'
 
             self.state = state
+            if state == 'success':
+                self.part.move(self.control_plan.source,
+                               self.control_plan.destination,
+                               self)
             self.finished_on = datetime.datetime.now()
 
     def has_failed(self):
@@ -89,11 +99,6 @@ class Test(op.Operation):
 class Check(op.Action):
     """Verification of a characteristic on a part, outputs defects...
     """
-    def __init__(self, operation, control, update=None):
-        super().__init__(operation, control, update)
-        self.measurements = []
-        self.defects = []
-
     @property
     def description(self):
         return self.control.requirement.description
@@ -106,51 +111,82 @@ class Check(op.Action):
     def control(self):
         return self.step
 
+    def start(self, **inputs):
+        super().start(**inputs)
+        self.measurements = []
+        self.defects = []
+        self._remove_part_defects()
+
+    def _remove_part_defects(self):
+        location = self.source if self.source else self.test.source
+        self._remove_requi_defects(self.requirement, location)
+
+    def _remove_requi_defects(self, requi, location):
+        req_key = '{}.{}'.format(requi.characteristic.key, requi.eid)
+        for defect in part.defects:
+            if requi_key in defect.tracking:
+                defect.clear(location, self)
+                for loc in location.sub_locations:
+                    defect.clear(loc, self)
+        for req in requi.requirements.values():
+            self._remove_requi_defects(requi, location)
+
     def close(self):
         """Eval results once check is finished, if ttf raises DefectFound
         """
         if self.state == 'done':
             self.state = 'nok' if self.defects else 'ok'
+            location = self.source if self.source else self.test.source
+            location = (
+                location
+                if self.cavity is None else
+                location.sub_locations['{}_{}'.format(location.key, self.cavity)]
+            )
+
+            for defect in self.defects:
+                defect.update_qty(defect.ocurrence,
+                                  location, check)
+
+            for measurement in self.measurements:
+                measurement.tokens.append(Token(
+                    measurement, location, measurement.value,self
+                ))
+
             self.finished_on = datetime.datetime.now()
             if self.state == 'nok':
                 self.control.get_reaction()(self)
-                tff = self.inbox.get('tff', True)
-                if tff:
+                if self.tff:
                     raise DefectFound()
 
-        # for measurement in self.measurements:
-        #     self.put(measurement, self.parent.route.destination)
 
-        # for defect in self.defects:
-        #     self.put(defect, self.parent.route.destination)
-
-    def add_measurement(self, requirement, value, sufix=None, ms_chain=None,
+    def add_measurement(self, requirement, value, index=None, ms_chain=None,
                         link_part=True, uncertainty=0):
         """Add measurement of a characteristic to check
         """
-        subject = self.test.part if link_part else ms_chain[0]
-        measurement = subject.get_measurement(requirement.characteristic,
-                                              sufix, ms_chain)
+
+        subject = self.part if link_part else ms_chain[0]
+        measurement = subject.get_measurement(requirement, index, ms_chain)
+
         self.measurements.append(measurement)
         measurement.value = value
 
-        mode_key = measurement.eval_value(requirement.specs,
+        mode_key = measurement.eval_value(value, requirement.specs,
                                           uncertainty=uncertainty)
         if mode_key:
-            self.add_defect(requirement, mode_key, sufix, ms_chain, link_part)
+            self.add_defect(requirement, mode_key, index, ms_chain, link_part)
 
-    def add_defect(self, requirement, mode_key, sufix=None, ms_chain=None,
-                   link_part=True, qty=1):
+    def add_defect(self, requirement, mode_key, index=None, ms_chain=None,
+                   link_part=True, ocurrence=1):
         """Add defect of check
         """
         failure_mode = requirement.characteristic.failure_modes[mode_key]
         subject = self.part if link_part else ms_chain[0]
-        defect = subject.get_defect(failure_mode, sufix)
-        defect.qty = qty
+
+        defect = subject.get_defect(requirement, mode_key, index)
+        defect.ocurrence = ocurrence
+
         self.defects.append(defect)
 
-    def close(self):
-        pass
 
 
 class Defect(Item):
@@ -160,22 +196,20 @@ class Defect(Item):
         self.failure_mode = failure_mode
         self.tracking = tracking
         self.subject = subject
+        self.ocurrence = None
 
 
 class Measurement(Item):
     """Measurement of a subject done by a check action
     """
     def __init__(self, characteristic, tracking, subject):
+        self.subject = subject
         self.characteristic = characteristic
         self.tracking = tracking
         self.value = None
 
-        subject.measurements.append(self)
-        self.subject = subject
-
-    def eval_value(self, specs, uncertainty=0):
-        if self.value is None:
-            raise Exception('No value of measurement')
+    def eval_value(self, value, specs, uncertainty=0):
+        self.value = value
 
         low_limit = high_limit = None
         if 'limits' in specs:
@@ -214,15 +248,15 @@ class Control(op.Step):
 
         super().__init__(route, method_name, method_pars)
         self.requirement = requirement
-
-        self.last_count = 0
-        self.sampling = Sampling(self, *self._sampling_par[sampling])
         self.reaction_name = reaction
 
     def implement(self, operation):
         """Counts item (time or units)
         and using sampling decides to create check or not
         """
+        if not hasattr(self, 'sampling'):
+            self.sampling = Sampling(self, *self._sampling_par['100%'])
+
         if self.sampling.count(operation):
             return Check(operation, self, operation.update)
 
@@ -237,6 +271,7 @@ class Control(op.Step):
 class Sampling:
     def __init__(self, control,  quantity, frequency):
         self.control = control
+        control.last_count = 0
         self.quantity = quantity
         self.frequency = frequency
 

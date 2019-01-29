@@ -1,5 +1,5 @@
 from . import TestMapper
-from quactrl.data.sqlalchemy.mappers import core, products, quality # operations, quality
+from quactrl.data.sqlalchemy.mappers import core, products, operations, quality
 import quactrl.models.products as prd
 import quactrl.models.quality as qua
 
@@ -15,16 +15,20 @@ class A_QualityMapper(TestMapper):
         characteristic = prd.Characteristic(attribute, element)
         mode = qua.Mode('m')
         characteristic.add_failure_mode(mode)
+        requirement = prd.Requirement(characteristic, 'a@e>A', specs={'limits': 1})
 
-        subject.get_defect(characteristic.failure_modes['m'])
-        subject.get_measurement(characteristic)
+        subject.get_measurement(requirement)
+        subject.get_defect(requirement, 'm')
 
         session = self.Session()
+        session.add(subject)
         session.add(subject)
         session.commit()
 
         session = self.Session()
         subject = session.query(qua.Subject).first()
 
-        assert subject.defects[0].tracking == '1234/m-a@e'
-        assert subject.measurements[0].tracking == '1234/a@e'
+        assert subject.defects[0].tracking == '1234/m-a@e>A'
+        assert subject.measurements[0].tracking == '1234/a@e>A'
+
+        assert subject.measurements[0].subject == subject

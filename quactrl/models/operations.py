@@ -7,9 +7,9 @@ from .core import Node, Resource, UnitaryItem, Path, Flow, Token
 class Location(Node):
     """Site of products
     """
-    def __init__(self, key, name, description=None):
+    def __init__(self, key, name=None, description=None):
         self.key = key
-        self.name = name
+        self.name = name if name else key
         self.description = description
 
 
@@ -17,10 +17,9 @@ class Action(Flow):
     """Implementation of a step from a route
     """
     def __init__(self, operation, step, update=None):
-        super(Flow, self).__init__(operation.responsible, update)
+        super().__init__(operation.responsible, update)
         self.operation = operation
         self.step = step
-        self.inbox = {}
 
     @property
     def description(self):
@@ -28,8 +27,8 @@ class Action(Flow):
 
     def start(self, **inputs):
         super().start()
-        self.cavity = inputs.pop('cavity')
-        self.inbox.update(inputs)
+        for attr, value in inputs.items():
+            setattr(self, attr, value)
 
     def execute(self):
         """Execute method asociated to route
@@ -59,15 +58,14 @@ class Operation(Flow):
         self.route = route
 
         self.actions = []
-        self.inbox = {}
-        self.outbox = {}
         self._cancel = False
         self.on_action = None
 
     def start(self, **inputs):
         super().start()
-        self.cavity = inputs.pop('cavity')
-        self.inbox.update(inputs)
+        self.inbox = inputs
+        for att, value in inputs.items():
+            setattr(self, att, value)
 
     def execute(self):
         """Execute method asociated to route
@@ -89,7 +87,7 @@ class Operation(Flow):
             if action:  # step could no create operation!
                 self.on_action = action
                 self.actions.append(action)
-                action.start(cavity=self.cavity, **self.inbox)
+                action.start(**self.inbox)
                 action.execute()
                 if action.state == 'ongoing':
                     action.thread.join()
@@ -129,10 +127,6 @@ class Operation(Flow):
         self.question.answer(**kwargs)
 
 
-class WrongInboxContent(Exception):
-    pass
-
-
 class Route(Path):
     """Planning of an operation over resources
     """
@@ -148,7 +142,6 @@ class Route(Path):
         self.steps = []
 
         self.outputs = outputs if outputs else []
-        self.method = get_function(method_name) if method_name else None
         self.method_pars = method_pars if method_pars else {}
 
     def implement(self, responsible, update=None):
@@ -167,7 +160,6 @@ class Step(Path):
         self.route = route
         self.sequence = 0 if not route.steps else route.steps[-1].sequence + 5
         self.method_name = method_name
-        self.method = get_function(method_name) if method_name else None
         self.method_pars = method_pars if method_pars else {}
 
     def implement(self, operation):

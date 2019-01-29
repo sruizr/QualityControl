@@ -29,11 +29,10 @@ class DeviceModel(Resource):
 class Device(qua.Subject):
     def __init__(self, device_model, tracking, location=None,
                  pars=None):
-        super().__init__()
         self.model = device_model
         self.tracking = tracking
 
-        self.location = location
+        self.add(location)
         self.pars = pars if pars else {}
 
     @property
@@ -69,7 +68,7 @@ class DeviceProvider(providers.Provider):
         return self._device
 
 
-class DeviceContainer(containers.DynamicContainer):
+class Toolbox(containers.DynamicContainer):
     """Container of devices and its components
     """
     _providers = {
@@ -91,6 +90,7 @@ class DeviceContainer(containers.DynamicContainer):
 
     def _load_device_configs(self, devices):
         for device in devices:
+            print(device)
             config = {'strategy': 'device', 'class': device.model.class_name,
                       'name': device.name}
             args = [device.tracking]
