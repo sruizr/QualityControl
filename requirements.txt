@@ -2,7 +2,6 @@ pytest >=3.0.3
 sqlalchemy >= 1.1.
 pytest-cov
 faker
-behave
 
 # elpy environment
 jedi
@@ -12,9 +11,6 @@ yapf
 elpy
 black
 
-#rest-behave
-
-
 invoke
 
 # apirest
@@ -23,3 +19,5 @@ cherrypy
 requests
 
 dependency_injector
+
+# mysqlclient # If use mysql as data layer

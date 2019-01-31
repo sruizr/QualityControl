@@ -76,20 +76,15 @@ class PartModel(PartGroup):
 class Part(qua.Subject):
     """Part with unique serial number
     """
-    def __init__(self, model, serial_number, location=None, pars=None):
+    def __init__(self, model, serial_number, pars=None):
         self.model = model
         self.serial_number = serial_number
         self.pars = pars if pars else {}
 
-        self.add(location)
         self.dut = None
 
     def set_dut(self, connection):
         self.dut = self.model.create_dut(connection)
-
-    @property
-    def location(self):
-        pass
 
 
 class Requirement(Resource):

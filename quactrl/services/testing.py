@@ -3,6 +3,7 @@ import sys
 import traceback
 from queue import Queue
 from quactrl.models.devices import Toolbox
+from quactrl.data import NotFoundPath, NotFoundItem, NotFoundResource
 import quactrl.models.operations as op
 import quactrl.models.products as prd
 from quactrl.models.quality import DefectFound
@@ -212,12 +213,17 @@ class Inspector(threading.Thread):
         if (self.part_model is None
                 or self.part_model.key != part_number):
             self.part_model = self.db.PartModels().get(part_number)
-        if (
-                self.control_plan is None
-                or self.part_model not in
-                self.control_plan.outputs):
+            if self.part_model is None:
+                raise NotFoundResource('Not found part model for partnumber{}'.format(part_number))
+
+        if (self.control_plan is None
+            or self.part_model not in
+            self.control_plan.outputs):
             self.control_plan = (self.db.ControlPlans()
                                  .get_by(self.part_model, self.location))
+            if self.control_plan is None:
+                raise NotFoundPath('Not found control plan for {}'.format(part_number))
+
 
     def run(self):
         """Thread activation processing order by order"""
@@ -248,24 +254,17 @@ class Inspector(threading.Thread):
         """Get part from data layer if exist or create a new one
         """
 
-        # if not serial_number:
-        #     serial_number = self.sn_generator.get_serial_number(
-        #         self.part_model.key,
-        #         part_info.pop('batch_number')
-        #     )
-
         part = self.db.Parts().get_by(self.part_model, serial_number)
-
-        if part is None:
-            part = prd.Part(self.part_model, serial_number,
-                           location=self.location, pars=pars)
-
-        if part.location != self.location:
+        if part and part.location != self.location:
             raise WrongLocationError(
                 'Part {} with sn {} found on {}'.format(
                     part.model.key, part.tracking, part.location.key
                 )
             )
+
+        if part is None:
+            part = prd.Part(self.part_model, serial_number,
+                            pars=pars)
 
         if part.model.is_device():
             connection = self.toolbox.modbus_conn()
@@ -289,6 +288,7 @@ class Inspector(threading.Thread):
             self.part = part = self.get_part(serial_number, part_info)
             self.test = test = self.control_plan.implement(self.responsible,
                                                            self.update)
+
             self.db.Tests().add(test)
             self.db.Parts().add(part)
             logger.info('Test has been added on cavity {}'.format(self.cavity))

@@ -20,12 +20,12 @@ class Server:
         self.port = port
         cherrypy.tree.mount(root_resource, '/', self.conf)
 
-    def start(self):
+    def start(self, silent_access=False):
         cherrypy.server.socket_host = self.host
         cherrypy.server.socket_port = self.port
+        cherrypy.config.update({'log.screen': not silent_access})
 
         cherrypy.engine.start()
-        # cherrypy.quickstart(self.resources['/tester'], '/', self.conf )
 
     def stop(self):
         cherrypy.engine.exit()

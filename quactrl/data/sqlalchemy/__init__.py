@@ -13,21 +13,13 @@ metadata = MetaData()
 
 
 class Db:
-    def __init__(self, connection_string, create_all=False, drop_all=False):
+    def __init__(self, connection_string):
         if connection_string[:6] == 'sqlite':
             connect_args={'check_same_thread': False}
         else:
             connect_args = {}
         self.engine = create_engine(connection_string, connect_args=connect_args)
         metadata.bind = self.engine
-
-        import quactrl.data.sqlalchemy.tables
-        if drop_all:
-            create_all = True
-            metadata.drop_all()
-
-        if create_all:
-            metadata.create_all()
 
         # load all mappers
         from quactrl.data.sqlalchemy.mappers import load_all_mappers
@@ -36,6 +28,12 @@ class Db:
     @property
     def Session(self):
         return sessionmaker(bind=self.engine, autoflush=False)
+
+    def create_schema(self):
+        metadata.create_all()
+
+    def drop_all(self):
+        metadata.drop_all()
 
 
 class Repository:
@@ -142,21 +140,18 @@ class ControlPlanRepo(Repository):
     def get_by(self, part_model, location):
         """Return control plan for a part_model on a location
         """
-        print(location.key)
-        control_plan = self.session.query(ControlPlan).filter(
+        control_plan = self.session.query(ControlPlan).join(ControlPlan.outputs).filter(
             and_(
                 ControlPlan.source == location,
-                ControlPlan.outputs.any(PartModel.key == part_model.key)
-            )
-
-        ).first()
+                PartModel.key == part_model.key)
+            ).first()
 
         if control_plan is None:
             for group in part_model.groups:
-                control_plan = self.session.query(ControlPlan).filter( and_(
-                    ControlPlan.destination == location,
-                    ControlPlan.outputs.any(PartGroup.key == group.key)
-                )).first()
+                control_plan = self.session.query(ControlPlan).join(ControlPlan.outputs).filter( and_(
+                    ControlPlan.source == location,
+                    PartGroup.key == group.key)
+                ).first()
                 if control_plan:
                     return control_plan
 

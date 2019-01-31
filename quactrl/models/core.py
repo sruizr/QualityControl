@@ -108,6 +108,11 @@ class UnitaryItem(Item):
     def move(self, from_node, to_node, flow):
         super().move(from_node, to_node, flow, 1)
 
+    @property
+    def location(self):
+        for token in self.tokens:
+            if token.current:
+                return token.node
 
 class Path:
     @property
@@ -125,19 +130,19 @@ class Flow:
             setattr(self, att, value)
 
     @property
-    def state(self):
-        return self._state
+    def status(self):
+        return self.state
 
-    @state.setter
-    def state(self, state):
-        self._state = state
-        if hasattr(self, 'update'):
+    @status.setter
+    def status(self, state):
+        self.state = state
+        if hasattr(self, 'update') and self.update:
             self.update(state, self)
 
     def start(self):
-        self.state = 'started'
+        self.status = 'started'
         self.started_on = datetime.datetime.now()
 
     def close(self):
-        self.state = 'closed'
+        self.status = 'closed'
         self.finished_on = datetime.datetime.now()

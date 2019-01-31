@@ -14,29 +14,26 @@ class Subject(UnitaryItem):
         self.measurements = []
         self.defects = []
 
-    def get_measurement(self, requirement, index=None, ms_chain=None):
-
+    def get_measurement(self, requirement, index=None):
+        """Return measurement instance of subject
+        """
         eid = '>{}'.format(requirement.eid) if requirement.eid else ''
         sufix = '' if index is None else '_{:02d}'.format(index)
         tracking = requirement.characteristic.key + eid + sufix
         tracking = '{}/{}'.format(self.tracking, tracking)
 
-        # if ms_chain:
-        #     tracking = '{} [{}]'.format(
-        #         tracking, ', '.join([ms.tracking for ms in ms_chain])
-        #     )
-
         for measurement in self.measurements:
             if measurement.tracking == tracking:
                 return measurement
 
+        # No found, creating a new one
         measurement = Measurement(requirement.characteristic, tracking, self)
         if measurement not in self.measurements:
             self.measurements.append(measurement)
         return measurement
 
     def get_defect(self, requirement, mode_key, index=None):
-        """Add defect to subject if not exist and return it
+        """Return defect instance of subject
         """
         failure_mode = requirement.characteristic.failure_modes[mode_key]
 
@@ -49,39 +46,45 @@ class Subject(UnitaryItem):
             if defect.tracking == tracking:
                 return defect
 
+        # Not found, creating a new one
         defect = Defect(failure_mode, tracking, self)
         if defect not in self.defects:
             self.defects.append(defect)
         return defect
 
     def clear_defects(self, check):
-        self._clear_defects_by_requi(check.control.requirement, check)
+        self._clear_requi_defects(check.control.requirement, check)
 
-    def _clear_defects_by_requi(self, requirement, check):
+    def _clear_requi_defects(self, requi, check):
+        req_key = '{}>{}'.format(requi.characteristic.key, requi.eid)
         for defect in self.defects:
-            if requirement.eid in defect.tracking:
-                defect.clear(check)
-            for requi in requirement.requirements.values():
-                self._clear_defects_by_requi(requi, check)
+            if req_key in defect.tracking:
+                defect.clear(check.location, check)
+                for loc in check.location.sub_locations:
+                    defect.clear(loc, check)
+
+        for req in requi.requirements.values():
+            self._clear_requi_defects(req, check)
 
 
 class ControlPlan(op.Route):
     def implement(self, responsible, update=None):
-        return Test(self, responsible, update)
+        return self.can_implement(self, Test, responsible, update)
 
 
 class Test(op.Operation):
     def start(self, **kwargs):
         super().start(**kwargs)
+        self.part.update_qty(1, self.control_plan.source, self)
 
     def close(self):
-        if self.state in ('done', 'walking'):
-            if self.state == 'walking':
+        if self.status in ('done', 'walking'):
+            if self.status == 'walking':
                 self._cancel = True
-            state = 'failed' if self.has_failed() else 'success'
+            status = 'failed' if self.has_failed() else 'success'
 
-            self.state = state
-            if state == 'success':
+            self.status = status
+            if status == 'success':
                 self.part.move(self.control_plan.source,
                                self.control_plan.destination,
                                self)
@@ -91,7 +94,7 @@ class Test(op.Operation):
         """Even is not finished returns if test is nok
         """
         for action in self.actions:
-            if action.state in ('nok', 'cancelled'):
+            if action.status in ('nok', 'cancelled'):
                 return True
         return False
 
@@ -111,82 +114,70 @@ class Check(op.Action):
     def control(self):
         return self.step
 
+    @property
+    def location(self):
+        if not hasattr(self, '_location'):
+            self._location = (self.control.source if self.control.source
+                              else self.test.control_plan.source)
+        return self._location
+
     def start(self, **inputs):
         super().start(**inputs)
         self.measurements = []
         self.defects = []
-        self._remove_part_defects()
-
-    def _remove_part_defects(self):
-        location = self.source if self.source else self.test.source
-        self._remove_requi_defects(self.requirement, location)
-
-    def _remove_requi_defects(self, requi, location):
-        req_key = '{}.{}'.format(requi.characteristic.key, requi.eid)
-        for defect in part.defects:
-            if requi_key in defect.tracking:
-                defect.clear(location, self)
-                for loc in location.sub_locations:
-                    defect.clear(loc, self)
-        for req in requi.requirements.values():
-            self._remove_requi_defects(requi, location)
+        self.part.clear_defects(self)
+        for device in self.devices.values():
+            device.clear_defects(self)
 
     def close(self):
         """Eval results once check is finished, if ttf raises DefectFound
         """
-        if self.state == 'done':
-            self.state = 'nok' if self.defects else 'ok'
-            location = self.source if self.source else self.test.source
+        if self.status == 'done':
+            self.status = 'nok' if self.defects else 'ok'
+
             location = (
-                location
+                self.location
                 if self.cavity is None else
-                location.sub_locations['{}_{}'.format(location.key, self.cavity)]
+                 self.location.sub_locations['{}_{}'.format(self.location.key, self.cavity)]
             )
 
             for defect in self.defects:
                 defect.update_qty(defect.ocurrence,
-                                  location, check)
+                                  location, self)
 
             for measurement in self.measurements:
                 measurement.tokens.append(Token(
-                    measurement, location, measurement.value,self
+                    measurement, location, measurement.value, self
                 ))
 
             self.finished_on = datetime.datetime.now()
-            if self.state == 'nok':
+            if self.status == 'nok':
                 self.control.get_reaction()(self)
                 if self.tff:
                     raise DefectFound()
 
 
-    def add_measurement(self, requirement, value, index=None, ms_chain=None,
-                        link_part=True, uncertainty=0):
+    def add_measurement(self, requirement, value, subject, index=None, uncertainty=0):
         """Add measurement of a characteristic to check
         """
-
-        subject = self.part if link_part else ms_chain[0]
-        measurement = subject.get_measurement(requirement, index, ms_chain)
+        measurement = subject.get_measurement(requirement, index)
 
         self.measurements.append(measurement)
-        measurement.value = value
-
         mode_key = measurement.eval_value(value, requirement.specs,
                                           uncertainty=uncertainty)
-        if mode_key:
-            self.add_defect(requirement, mode_key, index, ms_chain, link_part)
 
-    def add_defect(self, requirement, mode_key, index=None, ms_chain=None,
-                   link_part=True, ocurrence=1):
+        if mode_key:
+            self.add_defect(requirement, mode_key, subject, index)
+
+    def add_defect(self, requirement, mode_key, subject, index=None, ocurrence=1):
         """Add defect of check
         """
         failure_mode = requirement.characteristic.failure_modes[mode_key]
-        subject = self.part if link_part else ms_chain[0]
 
         defect = subject.get_defect(requirement, mode_key, index)
         defect.ocurrence = ocurrence
 
         self.defects.append(defect)
-
 
 
 class Defect(Item):
@@ -263,8 +254,10 @@ class Control(op.Step):
     def get_reaction(self):
         """Return a reaction method to be executed if check is nok
         """
-        if self.reaction_name:
-            return get_function(self.reaction_name)
+        reaction_name = self.method_pars.get('reaction_name')
+        if reaction_name:
+            return get_function(reaction_name)
+
         return lambda check: None
 
 
