@@ -69,7 +69,7 @@ class Subject(UnitaryItem):
 
 class ControlPlan(op.Route):
     def implement(self, responsible, update=None):
-        return self.can_implement(self, Test, responsible, update)
+        return self.can_implement(Test, responsible, update)
 
 
 class Test(op.Operation):

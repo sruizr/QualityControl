@@ -4,6 +4,10 @@ from quactrl.helpers import get_function
 from .core import Node, Resource, UnitaryItem, Path, Flow, Token
 
 
+class NotAuthorizedException(Exception):
+    pass
+
+
 class Location(Node):
     """Site of products
     """
@@ -136,6 +140,7 @@ class Route(Path):
         """Create route from planned inputs and outputs, can be embebed
         """
         self.parent = parent
+        self.role = role
         self.sequence = 0
         self.source = source
         self.destination = destination
@@ -151,7 +156,7 @@ class Route(Path):
 
     def can_implement(self, Implementation, responsible, update):
         if not self.is_authorized(responsible):
-            raise NotAuthorizeException(
+            raise NotAuthorizedException(
                 'Responsible {} can not execute flow'.format(responsible.description)
             )
         return Implementation(self, responsible, update)
