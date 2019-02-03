@@ -12,8 +12,8 @@ metadata = MetaData()
 
 
 class Db:
-    def __init__(self, connection_string, create_all=False):
-        self.engine = create_engine(connection_string)
+    def __init__(self, connection_string, create_all=False, **kwargs):
+        self.engine = create_engine(connection_string, **kwargs)
         metadata.bind = self.engine
 
         import quactrl.data.sqlalchemy.tables

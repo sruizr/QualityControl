@@ -27,6 +27,7 @@ class Data(containers.DynamicContainer):
 
         self.Session = providers.ThreadLocalSingleton(self.db.Session,
                                                       connection_string)
+
         self._load_repos()
 
     def _get_class(self, name):

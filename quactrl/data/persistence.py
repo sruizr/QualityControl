@@ -1,4 +1,3 @@
-
 from sqlalchemy import create_engine, ForeignKey, Column, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, backref, relationship, scoped_session
 from quactrl.domain import Base
