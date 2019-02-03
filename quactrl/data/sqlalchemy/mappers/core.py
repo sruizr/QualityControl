@@ -1,4 +1,5 @@
-from sqlalchemy.orm import mapper, relationship
+from sqlalchemy import and_
+from sqlalchemy.orm import mapper, relationship, backref
 import quactrl.models.core as core
 import quactrl.data.sqlalchemy.tables as tables
 
@@ -31,6 +32,20 @@ def item_relationship(*args, **kwargs):
     return relationship(*args, **kwargs)
 
 
+def node_relationship(*args, **kwargs):
+    mapping = {
+        'secondary': tables.node_link,
+        'primaryjoin': (
+            tables.node.c.id == tables.node_link.c.from_node_id
+        ),
+        'secondaryjoin': (
+            tables.node.c.id == tables.node_link.c.to_node_id
+        )
+    }
+    kwargs.update(mapping)
+    return relationship(*args, **kwargs)
+
+
 mapper(core.Node, tables.node,
        polymorphic_on=tables.node.c.is_a,
        polymorphic_identity='node')
@@ -56,8 +71,13 @@ mapper(core.Path, tables.path,
                core.Node,
                foreign_keys=[tables.path.c.role_id]
            ),
-           'parent': relationship(core.Path),
-           'subflows': relationship(core.Path, )
+           'subpaths': relationship(
+               core.Path,
+               cascade="all, delete-orphan",
+               order_by=tables.path.c.sequence,
+               backref=backref('parent',
+                               remote_side=tables.path.c.id)
+           )
        })
 
 
@@ -65,8 +85,17 @@ mapper(core.Item, tables.item,
        polymorphic_on=tables.item.c.is_a,
        properties={
            'resource': relationship(core.Resource),
-           'tokens': relationship(core.Token)
+           'tokens': relationship(core.Token,
+                                  primaryjoin=and_(
+                                      tables.item.c.id==tables.token.c.item_id,
+                                      tables.token.c.current==True
+                                  )
+           )
        })
+
+
+mapper(core.UnitaryItem, inherits=core.Item,
+       polymorphic_identity='unitary_item')
 
 
 mapper(core.Flow, tables.flow,
@@ -76,7 +105,13 @@ mapper(core.Flow, tables.flow,
                core.Node,
                foreign_keys=[tables.flow.c.responsible_id]
            ),
-           'parent': relationship(core.Flow),
+           'subflows': relationship(
+               core.Flow,
+               cascade="all, delete-orphan",
+               order_by=tables.flow.c.id,
+               backref=backref('parent',
+                               remote_side=tables.flow.c.id)
+           ),
            'path': relationship(core.Path)
        })
 

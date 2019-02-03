@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (Table, MetaData, Column, Integer, String, ForeignKey,
-                        DateTime, Float)
+                        DateTime, Float, Boolean)
 from .types import JsonEncodedDict
 from quactrl.data.sqlalchemy import metadata
 
@@ -33,11 +33,18 @@ resource_link = Table('resource_link', metadata,
                       Column('to_resource_id', Integer,
                              ForeignKey('resource.id')))
 
+
+path_resource = Table('path_resource', metadata,
+                     Column('id', Integer, primary_key=True),
+                     Column('path_id', Integer, ForeignKey('path.id')),
+                     Column('resource_id', Integer, ForeignKey('resource.id')))
+
+
 path = Table('path', metadata,
              Column('id', Integer, primary_key=True),
              Column('is_a', String(50)),
              Column('parent_id', Integer, ForeignKey('path.id')),
-             Column('seq', Integer),
+             Column('sequence', Integer),
              Column('from_node_id', Integer, ForeignKey('node.id')),
              Column('to_node_id', Integer, ForeignKey('node.id')),
              Column('role_id', Integer, ForeignKey('node.id')),
@@ -71,7 +78,7 @@ token = Table(
     Column('item_id', Integer, ForeignKey('item.id'), index=True),
     Column('node_id', Integer, ForeignKey('node.id'), index=True),
     Column('qty', Float),
-    Column('state', String(15))
+    Column('current', Boolean)
 )
 
 

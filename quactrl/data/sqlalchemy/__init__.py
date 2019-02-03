@@ -1,24 +1,25 @@
-from sqlalchemy import MetaData, create_engine
+from sqlalchemy import MetaData, create_engine, and_
 from sqlalchemy.orm import sessionmaker
+from quactrl.models.core import Token
 from quactrl.models.hhrr import Person, Role
 from quactrl.models.operations import Operation, Step, Location
-from quactrl.models.quality import Mode
+from quactrl.models.quality import Mode, ControlPlan
 from quactrl.models.devices import Device, DeviceModel
 from quactrl.models.products import (Requirement, Element, Attribute,
-                                     PartModel, PartGroup, Characteristic)
+                                     PartModel, PartGroup, Characteristic, Part)
 
 
 metadata = MetaData()
 
 
 class Db:
-    def __init__(self, connection_string, create_all=False, **kwargs):
-        self.engine = create_engine(connection_string, **kwargs)
+    def __init__(self, connection_string):
+        if connection_string[:6] == 'sqlite':
+            connect_args={'check_same_thread': False}
+        else:
+            connect_args = {}
+        self.engine = create_engine(connection_string, connect_args=connect_args)
         metadata.bind = self.engine
-
-        import quactrl.data.sqlalchemy.tables
-        if create_all:
-            metadata.create_all()
 
         # load all mappers
         from quactrl.data.sqlalchemy.mappers import load_all_mappers
@@ -26,7 +27,13 @@ class Db:
 
     @property
     def Session(self):
-        return sessionmaker(bind=self.engine)
+        return sessionmaker(bind=self.engine, autoflush=False)
+
+    def create_schema(self):
+        metadata.create_all()
+
+    def drop_all(self):
+        metadata.drop_all()
 
 
 class Repository:
@@ -43,8 +50,10 @@ class KeyRepo(Repository):
         self.RepoClass = RepoClass
 
     def get(self, key):
-        return self.session.query(self.RepoClass).filter(self.RepoClass.key==key).one()
-
+        resource = self.session.query(self.RepoClass).filter(self.RepoClass.key==key).first()
+        if resource is None:
+            raise KeyError('resource with key "{}" is not found'.format(key))
+        return resource
 
 class RequirementRepo(KeyRepo):
     def __init__(self, session):
@@ -106,23 +115,48 @@ class DeviceRepo(Repository):
         super().__init__(session)
 
     def get_all_from(self, location_key):
-        pass
+        location = self.session.query(Location).filter(Location.key == location_key).one()
+        results =  self.session.query(Device, Token).filter(Token.node == location).all()
+        return [result[0] for result in results]
 
 
 class PartRepo(Repository):
+    def __init__(self, session):
+        super().__init__(session)
+
     def get_by(self, part_model, serial_number):
-        pass
+        return self.session.query(Part).filter(and_(
+            Part.serial_number == serial_number,
+            Part.model == part_model
+            )).first()
 
     def get_last_serial_number(self, part_model, batch_number, pos):
         """Retrieve the last serial number from database (if exists...)
         """
         pass
 
+
 class ControlPlanRepo(Repository):
     def get_by(self, part_model, location):
         """Return control plan for a part_model on a location
         """
-        pass
+        control_plan = self.session.query(ControlPlan).join(ControlPlan.outputs).filter(
+            and_(
+                ControlPlan.source == location,
+                PartModel.key == part_model.key)
+            ).first()
+
+        if control_plan is None:
+            for group in part_model.groups:
+                control_plan = self.session.query(ControlPlan).join(ControlPlan.outputs).filter( and_(
+                    ControlPlan.source == location,
+                    PartGroup.key == group.key)
+                ).first()
+                if control_plan:
+                    return control_plan
+
+        return control_plan
+
 
 class TestRepo(Repository):
     pass

@@ -1,4 +1,5 @@
 import datetime
+from quactrl.helpers import get_function
 """Base of model layer is a graph
 """
 
@@ -7,14 +8,12 @@ class NotFoundQuantity(Exception):
 
 
 class Node:
-    pass
+    def __init__(self, **kwargs):
+        for att, value in kwargs.items():
+            setattr(self, att, value)
 
 
 class Resource:
-    pass
-
-
-class ResourceLink:
     pass
 
 
@@ -28,58 +27,56 @@ class Item:
 
     @property
     def qty(self):
-        return sum([token.qty for token in self.tokens])
+        return sum([token.qty
+                    for token in self.tokens
+                    if token.current])
 
     @property
     def stocks(self):
         stocks = {}
-        for token in self.tokes:
-            if token.node not in stocks:
-                stocks[token.node] = 0
-            stocks[token.node] += token.qty
+        for token in self.tokens:
+            if token.current:
+                stocks[token.node] = token.qty
 
-        return {node: qty
-                for node, qty in stocks.items()
-                if qty != 0}
+        return stocks
 
-    def add(self, qty, node, flow=None):
+    def get_token(self, node):
+        for token in self.tokens:
+            if token.current and token.node == node:
+                return token
+
+    def update_qty(self, qty, node, flow):
         """Add a qty on a node
         """
-        self.tokens.append(
-            Token(self, node, qty, flow)
-        )
-
-    def remove(self, qty, node, flow):
-        """Remove a qty of item on node
-        """
-        stocks = self.stocks
-        if node in stocks:
-            if qty >= stocks[node]:
-                self.tokens.append(
-                    Token(self, node, -qty, flow)
-                )
-            else:
-                raise NotFoundQuantity()
+        if qty == 0:
+            self.clear(node, flow)
+        elif qty < 0:
+            raise Exception('Quantity should not be negative')
         else:
-            raise NotFoundQuantity()
+            token = self.get_token(node)
+            if token:
+                token.current = False
 
-    def clear(self, flow, node=None):
-        """Removes all quantities from node
+            new_token = Token(self, node, qty, flow)
+            self.tokens.append(new_token)
+
+    def clear(self, node, flow):
+        """Empty node from quantity
         """
-        qty = self.stocks.get(node)
-        if qty:
-            self.remove(qty, node, flow)
+        token = self.get_token(node)
+        if token:
+            token.current = False
+        new_token = Token(self, node, 0, flow)
+        token.current = False
+        self.tokens.append(token)
 
     def move(self, from_node, to_node, flow, qty=None):
-        avalaible_qty = self.stocks.get(from_node)
-        if not qty:
-            qty = avalaible_qty
+        token = self.get_token(from_node)
+        if qty is None:
+            qty = token.qty
 
-        if qty > avalaible_qty:
-            raise NotFoundQuantity()
-
-        self.remove(qty, from_node, flow)
-        self.add(qty, to_node, flow)
+        self.update_qty(token.qty - qty, from_node, flow)
+        self.update_qty(qty, to_node, flow)
 
     def undo_flow(self, flow):
         "Clear all tokens of a flow"
@@ -94,6 +91,7 @@ class Token:
         self.node = node
         self.qty = qty
         self.flow = flow
+        self.current = True
 
 
 class UnitaryItem(Item):
@@ -102,35 +100,49 @@ class UnitaryItem(Item):
     def add(self, node, flow=None):
         if self.stocks:
             raise Exception('Unitary item can not add more quantity to any node')
-        super().add(1, node, flow)
+        super().update_qty(1, node, flow)
 
     def remove(self, node, flow):
-        super().remove(1, node, flow)
+        super().clear(node, flow)
 
     def move(self, from_node, to_node, flow):
         super().move(from_node, to_node, flow, 1)
 
+    @property
+    def location(self):
+        for token in self.tokens:
+            if token.current:
+                return token.node
 
 class Path:
-    pass
+    @property
+    def method(self):
+        if not hasattr(self, '_method'):
+            self._method = get_function(self.method_name) if self.method_name else None
+        return self._method
 
 
 class Flow:
-    @property
-    def state(self):
-        return self._state
+    def __init__(self, responsible, update=None, **kwargs):
+        self.responsible = responsible
+        self.update = update
+        for att, value in kwargs.items():
+            setattr(self, att, value)
 
-    @state.setter
-    def state(self, state):
-        self._state = state
-        if hasattr(self, 'update'):
+    @property
+    def status(self):
+        return self.state
+
+    @status.setter
+    def status(self, state):
+        self.state = state
+        if hasattr(self, 'update') and self.update:
             self.update(state, self)
 
     def start(self):
-        self.state = 'started'
+        self.status = 'started'
         self.started_on = datetime.datetime.now()
 
     def close(self):
-        self.state = 'closed'
+        self.status = 'closed'
         self.finished_on = datetime.datetime.now()
-    pass

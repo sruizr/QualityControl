@@ -14,12 +14,18 @@ class PartGroup(Resource):
         self.description = description
         self.pars = pars if pars else {}
 
-        self.kwargs = self.pars.get('kwargs', {})
-        device_class = self.pars.get('device_class')
-        self.Device = get_class(device_class) if device_class else None
-
         self.models = []
         self.requirements = {}
+
+    @property
+    def Device(self):
+        if not hasattr(self, '_Device'):
+            device_class = self.pars.get('device_class')
+            self._Device = None
+            if device_class is not None:
+                self._Device = get_class(device_class) if device_class else None
+                self.kwargs = self.pars.get('kwargs', {})
+        return self._Device
 
     def add_model(self, part_model):
         if part_model not in self.models:
@@ -34,14 +40,25 @@ class PartModel(PartGroup):
         super().__init__(part_number, name, description, pars)
         self.groups = []
 
-
     def add_group(self, part_group):
         if part_group not in self.groups:
             self.groups.append(part_group)
             part_group.add_model(self)
 
+    @property
+    def Device(self):
+        if not hasattr(self, '_Device'):
+            device_class = self.pars.get('device_class')
+            if device_class is None:
+                self._Device, self.kwargs = self._find_Device()
+            else:
+                self._Device = get_class(device_class)
+                self.kwargs = self.pars.get('kwargs', {})
+
+        return self._Device
+
     def _find_Device(self):
-        for group in self.part_groups:
+        for group in self.groups:
             if group.Device:
                 return group.Device, group.kwargs.copy()
         return None, None
@@ -50,41 +67,24 @@ class PartModel(PartGroup):
         """Return a device instance if part model is a device
         """
         if self.Device:
-            return self.Device(connection, self.kwargs)
-        else:
-            Device, kwargs = self._find_Device()
-            if Device:
-                kwargs.update(self.kwargs)
-                return Device(connection, **kwargs)
+            return self.Device(connection, **self.kwargs)
 
     def is_device(self):
-        if self.Device:
-            return True
-        else:
-            Device, kwargs = self._find_Device()
-            return Device is not None
+        return self.Device is not None
 
 
 class Part(qua.Subject):
     """Part with unique serial number
     """
-    def __init__(self, model, serial_number, location=None, pars=None):
-        super().__init__()
+    def __init__(self, model, serial_number, pars=None):
         self.model = model
         self.serial_number = serial_number
         self.pars = pars if pars else {}
 
-        self.add(location)
         self.dut = None
 
     def set_dut(self, connection):
         self.dut = self.model.create_dut(connection)
-
-    @property
-    def location(self):
-        locations = [location
-                     for location in self.stocks.keys()]
-        return locations[0] if len(locations) == 1 else locations
 
 
 class Requirement(Resource):

@@ -2,9 +2,15 @@ import threading
 import sys
 import traceback
 from queue import Queue
-from quactrl.models.devices import DeviceContainer
+from quactrl.models.devices import Toolbox
+from quactrl.data import NotFoundPath, NotFoundItem, NotFoundResource
 import quactrl.models.operations as op
+import quactrl.models.products as prd
 from quactrl.models.quality import DefectFound
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class WrongLocationError(Exception):
@@ -31,8 +37,10 @@ class Service:
         self.inspectors = {}
         self._lock = threading.Lock()
 
-        all_devices = self.db.Devices().get_all_from(location)
-        self.dev_container = DeviceContainer(all_devices)
+        all_devices = self.db.Devices().get_all_from(self.location_key)
+        logger.info('Sesssion on main is {}'.format(self.db.Session()))
+        logger.info('Sesssion on main is {}'.format(self.db.Session()))
+        self.toolbox = Toolbox(all_devices)
 
     @property
     def tests(self):
@@ -58,7 +66,7 @@ class Service:
             self.restart_inspector(cavity)
         else:
             self.inspectors[cavity] = inspector = Inspector(
-                self.db, self.dev_container,
+                self.db, self.toolbox,
                 self.location_key, cavity, self.tff
             )
             self.events[cavity] = []
@@ -161,11 +169,11 @@ class Service:
 class Inspector(threading.Thread):
     """Inspector of one cavity sharing some devices on a location
     """
-    def __init__(self, database, dev_container, location_key,
+    def __init__(self, database, toolbox, location_key,
                  cavity=None, tff=True):
         """Args:
         database(Container): Persistence layer container of providers
-        dev_container(Container): Container of devices
+        toolbox(Container): Container of devices
         location_key: where is located the test station and all its devices
         cavity: cavity number, None is the station is not multicavity
         tff(Boolean): Till first failure, stops test when first failure is found
@@ -173,12 +181,11 @@ class Inspector(threading.Thread):
         name = 'Inspector'
         if cavity is not None:
             name += '_{}'.format(cavity)
-
         super().__init__(name=name)
 
         self.db = database
-        self.dev_container = dev_container
-        self.location = self.db.Locations().get(location_key)
+        self.toolbox = toolbox
+        self.location_key = location_key
         self.cavity = cavity
         self.tff = tff
 
@@ -206,15 +213,24 @@ class Inspector(threading.Thread):
         if (self.part_model is None
                 or self.part_model.key != part_number):
             self.part_model = self.db.PartModels().get(part_number)
-        if (
-                self.control_plan is None
-                or self.part_model not in
-                self.control_plan.outputs):
+            if self.part_model is None:
+                raise NotFoundResource('Not found part model for partnumber{}'.format(part_number))
+
+        if (self.control_plan is None
+            or self.part_model not in
+            self.control_plan.outputs):
             self.control_plan = (self.db.ControlPlans()
                                  .get_by(self.part_model, self.location))
+            if self.control_plan is None:
+                raise NotFoundPath('Not found control plan for {}'.format(part_number))
+
 
     def run(self):
         """Thread activation processing order by order"""
+        self.location = self.db.Locations().get(self.location_key)
+        self.devices = {device.tracking: device
+                        for device in self.db.Devices().get_all_from(self.location_key)}
+
         while not self._stop_event.is_set():
             try:
                 self.state = 'idle'
@@ -229,35 +245,29 @@ class Inspector(threading.Thread):
             except Exception as e:
                 trc = sys.exc_info()
                 self.update('loop_error', e, traceback.format_tb(trc[2]))
+                logger.exception(e)
                 raise e
-
+        logger.info('Inspector {} has stopped'.format(self.name))
         self.state = 'stopped'
 
     def get_part(self, serial_number, pars):
         """Get part from data layer if exist or create a new one
         """
 
-        # if not serial_number:
-        #     serial_number = self.sn_generator.get_serial_number(
-        #         self.part_model.key,
-        #         part_info.pop('batch_number')
-        #     )
-
         part = self.db.Parts().get_by(self.part_model, serial_number)
-
-        if part is None:
-            part = op.Part(self.part_model, serial_number,
-                           location=self.location, pars=pars)
-
-        if part.location != self.location:
+        if part and part.location != self.location:
             raise WrongLocationError(
                 'Part {} with sn {} found on {}'.format(
                     part.model.key, part.tracking, part.location.key
                 )
             )
 
+        if part is None:
+            part = prd.Part(self.part_model, serial_number,
+                            pars=pars)
+
         if part.model.is_device():
-            connection = self.dev_container.modbus_conn()
+            connection = self.toolbox.modbus_conn()
             connection = connection if self.cavity is None \
                 else connection[self.cavity]
             part.set_dut(connection)
@@ -268,6 +278,7 @@ class Inspector(threading.Thread):
         """Process a full test  from an order
         """
         try:
+            logger.info('Init testing on cavity {}'.format(self.cavity))
             part_info, responsible_key = order
             self.set_responsible(responsible_key)
 
@@ -277,12 +288,15 @@ class Inspector(threading.Thread):
             self.part = part = self.get_part(serial_number, part_info)
             self.test = test = self.control_plan.implement(self.responsible,
                                                            self.update)
+
             self.db.Tests().add(test)
-            test.start(part=part, dev_container=self.dev_container,
+            self.db.Parts().add(part)
+            logger.info('Test has been added on cavity {}'.format(self.cavity))
+            test.start(part=part, toolbox=self.toolbox, devices=self.devices,
                        cavity=self.cavity, tff=self.tff)
             try:
                 if part.dut and hasattr(part.dut, 'supply_voltage'):
-                    self.dev_container.dyncir().switch_on_dut(
+                    self.toolbox.dyncir().switch_on_dut(
                         voltage=part.dut.supply_voltage,
                         wait_after=1, cavity=self.cavity
                     )
@@ -292,13 +306,14 @@ class Inspector(threading.Thread):
             except DefectFound:
                 test.close()
             except Exception as e:
+                logger.exception(e)
                 trc = sys.exc_info()
                 self.update('test_error', e, traceback.format_tb(trc[2]))
                 test.cancel()
             finally:
                 self.db.Session().commit()
                 if part.dut and hasattr(part.dut, 'supply_voltage'):
-                    self.dev_container.dyncir().switch_off_dut(
+                    self.toolbox.dyncir().switch_off_dut(
                         voltage=part.dut.supply_voltage,
                         wait_after=0, cavity=self.cavity
                     )

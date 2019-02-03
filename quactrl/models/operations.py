@@ -4,12 +4,16 @@ from quactrl.helpers import get_function
 from .core import Node, Resource, UnitaryItem, Path, Flow, Token
 
 
+class NotAuthorizedException(Exception):
+    pass
+
+
 class Location(Node):
     """Site of products
     """
-    def __init__(self, key, name, description=None):
+    def __init__(self, key, name=None, description=None):
         self.key = key
-        self.name = name
+        self.name = name if name else key
         self.description = description
 
 
@@ -17,10 +21,9 @@ class Action(Flow):
     """Implementation of a step from a route
     """
     def __init__(self, operation, step, update=None):
-        super(Flow, self).__init__(operation.responsible, update)
+        super().__init__(operation.responsible, update)
         self.operation = operation
         self.step = step
-        self.inbox = {}
 
     @property
     def description(self):
@@ -28,26 +31,26 @@ class Action(Flow):
 
     def start(self, **inputs):
         super().start()
-        self.cavity = inputs.pop('cavity')
-        self.inbox.update(inputs)
+        for attr, value in inputs.items():
+            setattr(self, attr, value)
 
     def execute(self):
         """Execute method asociated to route
         """
-        if (self.state == 'started'):
+        if (self.status == 'started'):
             if self.step.method:
                 self.step.method(self, **self.step.method_pars)
                 if hasattr(self, 'thread'):
-                    self.state = 'ongoing'
+                    self.status = 'ongoing'
                 else:
-                    self.state = 'done'
+                    self.status = 'done'
 
     def cancel(self):
         """Cancel execution of operation
         """
-        if self.state == 'ongoing':
+        if self.status == 'ongoing':
             self.thread.cancel()
-        self.state = 'cancelled'
+        self.status = 'cancelled'
         self.finished_on = datetime.datetime.now()
 
 
@@ -59,48 +62,47 @@ class Operation(Flow):
         self.route = route
 
         self.actions = []
-        self.inbox = {}
-        self.outbox = {}
         self._cancel = False
         self.on_action = None
 
     def start(self, **inputs):
         super().start()
-        self.cavity = inputs.pop('cavity')
-        self.inbox.update(inputs)
+        self.inbox = inputs
+        for att, value in inputs.items():
+            setattr(self, att, value)
 
     def execute(self):
         """Execute method asociated to route
         """
-        if (self.state == 'started'
-                or self.state == 'walked'):
+        if (self.status == 'started'
+                or self.status == 'walked'):
             if self.route.method:
                 self.route.method(self, **self.route.method_pars)
                 if hasattr(self, 'thread'):
-                    self.state = 'ongoing'
-            self.state = 'done'
+                    self.status = 'ongoing'
+            self.status = 'done'
 
     def walk(self):
         """Execute each child action
         """
-        self.state = 'walking'
+        self.status = 'walking'
         self.on_action = None
         for action in self.action_iterator():
             if action:  # step could no create operation!
                 self.on_action = action
                 self.actions.append(action)
-                action.start(cavity=self.cavity, **self.inbox)
+                action.start(**self.inbox)
                 action.execute()
-                if action.state == 'ongoing':
+                if action.status == 'ongoing':
                     action.thread.join()
                     if hasattr(action, 'exception'):
                         # The thread has raised an exception
                         raise action.exception
-                    action.state = 'done'
+                    action.status = 'done'
                 action.close()
             self.on_action = None
 
-        self.state = 'walked'
+        self.status = 'walked'
 
     def action_iterator(self):
         for step in self.route.steps:
@@ -112,13 +114,13 @@ class Operation(Flow):
     def cancel(self):
         """Cancel execution of operation
         """
-        if self.state == 'ongoing':
+        if self.status == 'ongoing':
             self.thread.cancel()
-        elif self.state == 'walking':
+        elif self.status == 'walking':
             self._cancel = True
         if self.on_action:
             self.on_action.cancel()
-        self.state = 'cancelled'
+        self.status = 'cancelled'
         self.finished_on = datetime.datetime.now()
 
     def ask(self, key, **kwargs):
@@ -127,10 +129,6 @@ class Operation(Flow):
 
     def answer(self, **kwargs):
         self.question.answer(**kwargs)
-
-
-class WrongInboxContent(Exception):
-    pass
 
 
 class Route(Path):
@@ -142,22 +140,31 @@ class Route(Path):
         """Create route from planned inputs and outputs, can be embebed
         """
         self.parent = parent
+        self.role = role
         self.sequence = 0
         self.source = source
         self.destination = destination
         self.steps = []
 
         self.outputs = outputs if outputs else []
-        self.method = get_function(method_name) if method_name else None
         self.method_pars = method_pars if method_pars else {}
 
     def implement(self, responsible, update=None):
         """Returns operation instance from parent or responsible
         """
-        return Operation(self, responsible, update)
+        return self.can_implement(Operation, responsible, update)
 
-    def validate_inbox(self, inbox):
-        pass
+    def can_implement(self, Implementation, responsible, update):
+        if not self.is_authorized(responsible):
+            raise NotAuthorizedException(
+                'Responsible {} can not execute flow'.format(responsible.description)
+            )
+        return Implementation(self, responsible, update)
+
+    def is_authorized(self, responsible):
+        """
+        """
+        return (responsible == self.role) or (self.role in responsible.roles)
 
 
 class Step(Path):
@@ -167,7 +174,6 @@ class Step(Path):
         self.route = route
         self.sequence = 0 if not route.steps else route.steps[-1].sequence + 5
         self.method_name = method_name
-        self.method = get_function(method_name) if method_name else None
         self.method_pars = method_pars if method_pars else {}
 
     def implement(self, operation):
