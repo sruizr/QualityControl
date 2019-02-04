@@ -1,29 +1,29 @@
 import subprocess
-from .core import Resource, Item
+import core
 from quactrl.helpers.docs import TexWriter
 
 
-class Form(Resource):
+class Directory(core.Node):
+    def __init__(self, key, name=None, description=None, parent=None):
+        self.key = key
+        self.name = name if name else key
+        self.directories = []
+        self.parent = parent
+
+    def path(self):
+        prefix = self.parent.path if self.parent else ''
+        return '{}/{}'.format(prefix, self.name)
+
+
+class Form(core.Resource):
     def __init__(self, key, template, description=None, pars=None):
         self.key = key
         self.template = template
         self.description = description
         self.pars = pars if pars else {}
 
-    def fill(self, tracking,  content):
-        return Report(self, tracking, content)
 
-    @property
-    def writer(self):
-        if not hasattr(self, '_writer'):
-            self._writer = TexWriter(
-                templates_dir=self.pars['templates_dir']
-            )
-            self._writer.set_template('{}.tex'.format(self.name))
-        return self._writer
-
-
-class Report(Item):
+class Document(core.Item):
     def __init__(self, form, tracking, content):
         self.form = form
         self.tracking = tracking
@@ -32,6 +32,10 @@ class Report(Item):
     @property
     def content(self):
         return self.pars['content']
+
+    @property
+    def filename(self):
+        return '{}_{}.{}'.format(self.form.name, self.tracking, self.form.type)
 
     def print_sheet(self, printer_name, pdf_file_path=None):
         """Prints to local printer using CUPS service, if there is no pdf_file, it creates a new one and returns it
@@ -67,16 +71,35 @@ class Administration(core.Path):
 
 
 class Fill(Flow):
-    pass
+    def close(self):
+        if hasattr(self, 'docs'):
+            for doc in self.docs:
+                self.fill_doc(doc)
+        if hasattr(self, 'doc'):
+            self.fill_doc
+        super().close()
+
+    def fill_doc(self, doc):
+        doc_path = '{}/{}'.format(
+            self.administration.destination.path, doc.filename
+        )
+        self.documngr.fill(doc.content, doc.form.template_path,
+                         doc_path)
 
 
 class Print(Flow):
-    pass
+    def close(self):
+        if hasattr(self, 'docs'):
+            for doc in self.docs:
+                self.print_doc(doc)
+        if hasattr(self, 'doc'):
+            self.print_doc
+        super().close()
 
 
 class Sign(Flow):
-    pass
-
+    def close(self):
+        self.documngr.has
 
 class Export(Flow):
     pass
