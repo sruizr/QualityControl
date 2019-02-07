@@ -16,11 +16,19 @@ class Directory(core.Node):
 
 
 class Form(core.Resource):
-    def __init__(self, key, template, description=None, pars=None):
+    def __init__(self, key, name, description=None, pars=None):
         self.key = key
-        self.template = template
+        self.name = name
         self.description = description
         self.pars = pars if pars else {}
+
+    @property
+    def type(self):
+        return self.pars.get('type', '')
+
+    @property
+    def template_name(self):
+        return '{}.{}'.format(self.name, self.type)
 
 
 class Document(core.Item):
@@ -83,6 +91,7 @@ class Fill(Flow):
         doc_path = '{}/{}'.format(
             self.administration.destination.path, doc.filename
         )
+        doc.add(1, self, self.administration.destination)
         self.documngr.fill(doc.content, doc.form.template_path,
                          doc_path)
 
@@ -96,10 +105,13 @@ class Print(Flow):
             self.print_doc
         super().close()
 
+    def print_doc(self, doc):
+        doc.add(1, self.administration.destination, self)
 
 class Sign(Flow):
     def close(self):
-        self.documngr.has
+        pass
+
 
 class Export(Flow):
     pass
