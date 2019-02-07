@@ -54,7 +54,6 @@ class Cavity:
                 state = 'stacked'
             except Exception:  # if problems getting info is because no part
                 state = 'empty'
-
         elif self.state == 'stacked' and self.inspector.state == 'busy':
             state = 'busy'
             self.part = self.inspector.part
