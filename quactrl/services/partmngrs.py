@@ -40,20 +40,27 @@ class Cavity:
         logger.debug('Inspector state is {} and state is  {}'.format(
             inspector_state, state
         ))
-        if self.state == 'empty' and self.part_is_present(self.key):
+        if self.state == 'empty' and (self.part_is_present(self.key)
+                                      and self.part_manager.is_ready()):
             state = 'loaded'
         elif self.state == 'loaded' and self.inspector.state == 'idle':
-            self.test_service.stack_part(
-                self.get_part_info(self.key),
-                self.part_manager.responsible.key,
-                self.key
-            )
-            state = 'stacked'
+            try:
+                part_info = self.get_part_info(self.key)
+                self.test_service.stack_part(
+                    part_info,
+                    self.part_manager.responsible.key,
+                    self.key
+                )
+                state = 'stacked'
+            except Exception:  # if problems getting info is because no part
+                state = 'empty'
         elif self.state == 'stacked' and self.inspector.state == 'busy':
             state = 'busy'
+            self.part = self.inspector.part
         elif self.state == 'busy' and self.inspector.state == 'idle':
             state = self.inspector.test.state
-            self.part = self.inspector.part
+        elif self.state == 'busy' and self.inspector.state != 'busy':
+            logger.info('Inspector state is {}'.format(self.inspector.state))
         elif (self.state in ('success', 'failed', 'cancelled') and
               not self.part_is_present(self.key)):
             state = 'empty'
@@ -91,11 +98,9 @@ class MultiPartManager(threading.Thread):
 
     def run(self):
         while self._continue:
-            if self.is_ready():
-                cavities = list(self.cavities.values())
-                for cavity in cavities:
-                    cavity.refresh()
-            time.sleep(self.refresh_time)
+            cavities = list(self.cavities.values())
+            for cavity in cavities:
+                cavity.refresh()
 
     def stop(self):
         self._continue = False
@@ -128,6 +133,7 @@ class MultiPartManager(threading.Thread):
 
     def __del__(self):
         self.stop()
+
 
 
 class MonoPartManager(MultiPartManager):

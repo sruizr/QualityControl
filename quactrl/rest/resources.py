@@ -100,8 +100,8 @@ class PartResource(Resource):
         pass
 
 
-class EventsResource(Resource):
 
+class EventsResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self, cavity=None, word=None):
         service = self.part_manager.test_service
@@ -109,7 +109,7 @@ class EventsResource(Resource):
         if cavity == 'last' or word == 'last':
             get_events = service.get_last_events
         key = try_int(cavity)
-        events = get_events(cavity)
+        events = get_events(key)
 
         return self._parse_events(events)
 
