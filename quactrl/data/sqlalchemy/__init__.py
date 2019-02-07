@@ -18,7 +18,10 @@ class Db:
             connect_args={'check_same_thread': False}
         else:
             connect_args = {}
-        self.engine = create_engine(connection_string, connect_args=connect_args)
+
+        self.engine = create_engine(connection_string, connect_args=connect_args,
+                                    pool_size=6, max_overflow=16, pool_pre_ping=True
+        )
         metadata.bind = self.engine
 
         # load all mappers

@@ -89,6 +89,8 @@ class Service:
 
     @property
     def active_cavities(self):
+        """Cavities with inspectors asigned
+        """
         return list(self.inspectors.keys())
 
     def restart_inspector(self, cavity=None, reinsert_orders=True):
@@ -234,6 +236,7 @@ class Inspector(threading.Thread):
         while not self._stop_event.is_set():
             try:
                 self.state = 'idle'
+                logger.info('Inspector {} is idle'.format(self.name))
                 order = self.orders.get()
                 if order is None:
                     self.orders.task_done()
@@ -242,6 +245,7 @@ class Inspector(threading.Thread):
                     self.state = 'busy'
                     self.run_test(order)
                     self.orders.task_done()
+                    logger.info('Inspector {} has finished'.format(self.name))
             except Exception as e:
                 trc = sys.exc_info()
                 self.update('loop_error', e, traceback.format_tb(trc[2]))
