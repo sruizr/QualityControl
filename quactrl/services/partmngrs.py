@@ -40,7 +40,8 @@ class Cavity:
         logger.debug('Inspector state is {} and state is  {}'.format(
             inspector_state, state
         ))
-        if self.state == 'empty' and self.part_is_present(self.key) and self.part_manager.is_ready():
+        if self.state == 'empty' and (self.part_is_present(self.key)
+                                      and self.part_manager.is_ready()):
             state = 'loaded'
         elif self.state == 'loaded' and self.inspector.state == 'idle':
             try:
@@ -53,7 +54,6 @@ class Cavity:
                 state = 'stacked'
             except Exception:  # if problems getting info is because no part
                 state = 'empty'
-
         elif self.state == 'stacked' and self.inspector.state == 'busy':
             state = 'busy'
             self.part = self.inspector.part
@@ -133,6 +133,7 @@ class MultiPartManager(threading.Thread):
 
     def __del__(self):
         self.stop()
+
 
 
 class MonoPartManager(MultiPartManager):
