@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (Table, MetaData, Column, Integer, String, ForeignKey,
-                        DateTime, Float, Boolean)
+                        DateTime, Float, Boolean, UniqueConstraint)
 from .types import JsonEncodedDict
 from quactrl.data.sqlalchemy import metadata
 
@@ -8,9 +8,13 @@ from quactrl.data.sqlalchemy import metadata
 node = Table('node', metadata,
              Column('id', Integer, primary_key=True),
              Column('is_a', String(50)),
-             Column('key', String(15)),
+             Column('key', String(25)),
              Column('name', String(50)),
-             Column('description', String(255)))
+             Column('description', String(255)),
+             UniqueConstraint('key', 'is_a', name='uix_node')
+
+
+)
 
 
 node_link = Table('node_link', metadata,
@@ -21,10 +25,12 @@ node_link = Table('node_link', metadata,
 resource = Table('resource', metadata,
                  Column('id', Integer, primary_key=True),
                  Column('is_a', String(50)),
-                 Column('key', String(15)),
+                 Column('key', String(25)),
                  Column('name', String(30)),
                  Column('description', String(200)),
-                 Column('pars', JsonEncodedDict))
+                 Column('pars', JsonEncodedDict),
+                 UniqueConstraint('key', 'is_a', name='uix_resource')
+)
 
 
 resource_link = Table('resource_link', metadata,
@@ -68,7 +74,9 @@ item = Table('item', metadata,
              Column('resource_id', Integer, ForeignKey('resource.id')),
              Column('is_a', String(50)),
              Column('tracking', String(150)),
-             Column('pars', JsonEncodedDict))
+             Column('pars', JsonEncodedDict),
+             UniqueConstraint('resource_id', 'tracking', name='uix_item')
+)
 
 
 token = Table(
