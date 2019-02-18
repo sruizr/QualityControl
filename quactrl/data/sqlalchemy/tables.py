@@ -12,8 +12,6 @@ node = Table('node', metadata,
              Column('name', String(50)),
              Column('description', String(255)),
              UniqueConstraint('key', 'is_a', name='uix_node')
-
-
 )
 
 

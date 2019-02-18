@@ -89,6 +89,8 @@ class Service:
 
     @property
     def active_cavities(self):
+        """Cavities with inspectors asigned
+        """
         return list(self.inspectors.keys())
 
     def restart_inspector(self, cavity=None, reinsert_orders=True):
