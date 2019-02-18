@@ -74,39 +74,64 @@ class Document(core.Item):
                                      path=path)
 
 
-class Administration(core.Path):
-    pass
-
-
 class Fill(Flow):
-    def close(self):
-        if hasattr(self, 'docs'):
-            for doc in self.docs:
-                self.fill_doc(doc)
-        if hasattr(self, 'doc'):
-            self.fill_doc
-        super().close()
+    def __init__(self, operation, step, update):
+        self.update = update
+        self.operation = operation
+        self.step = step
+        self.docs = []
 
-    def fill_doc(self, doc):
-        doc_path = '{}/{}'.format(
-            self.administration.destination.path, doc.filename
-        )
-        doc.add(1, self, self.administration.destination)
-        self.documngr.fill(doc.content, doc.form.template_path,
-                         doc_path)
+
+    def execute(self):
+        if (self.status != 'started'):
+            raise Exception('step should be started before executing')
+
+        self.step.method(self, **self.step.method_pars)  # method loads doc_tracking and doc_content
+        form = self.step.out_resources[0]
+        self.doc = form.create(self.doc_tracking, self.doc_content)
+        dir_path = self.destination.path
+
+        doc_path = '{}/{}.pdf'.format(self.step.destination.path,
+                                         self.doc.filename)
+        self.doc_service.fill(doc.content, form.template, doc_path)
+
+        self.status = 'done'
+
+    def close(self):
+        self.doc.add(1, self.step.destination, self)
+        if not hasattr('docs', self.operation):
+            self.operation.docs = []
+
+        self.operation.docs.append(self.doc)
+
+        super().close()
 
 
 class Print(Flow):
+    def __init__(self, operation, step, update=None):
+        self.update = update
+        self.operation = operation
+        self.step =step
+        self.docs = []
+
+    def execute(self):
+        super().execute()
+        printer_name = self.method_pars['printer_name']
+        pattern = self.method_pars.get('pattern', '')
+        self.docs = []
+        if hasattr(self.operation, 'docs'):
+            for doc in self.operation.docs:
+                if pattern in doc.tracking:
+                    self.docu_service.print_to_cups_printer(
+                        printer_name, doc.file_path
+                    )
+                self.docs.append(doc)
+
     def close(self):
-        if hasattr(self, 'docs'):
-            for doc in self.docs:
-                self.print_doc(doc)
-        if hasattr(self, 'doc'):
-            self.print_doc
+        for doc in self.docs:
+            doc.add(1, self.operation.destination, self)
         super().close()
 
-    def print_doc(self, doc):
-        doc.add(1, self.administration.destination, self)
 
 class Sign(Flow):
     def close(self):
@@ -119,3 +144,18 @@ class Export(Flow):
 
 class Copy(Flow):
     pass
+
+
+class FillStep(core.Path):
+    def implement(self, operation):
+        return Fill(operation, self, operation.update)
+
+
+class PrintStep(core.Path):
+    def implement(self, operation):
+        return Print(operation, self, operation.update)
+
+
+class SignStep(core.Path):
+    def implement(self, operation):
+        return Sign(operation, self, operation.update)

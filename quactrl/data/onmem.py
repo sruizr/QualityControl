@@ -6,8 +6,7 @@ class Session:
     def commit(self):
         if self.db.testsaver:
             for test in self.db.tests:
-                if not hasattr(test, 'id'):
-                    self.db.testsaver.save(test)
+                self.db.testsaver.save(test)
 
     def rollback(self):
         pass
