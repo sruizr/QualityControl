@@ -16,12 +16,13 @@ class Db:
     def __init__(self, connection_string):
         if connection_string[:6] == 'sqlite':
             connect_args={'check_same_thread': False}
+            kwargs = {}
         else:
             connect_args = {}
+            kwargs = {'pool_size': 17, 'pool_recycle': 3600}
 
         self.engine = create_engine(connection_string, connect_args=connect_args,
-                                    pool_size=6, max_overflow=16, pool_pre_ping=True
-        )
+                                    **kwargs)
         metadata.bind = self.engine
 
         # load all mappers
