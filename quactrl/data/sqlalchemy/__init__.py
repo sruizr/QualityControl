@@ -7,6 +7,12 @@ from quactrl.models.quality import Mode, ControlPlan
 from quactrl.models.devices import Device, DeviceModel
 from quactrl.models.products import (Requirement, Element, Attribute,
                                      PartModel, PartGroup, Characteristic, Part)
+from quactrl.models.documents import (Form, Directory)
+import logging
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 metadata = MetaData()
@@ -104,6 +110,16 @@ class PartModelRepo(KeyRepo):
         super().__init__(session, PartModel)
 
 
+class DirectoryRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Directory)
+
+
+class FormRepo(KeyRepo):
+    def __init__(self, session):
+        super().__init__(session, Form)
+
+
 class PartGroupRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, PartGroup)
@@ -120,7 +136,11 @@ class DeviceRepo(Repository):
 
     def get_all_from(self, location_key):
         location = self.session.query(Location).filter(Location.key == location_key).one()
-        results =  self.session.query(Device, Token).filter(Token.node == location).all()
+        logger.info('Location is {}'.format(location.key))
+        results =  self.session.query(Device, Token).filter(
+            Device.id == Token.item_id).filter(
+                Token.node == location).all()
+        logger.info('Number of devices are: {}'.format(len(results)))
         return [result[0] for result in results]
 
 

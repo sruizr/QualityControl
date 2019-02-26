@@ -5,7 +5,6 @@ import quactrl.models.documents as doc
 from quactrl.data.sqlalchemy.mappers.core import (resource_relationship, node_relationship)
 
 
-
 mapper(doc.Directory, inherits=core.Node,
        polymorphic_identity='directory',
        properties={
@@ -17,8 +16,11 @@ mapper(doc.Directory, inherits=core.Node,
 )
 
 
-mapper(doc.PdfDocument, inherits=core.Item,
-       polymorphic_identity='pdf_doc'
+mapper(doc.Document, inherits=core.Item,
+       polymorphic_identity='pdf_doc',
+       properties={
+           'form': synonym('resource')
+       }
 )
 
 

@@ -18,9 +18,10 @@ class Resource:
         self.part_manager = part_manager
 
     def OPTIONS(self, key=None, word=None):
-        cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Access-Control-Allow-Origin'
+        cherrypy.response.headers['Access-Control-Allow-Headers'] = 'Access-Control-Allow-Origin, Content-Type'
         cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
-        possible_methods = ('PUT', 'DELETE', 'PATCH')
+
+        possible_methods = ('PUT', 'DELETE', 'PATCH', 'POST')
         methods = [http_method for http_method in possible_methods
                    if hasattr(self, http_method)]
         cherrypy.response.headers['Access-Control-Allow-Methods'] = ','.join(methods)
@@ -91,12 +92,12 @@ class BatchResource(Resource):
 
 class PartResource(Resource):
     @cherrypy.tools.json_out()
-    def GET(self, cavity):
+    def GET(self, cavity=None):
         key = try_int(cavity)
         return parse(self.part_manager.cavities[key].part)
 
     @cherrypy.tools.json_in()
-    def POST(self, cavity):
+    def POST(self, cavity=None):
         pass
 
 

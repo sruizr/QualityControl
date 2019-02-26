@@ -3,7 +3,7 @@ import sys
 import traceback
 from queue import Queue
 from quactrl.models.devices import Toolbox
-from quactrl.data import NotFoundPath, NotFoundItem, NotFoundResource
+from quactrl.data import NotFoundPath, NotFoundItem, NotFoundResource, NotFoundPart
 import quactrl.models.operations as op
 import quactrl.models.products as prd
 from quactrl.models.quality import DefectFound
@@ -11,6 +11,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class WrongLocationError(Exception):
@@ -27,7 +28,7 @@ class InspectorException(Exception):
 
 class Service:
     """Test parts from a location"""
-    def __init__(self, database, location, till_first_failure=True):
+    def __init__(self, database, location, till_first_failure=True, create_part=True):
 
         self.db = database
         self.tff = till_first_failure
@@ -36,10 +37,12 @@ class Service:
         self.events = {}
         self.inspectors = {}
         self._lock = threading.Lock()
+        self.create_part = create_part
 
         all_devices = self.db.Devices().get_all_from(self.location_key)
-        logger.info('Sesssion on main is {}'.format(self.db.Session()))
-        logger.info('Sesssion on main is {}'.format(self.db.Session()))
+
+        logger.info('Loaded {} devices at {}'.format(len(all_devices), location))
+        logger.debug('Sesssion on main is {}'.format(self.db.Session()))
         self.toolbox = Toolbox(all_devices)
 
     @property
@@ -67,7 +70,8 @@ class Service:
         else:
             self.inspectors[cavity] = inspector = Inspector(
                 self.db, self.toolbox,
-                self.location_key, cavity, self.tff
+                self.location_key, cavity, self.tff,
+                self.create_part
             )
             self.events[cavity] = []
             inspector.setDaemon(True)
@@ -120,7 +124,7 @@ class Service:
         """Start part for testing on an order process parameters"""
         inspector = self.inspectors[cavity]
         inspector.orders.put((part_info, responsible_key))
-        print('Part info is:{}'.format(part_info))
+        logging.info('Part info is:{}'.format(part_info))
     # def notify(self, info, cavity=None):
     #     """Transfer notification from client to inspector"""
     #     self.inspectors[cavity].notify(info)
@@ -172,7 +176,7 @@ class Inspector(threading.Thread):
     """Inspector of one cavity sharing some devices on a location
     """
     def __init__(self, database, toolbox, location_key,
-                 cavity=None, tff=True):
+                 cavity=None, tff=True, create_part=True):
         """Args:
         database(Container): Persistence layer container of providers
         toolbox(Container): Container of devices
@@ -190,6 +194,7 @@ class Inspector(threading.Thread):
         self.location_key = location_key
         self.cavity = cavity
         self.tff = tff
+        self.create_part = create_part
 
         # Inputs and Outputs of inspector
         self.orders = Queue()
@@ -266,6 +271,9 @@ class Inspector(threading.Thread):
                 )
             )
 
+        if (part is None) and (not self.create_part):
+            raise NotFoundPart('Part with sn {} not found, remove'.format(serial_number))
+
         if part is None:
             part = prd.Part(self.part_model, serial_number,
                             pars=pars)
@@ -322,6 +330,16 @@ class Inspector(threading.Thread):
                         wait_after=0, cavity=self.cavity
                     )
                 self.part = None
+
+        except NotFoundPart as e:
+            logger.exception(e)
+            trc = sys.exc_info()
+            self.update('Not_found_part', e, traceback.format_tb(trc[2]))
+        except WrongLocationError as e:
+            logger.exception(e)
+            trc = sys.exc_info()
+            self.update('WrongLocationError', e, traceback.format_tb(trc[2]))
+
         except Exception as e:
             self.part = None
             trc = sys.exc_info()

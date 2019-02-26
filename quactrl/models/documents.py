@@ -1,5 +1,10 @@
 import quactrl.models.core as core
 import quactrl.models.operations as op
+import logging
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class Directory(core.Node):
@@ -9,6 +14,7 @@ class Directory(core.Node):
         self.directories = []
         self.parent = parent
 
+    @property
     def path(self):
         prefix = self.parent.path if self.parent else ''
         return '{}/{}'.format(prefix, self.name)
@@ -31,12 +37,13 @@ class Form(core.Resource):
         return '{}.{}'.format(self.name, self.type)
 
 
-class PdfDocument(core.Item):
-    def __init__(self, form, tracking, content):
+class Document(core.Item):
+    def __init__(self, form, tracking, content, type='pdf'):
         self.form = form
         self.tracking = tracking
+        self.pars = {}
         self.pars['content'] = content
-        self.pars['type'] = 'pdf'
+        self.pars['type'] = type
 
     @property
     def content(self):
@@ -48,12 +55,17 @@ class PdfDocument(core.Item):
 
     @property
     def filename(self):
-        return '{}_{}.{}'.format(self.form.name, self.tracking, self.type)
+        value = '{}_{}.{}'.format(self.form.name, self.tracking, self.type)
+        logger.info('filename is : {}'.format(value))
+        return value
 
+    @property
     def file_path(self):
         for token in reversed(self.tokens):
             if type(token.flow) is Fill:
-                return '{}/{}'.format(token.node.path, self.filename)
+                path =  '{}/{}'.format(token.node.path, self.filename)
+                logger.debug('Path for document is {}'.format(path))
+                return path
 
     # def print_sheet(self, printer_name, pdf_file_path=None):
     #     """Prints to local printer using CUPS service, if there is no pdf_file, it creates a new one and returns it
@@ -83,7 +95,7 @@ class PdfDocument(core.Item):
     #     return self.form.writer.fill(self.content, file_name=self.tracking,
     #                                  path=path)
 
-class DocFlow(core.Flow):
+class DocFlow(op.Action):
     def __init__(self, operation, step, update):
         self.update = update
         self.operation = operation
@@ -91,7 +103,7 @@ class DocFlow(core.Flow):
 
     @property
     def docs(self):
-        if hasattr(self, '_docs'):
+        if not hasattr(self, '_docs'):
             self._docs = []
 
         return self._docs
@@ -103,8 +115,10 @@ class DocFlow(core.Flow):
 
 
 class Fill(DocFlow):
-    def add_document(self, form, content, tracking):
-        self.docs.append(form.create_doc(tracking, content))
+    def add_document(self, form, tracking, content, type='pdf'):
+        self.docs.append(
+            Document(form, tracking, content, type)
+        )
 
     def close(self):
         """Create the documents and upload to file_system
@@ -112,7 +126,7 @@ class Fill(DocFlow):
         doc_service = self.operation.toolbox.doc_service()
         for doc in self.docs:
             destination = self.step.destination
-            self.doc.add(1, destination, self)
+            doc.update_qty(1, destination, self)
             doc_path = '{}/{}'.format(destination.path, doc.filename)
             doc_service.fill(doc.content, doc.form.template_name, doc_path)
 
@@ -125,12 +139,12 @@ class Print(DocFlow):
     """
     def close(self):
         doc_service = self.operation.toolbox.doc_service()
-        printer_name = self.method_pars['printer_name']
+        printer_name = self.step.method_pars['printer_name']
         for doc in self.docs:
-                self.doc_service.print_to_cups_printer(
+                doc_service.print_to_cups_printer(
                     printer_name, doc.file_path
                 )
-                doc.add(1, self.destination, self)
+                doc.update_qty(1, self.destination, self)
         super().close()
 
 

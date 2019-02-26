@@ -52,5 +52,7 @@ mapper(op.Step, inherits=core.Path,
        polymorphic_identity='step',
        properties={
            'source': synonym('from_node'),
-           'destination': synonym('to_node')
+           'destination': synonym('to_node'),
+           'outputs': relationship(core.Resource,
+                                   secondary=tables.path_resource)
        })

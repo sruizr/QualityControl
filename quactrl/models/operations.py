@@ -71,6 +71,13 @@ class Operation(Flow):
         for att, value in inputs.items():
             setattr(self, att, value)
 
+    @property
+    def docs(self):
+        if not hasattr(self, '_docs'):
+            self._docs = []
+
+        return self._docs
+
     def execute(self):
         """Execute method asociated to route
         """
@@ -175,6 +182,7 @@ class Step(Path):
         self.sequence = 0 if not route.steps else route.steps[-1].sequence + 5
         self.method_name = method_name
         self.method_pars = method_pars if method_pars else {}
+        self.outputs = []
 
     def implement(self, operation):
         return Action(operation, self, operation.update)
@@ -194,7 +202,6 @@ class Question(threading.Event):
         self.request.update(kwargs)
         if self.update:
             self.update('asked', self)
-
         self.wait()
 
     def answer(self, **kwargs):

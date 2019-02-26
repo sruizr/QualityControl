@@ -58,7 +58,7 @@ class Cavity:
             state = 'busy'
             self.part = self.inspector.part
         elif self.state == 'busy' and self.inspector.state == 'idle':
-            state = self.inspector.test.state
+            state = self.inspector.test.state if self.inspector.test else 'cancelled'
         elif self.state == 'busy' and self.inspector.state != 'busy':
             logger.info('Inspector state is {}'.format(self.inspector.state))
         elif (self.state in ('success', 'failed', 'cancelled') and
@@ -133,7 +133,6 @@ class MultiPartManager(threading.Thread):
 
     def __del__(self):
         self.stop()
-
 
 
 class MonoPartManager(MultiPartManager):

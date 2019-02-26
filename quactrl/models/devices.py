@@ -52,7 +52,7 @@ class DeviceProvider(providers.Provider):
         "docstring"
         args = list(args)
         self.tracking = args.pop(0)
-        logger.debug(' Creating device with tracking {}'.format(self.tracking))
+        logger.debug('Creating device with tracking {}'.format(self.tracking))
         self._singleton = providers.ThreadSafeSingleton(Device, *args,
                                                         **kwargs)
         self._device = None
@@ -80,6 +80,7 @@ class Toolbox(containers.DynamicContainer):
         """Receive a list of devices and loads a container of them and subcomponents
         """
         super().__init__()
+        logger.info('Composing {} devices'.format(len(devices)))
         self._devices = {}
         self._load_device_configs(devices)
         for name in self._devices.keys():

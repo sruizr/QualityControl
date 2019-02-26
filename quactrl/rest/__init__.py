@@ -11,7 +11,8 @@ class Server:
                     'tools.sessions.on': True,
                     'tools.response_headers.on': True,
                     'tools.response_headers.headers': [
-                        ('Access-Control-Allow-Origin', '*')
+                        ('Access-Control-Allow-Headers', 'Origin, Content-Type'),
+                       ('access-Control-Allow-Origin', '*')
                     ]
                 }
             }
@@ -23,6 +24,7 @@ class Server:
     def start(self, silent_access=False):
         cherrypy.server.socket_host = self.host
         cherrypy.server.socket_port = self.port
+        # propagate = True...
         cherrypy.config.update({'log.screen': not silent_access})
 
         cherrypy.engine.start()

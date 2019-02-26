@@ -57,6 +57,9 @@ def _parse_check(check):
         'finished_on': check.finished_on.isoformat()
         if check.finished_on else None
     }
+    if check.control.source:
+        result['source'] = check.control.source.key
+
     _parse_id(check, result)
 
     for measurement in check.measurements:
@@ -64,7 +67,6 @@ def _parse_check(check):
 
     for defect in check.defects:
         result['defects'].append(parse(defect))
-
     return result
 
 
@@ -162,5 +164,7 @@ _PARSES = {
     'PartModel': _parse_part_model,
     'Cavity': _parse_cavity,
     'Part': _parse_part,
-    'Question': _parse_question
+    'Question': _parse_question,
+    'Fill': _parse_action,
+    'Print': _parse_action
 }

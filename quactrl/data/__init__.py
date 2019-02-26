@@ -2,6 +2,10 @@ from dependency_injector import providers, containers
 from quactrl.helpers import get_class
 
 
+class NotFoundPart(Exception):
+    pass
+
+
 class NotFoundPath(Exception):
     pass
 
@@ -29,7 +33,7 @@ class Data(containers.DynamicContainer):
         'products.Element', 'products.Attribute', 'products.Characteristic',
         'products.Requirement',
         'quality.Test', 'quality.Mode',
-        'devices.DeviceModel', 'devices.Device'
+        'devices.DeviceModel', 'devices.Device', 'documents.Directory', 'documents.Form'
     ]
 
     def __init__(self, module_name, connection_string=None, **kwargs):
