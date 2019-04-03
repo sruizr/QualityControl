@@ -10,6 +10,7 @@ from quactrl.models.quality import DefectFound
 import logging
 
 
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -355,6 +356,8 @@ class Inspector(threading.Thread):
 
     def stop(self):
         """Stop thread and return unprocessed orders"""
+        raise Exception('Someone has stopped this tghread')
+        logging.info('Someone has ordered to stop')
         pending_orders = []
         self._stop_event.set()
 

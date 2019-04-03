@@ -1,4 +1,6 @@
 import cherrypy
+import logging
+
 
 
 class Server:
@@ -21,12 +23,12 @@ class Server:
         self.port = port
         cherrypy.tree.mount(root_resource, '/', self.conf)
 
-    def start(self, silent_access=False):
+    def start(self, silent_access=True):
+        logging.getLogger('cherrypy').propagate = False
+
         cherrypy.server.socket_host = self.host
         cherrypy.server.socket_port = self.port
-        # propagate = True...
         cherrypy.config.update({'log.screen': not silent_access})
-
         cherrypy.engine.start()
 
     def stop(self):
