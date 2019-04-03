@@ -46,8 +46,9 @@ class Session:
     def commit(self):
         if self.test_saver:
             for test in self._tests:
-                if not hasattr(test, '_id'):
+                if not hasattr(test, '_id') and test.state in ('cancelled', 'failed', 'success'):
                     self.test_saver.save(test)
+
 
     def rollback(self):
         pass

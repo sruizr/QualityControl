@@ -4,7 +4,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-
+logger.setLevel(logging.INFO)
 
 class SetupException(Exception):
     pass
@@ -37,9 +37,10 @@ class Cavity:
 
         state = self.state
         inspector_state = self.inspector.state
-        logger.debug('Inspector state is {} and state is  {}'.format(
-            inspector_state, state
-        ))
+        # if inspector_state == 'stopped':
+        #     logger.info('Inspector state is {} and state is {} cavity {}'.format(
+        #         inspector_state, state, self.key
+        #     ))
         if self.state == 'empty' and self.part_is_present(self.key):
             state = 'loaded'
         elif self.state == 'loaded' and self.inspector.state == 'idle':

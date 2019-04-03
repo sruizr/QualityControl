@@ -5,6 +5,7 @@ from queue import Queue
 from quactrl.models.devices import DeviceContainer
 import quactrl.models.operations as op
 from quactrl.models.quality import DefectFound
+import logging
 
 
 class WrongLocationError(Exception):
@@ -229,8 +230,10 @@ class Inspector(threading.Thread):
             except Exception as e:
                 trc = sys.exc_info()
                 self.update('loop_error', e, traceback.format_tb(trc[2]))
+                logging.exception(e)
                 raise e
 
+        logging.info('Inspector {} is out'.format(self.name))
         self.state = 'stopped'
 
     def get_part(self, serial_number, pars):
@@ -318,6 +321,8 @@ class Inspector(threading.Thread):
 
     def stop(self):
         """Stop thread and return unprocessed orders"""
+        raise Exception('Someone has stopped this tghread')
+        logging.info('Someone has ordered to stop')
         pending_orders = []
         self._stop_event.set()
 
