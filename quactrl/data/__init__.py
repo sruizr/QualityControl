@@ -36,7 +36,7 @@ class Data(containers.DynamicContainer):
         'devices.DeviceModel', 'devices.Device', 'documents.Directory', 'documents.Form'
     ]
 
-    def __init__(self, module_name, connection_string=None, **kwargs):
+    def __init__(self, module_name, connection_string=None, repo_path=None, **kwargs):
         super().__init__()
         self.connection_string = connection_string
         self.module_name = 'quactrl.data.' + module_name
@@ -46,6 +46,8 @@ class Data(containers.DynamicContainer):
         )
 
         self.Session = providers.ThreadLocalSingleton(self.db.Session)
+
+        self._repo_path = repo_path
         self._load_repos()
 
     def drop_all(self):
@@ -54,21 +56,42 @@ class Data(containers.DynamicContainer):
     def create_schema(self):
         self.db.create_schema()
 
-    def _get_class(self, name):
-        full_class_name = '{}.{}Repo'.format(self.module_name, name)
-        ResultClass = get_class(full_class_name)
-        return ResultClass
+    def _find_repo_class(self, model):
+
+        module_name = self._repo_path if self._repo_path else self.module_name
+
+        # repo_path.model_path
+        RepoClass = self._get_repo_class(module_name, model)
+
+        if not RepoClass:  # module_path.model_path
+            RepoClass = self._get_repo_class(self.module_name, model)
+
+        model = model.split('.')[1]
+        if not RepoClass:  # repo_path.model_name
+            RepoClass = self._get_repo_class(module_name, model)
+
+        if not RepoClass:  # module_path.model_name
+            RepoClass = self._get_repo_class(self.module_name, model)
+
+        return RepoClass
+
+    def _get_repo_class(self, module_name, model_name):
+        repo_path = '{}.{}Repo'.format(module_name, model_name)
+
+        try:
+            RepoClass = get_class(repo_path)
+        except ImportError:  # Not found class
+            return
+
+        return RepoClass
+
 
     def _load_repos(self):
         for model in self._MODELS:
-            model_name = model.split('.')[1]
-            try:
-                RepoClass = self._get_class(model),
-            except ImportError:
-                RepoClass = self._get_class(model_name)
-
-            Provider = providers.ThreadLocalSingleton(
-                RepoClass,
-                session=self.Session
-            )
-            setattr(self, model_name + 's', Provider)
+            RepoClass = self._find_repo_class(model)
+            if RepoClass:
+                Provider = providers.ThreadLocalSingleton(
+                    RepoClass,
+                    session=self.Session
+                )
+                setattr(self, model_name + 's', Provider)

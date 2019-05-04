@@ -1,4 +1,4 @@
-from sqlalchemy import MetaData, create_engine, and_
+from sqlalchemy import MetaData, create_engine, and_, cast, desc, BigInteger
 from sqlalchemy.orm import sessionmaker
 from quactrl.models.core import Token
 from quactrl.models.hhrr import Person, Role
@@ -55,12 +55,12 @@ class Repository:
 
 
 class KeyRepo(Repository):
-    def __init__(self, session, RepoClass):
+    def __init__(self, session, Model):
         super().__init__(session)
-        self.RepoClass = RepoClass
+        self.Model = Model
 
     def get(self, key):
-        resource = self.session.query(self.RepoClass).filter(self.RepoClass.key==key).first()
+        resource = self.session.query(self.Model).filter(self.Model.key==key).first()
         if resource is None:
             raise KeyError('resource with key "{}" is not found'.format(key))
         return resource
@@ -157,7 +157,12 @@ class PartRepo(Repository):
     def get_last_serial_number(self, part_model, batch_number, pos):
         """Retrieve the last serial number from database (if exists...)
         """
-        pass
+        batch_pattern = '%{:06d}%'.format(int(batch_number))
+        part =  self.session.query(Part).filter(Part.serial_number.like(batch_pattern)).order_by(
+            desc(cast(Part.serial_number, BigInteger))).first()
+
+        if part:
+            return part.serial_number
 
 
 class ControlPlanRepo(Repository):

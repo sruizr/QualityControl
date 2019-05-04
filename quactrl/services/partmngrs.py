@@ -6,6 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+
 class SetupException(Exception):
     pass
 
@@ -52,7 +53,8 @@ class Cavity:
                     self.key
                 )
                 state = 'stacked'
-            except Exception:  # if problems getting info is because no part
+            except Exception as e:  # if problems getting info is because no part
+                logger.exception(e)
                 state = 'empty'
         elif self.state == 'stacked' and self.inspector.state == 'busy':
             state = 'busy'
@@ -69,6 +71,7 @@ class Cavity:
         if state != self.state:
             self.state = state
             self.part_manager.cavity_state_has_changed(self.key)
+            logger.info('State on cavity {} is {}'.format(self.key, state))
 
     def __del__(self):
         self.inspector.stop()
