@@ -157,9 +157,11 @@ class Check(op.Action):
                     raise DefectFound()
 
 
-    def add_measurement(self, requirement, value, subject, index=None, uncertainty=0):
+    def add_measurement(self, requirement, value, subject=None, index=None, uncertainty=0):
         """Add measurement of a characteristic to check
         """
+        if not subject:
+            subject = self.part
         measurement = subject.get_measurement(requirement, index)
 
         self.measurements.append(measurement)
@@ -169,9 +171,12 @@ class Check(op.Action):
         if mode_key:
             self.add_defect(requirement, mode_key, subject, index)
 
-    def add_defect(self, requirement, mode_key, subject, index=None, ocurrence=1):
+    def add_defect(self, requirement, mode_key, subject=None, index=None, ocurrence=1):
         """Add defect of check
         """
+        if not subject:
+            subject = self.part
+
         failure_mode = requirement.characteristic.failure_modes[mode_key]
 
         defect = subject.get_defect(requirement, mode_key, index)

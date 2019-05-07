@@ -1,4 +1,4 @@
-from sqlalchemy import MetaData, create_engine, and_
+from sqlalchemy import MetaData, create_engine, and_, cast, desc, BigInteger
 from sqlalchemy.orm import sessionmaker
 from quactrl.models.core import Token
 from quactrl.models.hhrr import Person, Role
@@ -47,12 +47,17 @@ class Db:
 
 
 class Repository:
-    def __init__(self, session):
-        self.session = session
-
+    def __init__(self, Session):
+        self.Session = Session
+        print("CREADO", self.session)
+        
     def add(self, obj):
-        self.session.add(obj)
+        session = self.Session()
+        session.add(obj)
 
+    def commit(self):
+        self.Session().commit()
+        
 
 class KeyRepo(Repository):
     def __init__(self, session, RepoClass):
@@ -60,7 +65,7 @@ class KeyRepo(Repository):
         self.RepoClass = RepoClass
 
     def get(self, key):
-        resource = self.session.query(self.RepoClass).filter(self.RepoClass.key==key).first()
+        resource = self.Session().query(self.RepoClass).filter(self.RepoClass.key==key).first()
         if resource is None:
             raise KeyError('resource with key "{}" is not found'.format(key))
         return resource
@@ -109,7 +114,6 @@ class PartModelRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, PartModel)
 
-
 class DirectoryRepo(KeyRepo):
     def __init__(self, session):
         super().__init__(session, Directory)
@@ -149,7 +153,7 @@ class PartRepo(Repository):
         super().__init__(session)
 
     def get_by(self, part_model, serial_number):
-        return self.session.query(Part).filter(and_(
+        return self.Session().query(Part).filter(and_(
             Part.serial_number == serial_number,
             Part.model == part_model
             )).first()
@@ -157,7 +161,12 @@ class PartRepo(Repository):
     def get_last_serial_number(self, part_model, batch_number, pos):
         """Retrieve the last serial number from database (if exists...)
         """
-        pass
+        batch_pattern = '%{:06d}%'.format(int(batch_number))
+        part =  self.session.query(Part).filter(Part.serial_number.like(batch_pattern)).order_by(
+            desc(cast(Part.serial_number, BigInteger))).first()
+
+        if part:
+            return part.serial_number
 
 
 class ControlPlanRepo(Repository):

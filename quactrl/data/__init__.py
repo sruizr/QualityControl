@@ -71,4 +71,5 @@ class Data(containers.DynamicContainer):
                 RepoClass,
                 session=self.Session
             )
+            print("PROVIDER", Provider().session)
             setattr(self, model_name + 's', Provider)
