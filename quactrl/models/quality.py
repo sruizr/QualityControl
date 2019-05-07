@@ -156,7 +156,6 @@ class Check(op.Action):
                 if self.tff:
                     raise DefectFound()
 
-
     def add_measurement(self, requirement, value, subject=None, index=None, uncertainty=0):
         """Add measurement of a characteristic to check
         """

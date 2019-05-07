@@ -41,6 +41,8 @@ class Item:
         return stocks
 
     def get_token_from(self, node):
+        """Return all tokens inside a node
+        """
         for token in self.tokens:
             if token.current and token.node == node:
                 return token

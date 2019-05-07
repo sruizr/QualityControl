@@ -1,19 +1,8 @@
 from threading import Lock
-from quactrl.data.sqlite import TestSaver
+from quactrl.data import Repository
 
 
 class Session:
-    def commit(self):
-        if self.db.test_saver:
-            for test in self._tests:
-                if not hasattr(test, '_id') and test.state in ('cancelled', 'failed', 'success'):
-                    self.test_saver.save(test)
-
-    def rollback(self):
-        pass
-
-
-class Db:
     routes = {}
     persons = {}
     locations = {}
@@ -22,10 +11,10 @@ class Db:
     elements = {}
     modes = {}
     locations = {}
-    partgroups = {}
+    partGroups = {}
     controlplans = {}
     devices = {}
-    devicemodels = {}
+    dDeviceModels = {}
     tests = []
     roles = {}
     parts = {}
@@ -33,125 +22,120 @@ class Db:
     characteristics = {}
     lock = Lock()
 
-    def __init__(self, connectionstring=None):
-        "docstring"
-        self.testsaver = None
-        if stringconnection:
-            pars = stringconnection.split(';')
-            filename = pars.pop(0)
-            parameters = {}
-            for par in pars:
-                parameter = par.split('=')
-                if len(parameter) == 1:
-                    parameters[parameter[0]] = True
-                else:
-                    parameter[parameter[0]] = parameter[1]
+    def commit(self):
+        pass
 
-            createschema = parameters.get('createschema', False)
-            keepdata = parameters.get('keepdata', False)
+    def rollback(self):
+        """It doesn't work...
+        """
+        pass
 
-            self.testsaver = TestSaver(filename, createschema,
-                                        keepdata)
+
+class Db:
+    def __init__(self, *args, **kwargs):
+        pass
 
     @property
     def Session(self):
-        Session.db = self
+        """Session class with thread locking capabilities
+        """
         return Session
 
 
-class Repository:
-    def init(self, session):
-        self.session = session
-
-
-class KeyRepo:
-    def init(self, session, repodict):
-        self.session = session
-        self.repodict = repodict
+class KeyRepo(Repository):
+    def init(self, data, dict_name):
+        super().__init__(data)
+        self._repo = getattr(data.Session, dict_name)
 
     def add(self, obj):
-        with self.session.db.lock:
-            self.repodict[obj.key] = obj
+        with self.session.lock:
+            self._repo[obj.key] = obj
+
+    def remove(self, obj):
+        with self.session.lock:
+            self._repo.pop(obj.key)
 
     def get(self, key):
-        return self.repodict[key]
+        return self._repo[key]
 
 
 class RequirementRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.requirements)
+    def init(self, data):
+        super().init(data, 'requirements')
 
 
 class RoleRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.roles)
+    def init(self, data):
+        super().init(data, 'roles')
 
 
 class LocationRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.locations)
+    def init(self, data):
+        super().init(data, 'locations')
 
 
 class PersonRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.persons)
+    def init(self, data):
+        super().init(data, 'persons')
 
 
 class ModeRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.modes)
+    def init(self, data):
+        super().init(data, 'modes')
 
 
 class CharacteristicRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.characteristics)
+    def init(self, data):
+        super().init(data, 'characteristics')
 
 
 class ElementRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.elements)
+    def init(self, data):
+        super().init(data, 'elements')
 
 
 class AttributeRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.attributes)
+    def init(self, data):
+        super().init(data, 'attributes')
 
 
 class PartModelRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.partmodels)
+    def init(self, data):
+        super().init(data, 'partmodels')
 
 
 class PartGroupRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.partgroups)
+    def init(self, data):
+        super().init(data, 'partgroups')
 
 
 class DeviceModelRepo(KeyRepo):
-    def init(self, session):
-        super().init(session, session.db.devicemodels)
+    def init(self, data):
+        super().init(data, 'devicemodels')
 
 
 class DeviceRepo(Repository):
     def add(self, device):
-        with self.session.db.lock:
+        session = self.data.Session()
+        with session.lock:
             key = device.location.key
             if key not in self.session.devices:
-                self.session.db.devices[key] = []
-            self.session.db.devices[key].append(device)
+                session.devices[key] = []
+            session.devices[key].append(device)
 
-    def getallfrom(self, locationkey):
-        return  self.session.db.devices[locationkey]
+    def get_all_from(self, locationkey):
+        return self.data.Session().devices[locationkey]
 
 
 class PartRepo(Repository):
     def add(self, part):
-        with self.session.db.lock:
-            if part.model not in self.session.db.parts:
-                self.session.db.parts[part.model] = []
-            self.session.db.parts[part.model].append(part)
+        session = self.data.Sesssion()
+        with session.lock:
+            if part.model not in session.parts:
+                session.parts[part.model] = []
+            session.parts[part.model].append(part)
 
-    def getby(self, partmodel, serialnumber):
+    def get(self, partmodel, serialnumber):
         if partmodel not in self.session.db.parts:
             return
 
@@ -160,7 +144,7 @@ class PartRepo(Repository):
             if part.tracking == serialnumber:
                 return part
 
-    def getlastserialnumber(self, partmodel, batchnumber, pos):
+    def get_last_serialnumber(self, partmodel, batchnumber, pos):
         """Retrieve the last serial number from database (if exists...)
         """
         if hasattr(self.session.db, 'testsaver'):
@@ -176,15 +160,17 @@ class ControlPlanRepo(Repository):
             key = resourcemap.key
             resources.append(key)
 
-        with self.session.db.lock:
+        session = self.data.Session()
+        with session.lock:
             for resource in resources:
-                self.session.db.controlplans[(resource, location)] = controlplan
+                session.controlplans[(resource, location)] = controlplan
 
-    def getby(self, partmodel, location):
+    def get(self, partmodel, location):
         """Return control plan for a partmodel on a location
         """
         key = (partmodel.key, location.key)
-        if key in self.session.db.controlplans:
+        session = self.data.Session()
+        if key in session.controlplans:
             return self.session.db.controlplans[key]
 
         #If there is no controlplan for specific partmodel...
@@ -196,5 +182,6 @@ class ControlPlanRepo(Repository):
 
 class TestRepo(Repository):
     def add(self, test):
-        with self.session.db.lock:
-            self.session.db.tests.append(test)
+        session = self.data.Session()
+        with session.lock:
+            session.tests.append(test)
