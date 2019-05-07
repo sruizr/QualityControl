@@ -1,5 +1,5 @@
 from sqlalchemy import MetaData, create_engine, and_, cast, desc, BigInteger
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import session_maker
 from quactrl.models.core import Token
 from quactrl.models.hhrr import Person, Role
 from quactrl.models.operations import Operation, Step, Location
@@ -8,6 +8,7 @@ from quactrl.models.devices import Device, DeviceModel
 from quactrl.models.products import (Requirement, Element, Attribute,
                                      PartModel, PartGroup, Characteristic, Part)
 from quactrl.models.documents import (Form, Directory)
+from quactrl.data import Repository
 import logging
 
 
@@ -19,15 +20,18 @@ metadata = MetaData()
 
 
 class Db:
+    """Database connection... maybe you should change name
+    """
     def __init__(self, connection_string):
         if connection_string[:6] == 'sqlite':
-            connect_args={'check_same_thread': False}
+            connect_args = {'check_same_thread': False}
             kwargs = {}
         else:
             connect_args = {}
             kwargs = {'pool_size': 17, 'pool_recycle': 3600}
 
-        self.engine = create_engine(connection_string, connect_args=connect_args,
+        self.engine = create_engine(connection_string,
+                                    connect_args=connect_args,
                                     **kwargs)
         metadata.bind = self.engine
 
@@ -35,9 +39,7 @@ class Db:
         from quactrl.data.sqlalchemy.mappers import load_all_mappers
         load_all_mappers()
 
-    @property
-    def Session(self):
-        return sessionmaker(bind=self.engine, autoflush=False)
+        self.Session = session_maker(bind=self.engine, autoflush=False)
 
     def create_schema(self):
         metadata.create_all()
@@ -46,98 +48,95 @@ class Db:
         metadata.drop_all()
 
 
-class Repository:
-    def __init__(self, session):
-        self.session = session
-
-    def add(self, obj):
-        self.session.add(obj)
-
-
 class KeyRepo(Repository):
-    def __init__(self, session, Model):
-        super().__init__(session)
+    def __init__(self, data, Model):
+        super().__init__(data)
         self.Model = Model
 
     def get(self, key):
-        resource = self.session.query(self.Model).filter(self.Model.key==key).first()
+        resource = self.session.query(self.Model).filter(
+            self.Model.key == key
+        ).first()
         if resource is None:
             raise KeyError('resource with key "{}" is not found'.format(key))
         return resource
 
+
 class RequirementRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Requirement)
+    def __init__(self, data):
+        super().__init__(data, Requirement)
 
 
 class RoleRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Role)
+    def __init__(self, data):
+        super().__init__(data, Role)
 
 
 class LocationRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Location)
+    def __init__(self, data):
+        super().__init__(data, Location)
 
 
 class PersonRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Person)
+    def __init__(self, data):
+        super().__init__(data, Person)
 
 
 class ModeRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Mode)
+    def __init__(self, data):
+        super().__init__(data, Mode)
 
 
 class CharacteristicRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Characteristic)
+    def __init__(self, data):
+        super().__init__(data, Characteristic)
 
 
 class ElementRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Element)
+    def __init__(self, data):
+        super().__init__(data, Element)
 
 
 class AttributeRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Attribute)
+    def __init__(self, data):
+        super().__init__(data, Attribute)
 
 
 class PartModelRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, PartModel)
+    def __init__(self, data):
+        super().__init__(data, PartModel)
 
 
 class DirectoryRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Directory)
+    def __init__(self, data):
+        super().__init__(data, Directory)
 
 
 class FormRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, Form)
+    def __init__(self, data):
+        super().__init__(data, Form)
 
 
 class PartGroupRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, PartGroup)
+    def __init__(self, data):
+        super().__init__(data, PartGroup)
 
 
 class DeviceModelRepo(KeyRepo):
-    def __init__(self, session):
-        super().__init__(session, DeviceModel)
+    def __init__(self, data):
+        super().__init__(data, DeviceModel)
 
 
 class DeviceRepo(Repository):
-    def __init__(self, session):
-        super().__init__(session)
+    def __init__(self, data):
+        super().__init__(data)
 
     def get_all_from(self, location_key):
+        """Returns all devices from a location given its key
+        """
         location = self.session.query(Location).filter(Location.key == location_key).one()
         logger.info('Location is {}'.format(location.key))
-        results =  self.session.query(Device, Token).filter(
+        results = self.session.query(Device, Token).filter(
             Device.id == Token.item_id).filter(
                 Token.node == location).all()
         logger.info('Number of devices are: {}'.format(len(results)))
@@ -145,8 +144,8 @@ class DeviceRepo(Repository):
 
 
 class PartRepo(Repository):
-    def __init__(self, session):
-        super().__init__(session)
+    def __init__(self, data):
+        super().__init__(data)
 
     def get_by(self, part_model, serial_number):
         return self.session.query(Part).filter(and_(
@@ -158,7 +157,7 @@ class PartRepo(Repository):
         """Retrieve the last serial number from database (if exists...)
         """
         batch_pattern = '%{:06d}%'.format(int(batch_number))
-        part =  self.session.query(Part).filter(Part.serial_number.like(batch_pattern)).order_by(
+        part = self.session.query(Part).filter(Part.serial_number.like(batch_pattern)).order_by(
             desc(cast(Part.serial_number, BigInteger))).first()
 
         if part:
@@ -169,18 +168,20 @@ class ControlPlanRepo(Repository):
     def get_by(self, part_model, location):
         """Return control plan for a part_model on a location
         """
-        control_plan = self.session.query(ControlPlan).join(ControlPlan.outputs).filter(
-            and_(
-                ControlPlan.source == location,
-                PartModel.key == part_model.key)
+        control_plan = self.session.query(ControlPlan).join(
+            ControlPlan.outputs).filter(
+                and_(
+                    ControlPlan.source == location,
+                    PartModel.key == part_model.key)
             ).first()
 
         if control_plan is None:
             for group in part_model.groups:
-                control_plan = self.session.query(ControlPlan).join(ControlPlan.outputs).filter( and_(
-                    ControlPlan.source == location,
-                    PartGroup.key == group.key)
-                ).first()
+                control_plan = self.session.query(ControlPlan).join(
+                    ControlPlan.outputs).filter(and_(
+                        ControlPlan.source == location,
+                        PartGroup.key == group.key)
+                    ).first()
                 if control_plan:
                     return control_plan
 

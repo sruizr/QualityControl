@@ -23,8 +23,7 @@ class NotFoundNode(Exception):
 
 
 class Data(containers.DynamicContainer):
-    """Data layer with all repositories and a session provider
-    All is ThreadLocalSingleton
+    """Data layer with thread local session provider and singleton repositories
     """
     _MODELS = [
         'hhrr.Person', 'hhrr.Role',
@@ -33,10 +32,12 @@ class Data(containers.DynamicContainer):
         'products.Element', 'products.Attribute', 'products.Characteristic',
         'products.Requirement',
         'quality.Test', 'quality.Mode',
-        'devices.DeviceModel', 'devices.Device', 'documents.Directory', 'documents.Form'
+        'devices.DeviceModel', 'devices.Device',
+        'documents.Directory', 'documents.Form'
     ]
 
-    def __init__(self, module_name, connection_string=None, repo_path=None, **kwargs):
+    def __init__(self, module_name, connection_string=None,
+                 custom_repo_path=None, **kwargs):
         super().__init__()
         self.connection_string = connection_string
         self.module_name = 'quactrl.data.' + module_name
@@ -47,17 +48,21 @@ class Data(containers.DynamicContainer):
 
         self.Session = providers.ThreadLocalSingleton(self.db.Session)
 
-        self._repo_path = repo_path
+        self._repo_path = custom_repo_path
         self._load_repos()
 
     def drop_all(self):
+        """Remove all tables and schemas, including data!
+        """
         self.db.drop_all()
 
     def create_schema(self):
+        """Create schema on database with empty tables
+        """
+
         self.db.create_schema()
 
     def _find_repo_class(self, model):
-
         module_name = self._repo_path if self._repo_path else self.module_name
 
         # repo_path.model_path
@@ -85,13 +90,27 @@ class Data(containers.DynamicContainer):
 
         return RepoClass
 
-
     def _load_repos(self):
         for model in self._MODELS:
             RepoClass = self._find_repo_class(model)
             if RepoClass:
-                Provider = providers.ThreadLocalSingleton(
+                Provider = providers.ThreadSafeSingleton(
                     RepoClass,
-                    session=self.Session
-                )
+                    data=self)
+                model_name = model.split('.')[-1]
                 setattr(self, model_name + 's', Provider)
+
+
+class Repository:
+    def __init__(self, data):
+        self.data = data
+
+    @property
+    def session(self):
+        return self.data.Session()
+
+    def add(self, obj):
+        self.session.add(obj)
+
+    def remove(self, obj):
+        self.session.delete(obj)
