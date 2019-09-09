@@ -193,6 +193,7 @@ class Inspector(threading.Thread):
         self.db = database
         self.toolbox = toolbox
         self.location_key = location_key
+        self.destination_key = None
         self.cavity = cavity
         self.tff = tff
         self.create_part = create_part
@@ -218,6 +219,8 @@ class Inspector(threading.Thread):
             self.responsible = self.db.Persons().get(responsible_key)
 
     def set_part_model(self, part_number):
+        """Set part model to be generated or found before test
+        """
         if (self.part_model is None
                 or self.part_model.key != part_number):
             self.part_model = self.db.PartModels().get(part_number)
@@ -232,6 +235,7 @@ class Inspector(threading.Thread):
             if self.control_plan is None:
                 raise NotFoundPath('Not found control plan for {}'.format(part_number))
 
+            self.destination_key = self.control_plan.destination.key
 
     def run(self):
         """Thread activation processing order by order"""
@@ -265,7 +269,7 @@ class Inspector(threading.Thread):
         """
 
         part = self.db.Parts().get_by(self.part_model, serial_number)
-        if part and part.location != self.location:
+        if part and part.location != self.location and part.location.key != self.destination_key:
             raise WrongLocationError(
                 'Part {} with sn {} found on {}'.format(
                     part.model.key, part.tracking, part.location.key
@@ -330,7 +334,6 @@ class Inspector(threading.Thread):
                         voltage=part.dut.supply_voltage,
                         wait_after=0, cavity=self.cavity
                     )
-                self.part = None
 
         except NotFoundPart as e:
             logger.exception(e)
@@ -356,7 +359,7 @@ class Inspector(threading.Thread):
 
     def stop(self):
         """Stop thread and return unprocessed orders"""
-        raise Exception('Someone has stopped this tghread')
+        raise Exception('Someone has stopped this thread')
         logging.info('Someone has ordered to stop')
         pending_orders = []
         self._stop_event.set()

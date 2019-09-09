@@ -114,4 +114,3 @@ class Repository:
 
     def remove(self, obj):
         self.session.delete(obj)
-

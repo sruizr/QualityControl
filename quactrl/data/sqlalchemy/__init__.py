@@ -20,7 +20,7 @@ metadata = MetaData()
 
 
 class Db:
-    """Database connection... maybe you should change name
+    """Database connection layer
     """
     def __init__(self, connection_string):
         if connection_string[:6] == 'sqlite':
@@ -57,7 +57,6 @@ class KeyRepo(Repository):
         resource = self.session.query(self.Model).filter(
             self.Model.key == key
         ).first()
-
         if resource is None:
             raise KeyError('resource with key "{}" is not found'.format(key))
         return resource
@@ -106,6 +105,7 @@ class AttributeRepo(KeyRepo):
 class PartModelRepo(KeyRepo):
     def __init__(self, data):
         super().__init__(data, PartModel)
+
 
 class DirectoryRepo(KeyRepo):
     def __init__(self, data):
