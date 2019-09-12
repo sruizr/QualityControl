@@ -1,4 +1,5 @@
 import re
+import inspect
 from quactrl.helpers import get_class
 from quactrl.models.core import Resource
 import quactrl.models.quality as qua
@@ -63,11 +64,24 @@ class PartModel(PartGroup):
                 return group.Device, group.kwargs.copy()
         return None, None
 
-    def create_dut(self, connection):
+    def create_dut(self, toolbox, cavity=None):
         """Return a device instance if part model is a device
         """
         if self.Device:
-            return self.Device(connection, **self.kwargs)
+            arg_names = inspect.getargspec(self.Device.__init__)
+            arg_names.pop(0)   # remove self parameter
+            kwargs = {}
+            for name in arg_names:
+                if name in self.kwargs:
+                    kwargs[name] = self.kwargs[name]
+                elif toolbox.hasattr(name):
+                    value = getattr(name, toolbox)()
+                    if type(value) is list:
+                        kwargs[name] = value[cavity]
+                    else:
+                        kwargs[name] = value
+
+                return self.Device(**kwargs)
 
     def is_device(self):
         return self.Device is not None
@@ -83,8 +97,8 @@ class Part(qua.Subject):
 
         self.dut = None
 
-    def set_dut(self, connection):
-        self.dut = self.model.create_dut(connection)
+    def set_dut(self, toolbox, cavity=None):
+        self.dut = self.model.create_dut(toolbox, cavity)
 
 
 class Requirement(Resource):

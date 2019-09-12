@@ -271,10 +271,7 @@ class Inspector(threading.Thread):
                             pars=pars)
 
         if part.model.is_device():
-            connection = self.toolbox.modbus_conn()
-            connection = connection if self.cavity is None \
-                else connection[self.cavity]
-            part.set_dut(connection)
+            part.set_dut(self.toolbox, self.cavity)
 
         return part
 
