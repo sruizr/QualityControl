@@ -11,10 +11,10 @@ class Session:
     elements = {}
     modes = {}
     locations = {}
-    partGroups = {}
+    partgroups = {}
     controlplans = {}
     devices = {}
-    dDeviceModels = {}
+    devicemodels = {}
     tests = []
     roles = {}
     parts = {}
@@ -42,10 +42,18 @@ class Db:
         return Session
 
 
+class DocuRepo(Repository):
+    pass
+
+
+class DirectoryRepo(Repository):
+    pass
+
+
 class KeyRepo(Repository):
-    def init(self, data, dict_name):
+    def __init__(self, data, dict_name):
         super().__init__(data)
-        self._repo = getattr(data.Session, dict_name)
+        self._repo = getattr(data.Session(), dict_name)
 
     def add(self, obj):
         with self.session.lock:
@@ -59,59 +67,63 @@ class KeyRepo(Repository):
         return self._repo[key]
 
 
+class FormRepo(KeyRepo):
+    pass
+
+
 class RequirementRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'requirements')
+    def __init__(self, data):
+        super().__init__(data, 'requirements')
 
 
 class RoleRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'roles')
+    def __init__(self, data):
+        super().__init__(data, 'roles')
 
 
 class LocationRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'locations')
+    def __init__(self, data):
+        super().__init__(data, 'locations')
 
 
 class PersonRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'persons')
+    def __init__(self, data):
+        super().__init__(data, 'persons')
 
 
 class ModeRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'modes')
+    def __init__(self, data):
+        super().__init__(data, 'modes')
 
 
 class CharacteristicRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'characteristics')
+    def __init__(self, data):
+        super().__init__(data, 'characteristics')
 
 
 class ElementRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'elements')
+    def __init__(self, data):
+        super().__init__(data, 'elements')
 
 
 class AttributeRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'attributes')
+    def __init__(self, data):
+        super().__init__(data, 'attributes')
 
 
 class PartModelRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'partmodels')
+    def __init__(self, data):
+        super().__init__(data, 'partmodels')
 
 
 class PartGroupRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'partgroups')
+    def __init__(self, data):
+        super().__init__(data, 'partgroups')
 
 
 class DeviceModelRepo(KeyRepo):
-    def init(self, data):
-        super().init(data, 'devicemodels')
+    def __init__(self, data):
+        super().__init__(data, 'devicemodels')
 
 
 class DeviceRepo(Repository):
@@ -124,22 +136,23 @@ class DeviceRepo(Repository):
             session.devices[key].append(device)
 
     def get_all_from(self, locationkey):
+
         return self.data.Session().devices[locationkey]
 
 
 class PartRepo(Repository):
     def add(self, part):
-        session = self.data.Sesssion()
+        session = self.data.Session()
         with session.lock:
             if part.model not in session.parts:
                 session.parts[part.model] = []
             session.parts[part.model].append(part)
 
-    def get(self, partmodel, serialnumber):
-        if partmodel not in self.session.db.parts:
+    def get_by(self, partmodel, serialnumber):
+        if partmodel not in self.session.parts:
             return
 
-        parts = self.session.db.parts[partmodel]
+        parts = self.session.parts[partmodel]
         for part in parts:
             if part.tracking == serialnumber:
                 return part
@@ -165,7 +178,7 @@ class ControlPlanRepo(Repository):
             for resource in resources:
                 session.controlplans[(resource, location)] = controlplan
 
-    def get(self, partmodel, location):
+    def get_by(self, partmodel, location):
         """Return control plan for a partmodel on a location
         """
         key = (partmodel.key, location.key)
@@ -174,10 +187,10 @@ class ControlPlanRepo(Repository):
             return self.session.db.controlplans[key]
 
         #If there is no controlplan for specific partmodel...
-        for group in partmodel.partgroups:
+        for group in partmodel.groups:
             key = (group.key, location.key)
-            if key in self.session.db.controlplans.keys():
-                return self.session.db.controlplans[key]
+            if key in self.session.controlplans.keys():
+                return self.session.controlplans[key]
 
 
 class TestRepo(Repository):

@@ -33,6 +33,8 @@ class Item:
 
     @property
     def stocks(self):
+        """Return stocks of item on each node
+        """
         stocks = {}
         for token in self.tokens:
             if token.current:
@@ -116,11 +118,15 @@ class UnitaryItem(Item):
             if token.current:
                 return token.node
 
+
 class Path:
     @property
     def method(self):
         if not hasattr(self, '_method'):
-            self._method = get_function(self.method_name) if self.method_name else None
+            if hasattr(self, 'method_name'):
+                self._method = get_function(self.method_name) if self.method_name else None
+            else:
+                self._method = None
         return self._method
 
 
@@ -130,6 +136,7 @@ class Flow:
         self.update = update
         for att, value in kwargs.items():
             setattr(self, att, value)
+        self.finished_on = None
 
     @property
     def status(self):
