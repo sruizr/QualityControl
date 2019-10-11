@@ -77,13 +77,15 @@ class Part(qua.Subject):
     """Part with unique serial number
     """
     def __init__(self, model, serial_number, pars=None):
-        self.model = model
-        self.serial_number = serial_number
-        self.pars = pars if pars else {}
-
+        super().__init__(resource=model, tracking=serial_number, **pars)
+        self.model = self.resource
+        self.serial_number = self.tracking
+        self.pars = pars
         self.dut = None
 
     def set_dut(self, connection):
+        """Set behaviour of the part as a device
+        """
         self.dut = self.model.create_dut(connection)
 
 

@@ -1,7 +1,12 @@
 import datetime
+from quactrl.data import NotFoundPart
 from quactrl.helpers import get_function
 from quactrl.models.core import Item, Resource, UnitaryItem, Token
 import quactrl.models.operations as op
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class DefectFound(Exception):
@@ -9,6 +14,8 @@ class DefectFound(Exception):
 
 
 class Subject(UnitaryItem):
+    """Element under quality control, can be a device or a part
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.measurements = []
@@ -73,9 +80,26 @@ class ControlPlan(op.Route):
 
 
 class Test(op.Operation):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.control_plan = self.route
+
     def start(self, **kwargs):
         super().start(**kwargs)
-        self.part.update_qty(1, self.control_plan.source, self)
+
+        self.part.is_new = False
+        if not self.part.location:
+            self.part.add(self.control_plan.source, self)
+            self.part.is_new = True
+        elif self.part.location == self.control_plan.destination:
+            self.part.move(self.part.location, self.control_plan.source, self)
+        elif self.part.location != self.control_plan.source:
+            raise NotFoundPart('Part with sn {} is in  {}'.format(self.part.tracking,
+                                                                  self.part.location.key
+            ))
+        else:
+            logger.warning('Current location is  {} for tracking {}'.format(self.part.location.key,
+                                                                            self.part.tracking))
 
     def close(self):
         if self.status in ('done', 'walking'):
@@ -156,10 +180,11 @@ class Check(op.Action):
                 if self.tff:
                     raise DefectFound()
 
-
-    def add_measurement(self, requirement, value, subject, index=None, uncertainty=0):
+    def add_measurement(self, requirement, value, subject=None, index=None, uncertainty=0):
         """Add measurement of a characteristic to check
         """
+        if not subject:
+            subject = self.part
         measurement = subject.get_measurement(requirement, index)
 
         self.measurements.append(measurement)
@@ -169,9 +194,12 @@ class Check(op.Action):
         if mode_key:
             self.add_defect(requirement, mode_key, subject, index)
 
-    def add_defect(self, requirement, mode_key, subject, index=None, ocurrence=1):
+    def add_defect(self, requirement, mode_key, subject=None, index=None, ocurrence=1):
         """Add defect of check
         """
+        if not subject:
+            subject = self.part
+
         failure_mode = requirement.characteristic.failure_modes[mode_key]
 
         defect = subject.get_defect(requirement, mode_key, index)
@@ -184,8 +212,8 @@ class Defect(Item):
     """Defect on a subject found by a check action
     """
     def __init__(self, failure_mode, tracking, subject):
-        self.failure_mode = failure_mode
-        self.tracking = tracking
+        super().__init__(resource=failure_mode, tracking=tracking)
+        self.failure_mode = self.resource
         self.subject = subject
         self.ocurrence = None
 
@@ -194,9 +222,9 @@ class Measurement(Item):
     """Measurement of a subject done by a check action
     """
     def __init__(self, characteristic, tracking, subject):
+        super().__init__(resource=characteristic, tracking=tracking)
         self.subject = subject
-        self.characteristic = characteristic
-        self.tracking = tracking
+        self.characteristic = self.resource
         self.value = None
 
     def eval_value(self, value, specs, uncertainty=0):
@@ -240,6 +268,7 @@ class Control(op.Step):
         super().__init__(route, method_name, method_pars)
         self.requirement = requirement
         self.reaction_name = reaction
+        self.source = None
 
     def implement(self, operation):
         """Counts item (time or units)

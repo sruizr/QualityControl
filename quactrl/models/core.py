@@ -33,6 +33,8 @@ class Item:
 
     @property
     def stocks(self):
+        """Return stocks of item on each node
+        """
         stocks = {}
         for token in self.tokens:
             if token.current:
@@ -40,7 +42,9 @@ class Item:
 
         return stocks
 
-    def get_token(self, node):
+    def get_token_from(self, node):
+        """Return all tokens inside a node
+        """
         for token in self.tokens:
             if token.current and token.node == node:
                 return token
@@ -53,7 +57,7 @@ class Item:
         elif qty < 0:
             raise Exception('Quantity should not be negative')
         else:
-            token = self.get_token(node)
+            token = self.get_token_from(node)
             if token:
                 token.current = False
 
@@ -63,15 +67,15 @@ class Item:
     def clear(self, node, flow):
         """Empty node from quantity
         """
-        token = self.get_token(node)
+        token = self.get_token_from(node)
         if token:
             token.current = False
-        new_token = Token(self, node, 0, flow)
-        token.current = False
-        self.tokens.append(token)
+            new_token = Token(self, node, 0, flow)
+            new_token.current = False
+            self.tokens.append(new_token)
 
     def move(self, from_node, to_node, flow, qty=None):
-        token = self.get_token(from_node)
+        token = self.get_token_from(from_node)
         if qty is None:
             qty = token.qty
 
@@ -114,11 +118,15 @@ class UnitaryItem(Item):
             if token.current:
                 return token.node
 
+
 class Path:
     @property
     def method(self):
         if not hasattr(self, '_method'):
-            self._method = get_function(self.method_name) if self.method_name else None
+            if hasattr(self, 'method_name'):
+                self._method = get_function(self.method_name) if self.method_name else None
+            else:
+                self._method = None
         return self._method
 
 
@@ -128,6 +136,7 @@ class Flow:
         self.update = update
         for att, value in kwargs.items():
             setattr(self, att, value)
+        self.finished_on = None
 
     @property
     def status(self):

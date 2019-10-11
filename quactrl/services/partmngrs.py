@@ -4,6 +4,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class SetupException(Exception):
@@ -25,7 +26,12 @@ class Cavity:
         self.get_part_info = lambda key: part_manager.get_part_info(key)
         self.part_is_present = lambda key: part_manager.part_is_present(key)
         self.part_manager = part_manager
-        self.part = None
+        self.current_part = None
+
+    @property
+    def part(self):
+        if self.state in ('busy', 'iddle'):
+            return self.current_part
 
     def restart(self, reinsert_orders=True):
         self.part_manager.test_service.restart_inspector(self.key,
@@ -52,11 +58,12 @@ class Cavity:
                     self.key
                 )
                 state = 'stacked'
-            except Exception:  # if problems getting info is because no part
+            except Exception as e:  # if problems getting info is because no part
+                logger.exception(e)
                 state = 'empty'
         elif self.state == 'stacked' and self.inspector.state == 'busy':
             state = 'busy'
-            self.part = self.inspector.part
+            self.current_part = self.inspector.part
         elif self.state == 'busy' and self.inspector.state == 'idle':
             state = self.inspector.test.state if self.inspector.test else 'cancelled'
         elif self.state == 'busy' and self.inspector.state != 'busy':
@@ -64,11 +71,11 @@ class Cavity:
         elif (self.state in ('success', 'failed', 'cancelled') and
               not self.part_is_present(self.key)):
             state = 'empty'
-            self.part = None
 
         if state != self.state:
             self.state = state
             self.part_manager.cavity_state_has_changed(self.key)
+            logger.info('State on cavity {} is {}'.format(self.key, state))
 
     def __del__(self):
         self.inspector.stop()
