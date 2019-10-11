@@ -20,7 +20,7 @@ metadata = MetaData()
 
 
 class Db:
-    """Database connection... maybe you should change name
+    """Database connection layer
     """
     def __init__(self, connection_string):
         if connection_string[:6] == 'sqlite':

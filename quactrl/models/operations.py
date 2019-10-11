@@ -15,6 +15,7 @@ class Location(Node):
         self.key = key
         self.name = name if name else key
         self.description = description
+        self.sub_locations = {}
 
 
 class Action(Flow):
@@ -46,7 +47,7 @@ class Action(Flow):
                     self.status = 'done'
 
     def cancel(self):
-        """Cancel execution of operation
+        """Cancel execution of action
         """
         if self.status == 'ongoing':
             self.thread.cancel()
