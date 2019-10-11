@@ -1,4 +1,5 @@
 import cherrypy
+import logging
 
 
 class Server:
@@ -22,6 +23,8 @@ class Server:
         cherrypy.tree.mount(root_resource, '/', self.conf)
 
     def start(self, silent_access=False):
+        logging.getLogger("cherrypy").propagate = False
+
         cherrypy.server.socket_host = self.host
         cherrypy.server.socket_port = self.port
         # propagate = True...
