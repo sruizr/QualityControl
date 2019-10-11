@@ -45,6 +45,8 @@ class Db:
         metadata.create_all()
 
     def drop_all(self):
+        """Drop all tables, be carefull
+        """
         metadata.drop_all()
 
 
