@@ -261,6 +261,13 @@ class Measurement(Item):
         elif 'value' in specs:
             return self._eval_discrete_value(value, specs['value'])
 
+    def get_measure(self, check):
+        """Retrieve measure value from check, if check invalid, None
+        """
+        for token in self.tokens:
+            if token.flow == check:
+                return token.qty
+
 
 class Control(op.Step):
     """Plan for checking a characteristic on a subject
