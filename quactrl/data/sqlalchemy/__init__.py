@@ -1,5 +1,5 @@
 from sqlalchemy import MetaData, create_engine, and_, cast, desc, BigInteger
-from sqlalchemy.orm import session_maker
+from sqlalchemy.orm import sessionmaker
 from quactrl.models.core import Token
 from quactrl.models.hhrr import Person, Role
 from quactrl.models.operations import Operation, Step, Location
@@ -39,12 +39,14 @@ class Db:
         from quactrl.data.sqlalchemy.mappers import load_all_mappers
         load_all_mappers()
 
-        self.Session = session_maker(bind=self.engine, autoflush=False)
+        self.Session = sessionmaker(bind=self.engine, autoflush=False)
 
     def create_schema(self):
         metadata.create_all()
 
     def drop_all(self):
+        """Drop all tables, be carefull
+        """
         metadata.drop_all()
 
 
@@ -60,6 +62,9 @@ class KeyRepo(Repository):
         if resource is None:
             raise KeyError('resource with key "{}" is not found'.format(key))
         return resource
+
+    def get_all(self):
+        return self.session.query(self.Model).all()
 
 
 class RequirementRepo(KeyRepo):
