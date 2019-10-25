@@ -44,11 +44,15 @@ class Db:
         metadata.create_all()
 
     def drop_all(self):
+        """Drop all tables, be carefull
+        """
         metadata.drop_all()
 
 
 class KeyRepo(Repository):
     def __init__(self, data, Model):
+        """Base class for repository with a key field
+        """
         super().__init__(data)
         self.Model = Model
 

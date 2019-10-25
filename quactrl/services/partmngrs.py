@@ -4,7 +4,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 class SetupException(Exception):
@@ -43,9 +43,9 @@ class Cavity:
 
         state = self.state
         inspector_state = self.inspector.state
-        logger.debug('Inspector state is {} and state is  {}'.format(
-            inspector_state, state
-        ))
+        # logger.debug('Inspector state is {} and state is  {}'.format(
+        #     inspector_state, state
+        # ))
         if self.state == 'empty' and (self.part_is_present(self.key)
                                       and self.part_manager.is_ready()):
             state = 'loaded'
@@ -97,6 +97,8 @@ class MultiPartManager(threading.Thread):
         self.cavities = {}
 
     def add_cavity(self, key=None):
+        """Add new cavity for allocating part
+        """
         self.cavities[key] = Cavity(self, key)
 
     def remove_cavity(self, key=None):

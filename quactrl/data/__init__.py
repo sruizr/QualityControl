@@ -104,6 +104,8 @@ class Data(containers.DynamicContainer):
 
 class Repository:
     def __init__(self, data):
+        """Base class for a repositry class with session pattern
+        """
         self.data = data
 
     @property

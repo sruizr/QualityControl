@@ -173,17 +173,17 @@ class Service:
 
 
 class Inspector(threading.Thread):
-    """Inspector of one cavity sharing some devices on a location
-    """
     def __init__(self, database, toolbox, location_key,
                  cavity=None, tff=True, create_part=True):
-        """Args:
-        database(Container): Persistence layer container of providers
-        toolbox(Container): Container of devices
-        location_key: where is located the test station and all its devices
-        cavity: cavity number, None is the station is not multicavity
-        tff(Boolean): Till first failure, stops test when first failure is found
+        """Inspector of one cavity sharing some devices on a location
+            Args:
+            database(Container): Persistence layer container of providers
+            toolbox(Container): Container of devices
+            location_key: where is located the test station and all its devices
+            cavity: cavity number, None is the station is not multicavity
+            tff(Boolean): Till first failure, stops test when first failure is found
         """
+
         name = 'Inspector'
         if cavity is not None:
             name += '_{}'.format(cavity)
@@ -283,10 +283,7 @@ class Inspector(threading.Thread):
                             pars=pars)
 
         if part.model.is_device():
-            connection = self.toolbox.modbus_conn()
-            connection = connection if self.cavity is None \
-                else connection[self.cavity]
-            part.set_dut(connection)
+            part.set_dut(self.toolbox, self.cavity)
 
         return part
 
