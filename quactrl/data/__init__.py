@@ -33,7 +33,8 @@ class Data(containers.DynamicContainer):
         'products.Requirement',
         'quality.Test', 'quality.Mode',
         'devices.DeviceModel', 'devices.Device',
-        'documents.Directory', 'documents.Form'
+        'documents.Directory', 'documents.Form',
+        'quality.Measurement'
     ]
 
     def __init__(self, module_name, connection_string=None,

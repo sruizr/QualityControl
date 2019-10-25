@@ -10,7 +10,6 @@ from quactrl.models.quality import DefectFound
 import logging
 
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 

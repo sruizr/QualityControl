@@ -1,9 +1,9 @@
 from sqlalchemy import MetaData, create_engine, and_, cast, desc, BigInteger
 from sqlalchemy.orm import sessionmaker
-from quactrl.models.core import Token
+from quactrl.models.core import Token, Item
 from quactrl.models.hhrr import Person, Role
-from quactrl.models.operations import Operation, Step, Location
-from quactrl.models.quality import Mode, ControlPlan
+from quactrl.models.operations import Operation, Step, Location, Route
+from quactrl.models.quality import Mode, ControlPlan, Measurement, Test
 from quactrl.models.devices import Device, DeviceModel
 from quactrl.models.products import (Requirement, Element, Attribute,
                                      PartModel, PartGroup, Characteristic, Part)
@@ -13,7 +13,6 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 metadata = MetaData()
@@ -137,7 +136,8 @@ class DeviceRepo(Repository):
     def get_all_from(self, location_key):
         """Returns all devices from a location given its key
         """
-        location = self.session.query(Location).filter(Location.key == location_key).one()
+        location = self.session.query(Location).filter(
+            Location.key == location_key).one()
         logger.info('Location is {}'.format(location.key))
         results = self.session.query(Device, Token).filter(
             Device.id == Token.item_id).filter(
@@ -192,4 +192,25 @@ class ControlPlanRepo(Repository):
 
 
 class TestRepo(Repository):
-    pass
+    def get_last(self, location_key, tracking):
+        location = self.session.query(Location).filter(Location.key == location_key).first()
+
+        tests = self.session.query(Test).join(ControlPlan).join(Token).join(Item).filter(
+            ControlPlan.source == location,
+            Item.tracking == tracking
+        ).order_by(Test.id.desc()).first()
+        return tests
+
+    def get_samples(self, test):
+        samples = self.session.query(Part).join(Token).filter(
+            Token.flow == test
+        ).all()
+        return list(samples)
+
+
+class MeasurementRepo(Repository):
+    def get_all(self, check):
+        measurements = self.session.query(Measurement).join(Token).filter(
+            Token.flow == check
+        ).all()
+        return measurements
