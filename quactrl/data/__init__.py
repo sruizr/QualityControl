@@ -2,6 +2,22 @@ from dependency_injector import providers, containers
 from quactrl.helpers import get_class
 
 
+class NotFoundPath(Exception):
+    pass
+
+
+class NotFoundItem(Exception):
+    pass
+
+
+class NotFoundResource(Exception):
+    pass
+
+
+class NotFoundNode(Exception):
+    pass
+
+
 class Data(containers.DynamicContainer):
     """Data layer with all repositories and a session provider
     All is ThreadLocalSingleton
@@ -25,9 +41,14 @@ class Data(containers.DynamicContainer):
             connection_string, **kwargs
         )
 
-        self.Session = providers.ThreadLocalSingleton(self.db.Session,
-                                                      connection_string)
+        self.Session = providers.ThreadLocalSingleton(self.db.Session)
         self._load_repos()
+
+    def drop_all(self):
+        self.db.drop_all()
+
+    def create_schema(self):
+        self.db.create_schema()
 
     def _get_class(self, name):
         full_class_name = '{}.{}Repo'.format(self.module_name, name)

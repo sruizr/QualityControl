@@ -27,13 +27,9 @@ class DeviceModel(Resource):
 
 
 class Device(qua.Subject):
-    def __init__(self, device_model, tracking, location=None,
-                 pars=None):
-        super().__init__()
+    def __init__(self, device_model, tracking, pars=None):
         self.model = device_model
         self.tracking = tracking
-
-        self.location = location
         self.pars = pars if pars else {}
 
     @property
@@ -69,7 +65,7 @@ class DeviceProvider(providers.Provider):
         return self._device
 
 
-class DeviceContainer(containers.DynamicContainer):
+class Toolbox(containers.DynamicContainer):
     """Container of devices and its components
     """
     _providers = {
@@ -106,13 +102,14 @@ class DeviceContainer(containers.DynamicContainer):
 
     def _load_component(self, config):
         name = config.get('name')
-        args = config.pop('args', [])
+        args = config.get('args', [])
         for index, value in enumerate(args):
             args[index] = self._process_value(value)
 
-        kwargs = config.pop('kwargs', {})
+        kwargs = config.get('kwargs', {})
         for key, value in kwargs.items():
             kwargs[key] = self._process_value(value)
+
 
         self._devices[name] = {
             'class': config.get('class'),
@@ -124,7 +121,6 @@ class DeviceContainer(containers.DynamicContainer):
 
     def _process_value(self, value):
         if (type(value) is dict) and ('class' in value) and ('name' in value):
-            print('Value is: {}'.format(value))
             self._load_component(value)
             return '>' + value['name']
         else:
