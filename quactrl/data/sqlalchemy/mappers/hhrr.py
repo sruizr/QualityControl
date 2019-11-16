@@ -17,8 +17,11 @@ mapper(hhrr.Person, tables.node,
                ),
                backref='persons'
            )
-       },)
+       }, polymorphic_load='selectin'
+)
+
 
 
 mapper(hhrr.Role, tables.node,
-       inherits=hhrr.Node, polymorphic_identity='role')
+       inherits=hhrr.Node, polymorphic_identity='role',
+       polymorphic_load='selectin')

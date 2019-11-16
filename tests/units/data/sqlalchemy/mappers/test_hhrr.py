@@ -9,6 +9,7 @@ class A_HhrrModule:
     def setup_class(cls):
         engine = create_engine('sqlite:///:memory:')
         metadata.bind = engine
+        engine.echo = True
 
         metadata.create_all()
         cls.Session = sessionmaker(bind=engine)
@@ -32,4 +33,5 @@ class A_HhrrModule:
 
         session = self.Session()
         role = session.query(Role).first()
+        assert len(session.query(Role). all()) == 1
         assert role.persons[0].name == 'salva'

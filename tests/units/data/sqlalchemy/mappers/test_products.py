@@ -20,6 +20,8 @@ class A_ProductModule(TestMapper):
         other_session = self.Session()
 
         part_group = other_session.query(prd.PartGroup).first()
+        part_groups = other_session.query(prd.PartGroup).all()
+        assert len(part_groups) ==  1
         assert part_group.models[0].key == 'model_key'
 
     def should_link_requirements_with_others(self):
