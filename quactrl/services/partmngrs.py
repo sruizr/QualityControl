@@ -25,6 +25,7 @@ class CavityState:
 class Empty(CavityState):
     def handle(self):
         if self.cavity.part_is_present():
+            self.cavity.part = None
             self.cavity.set_state('loaded')
 
 
@@ -55,8 +56,8 @@ class Busy(CavityState):
 
 class Solved(CavityState):
     def handle(self):
+        print(self.cavity.part_is_present())
         if not self.cavity.part_is_present():
-            self.cavity.part = None
             self.cavity.set_state('empty')
 
 
@@ -70,7 +71,7 @@ class Cavity:
             State.__name__.lower(): State(self)
             for State in [Empty, Loaded, Stacked, Busy, Solved]
         }
-        self.set_state('empty')
+        self._state = self._states['empty']
         self.test_service = part_manager.test_service
         if key not in self.test_service.inspectors.keys():
             self.test_service.start_inspector(key)
@@ -90,8 +91,12 @@ class Cavity:
             self._state = self._states[value]
             self.part_manager.cavity_state_has_changed(self.key)
 
+    @property
+    def state(self):
+        return self._state.name
+
     def stack_part(self):
-         part_info = self.cavity.get_part_info()
+         part_info = self.get_part_info()
          self.test_service.stack_part(
                 part_info,
                 self.part_manager.responsible.key,
