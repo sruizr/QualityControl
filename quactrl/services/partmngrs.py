@@ -9,66 +9,99 @@ logger = logging.getLogger(__name__)
 class SetupException(Exception):
     pass
 
+class CavityState:
+
+    def __init__(self, cavity):
+        self.cavity = cavity
+
+    @property
+    def name(self):
+        return self.__class__.__name__.lower()
+
+    def handle(self):
+        pass
+
+
+class Empty(CavityState):
+    def handle(self):
+        if self.cavity.part_is_present():
+            self.cavity.set_state('loaded')
+
+
+class Loaded(CavityState):
+    def handle(self):
+        if not self.cavity.part_is_present():
+            self.cavity.set_state('empty')
+            return
+
+        if self.cavity.part_is_ready() and self.cavity.inspector.state == 'idle':
+            self.cavity.stack_part()
+            self.cavity.set_state('stacked')
+
+
+class Stacked(CavityState):
+    def handle(self):
+        if self.cavity.inspector.state == 'busy':
+            self.cavity.part = self.cavity.inspector.part
+            self.cavity.set_state('busy')
+
+
+class Busy(CavityState):
+    def handle(self):
+        if self.cavity.inspector.state != 'busy':
+            self.cavity.set_state('solved')
+            self.cavity.resolution = self.cavity.inspector.state
+
+
+class Solved(CavityState):
+    def handle(self):
+        if not self.cavity.part_is_present():
+            self.cavity.part = None
+            self.cavity.set_state('empty')
+
 
 class Cavity:
     """Cavity where a part is allocated to test
     """
     def __init__(self, part_manager, key=None):
         self.key = key
-        self.state = 'empty'
 
+        self._states = {
+            State.__name__.lower(): State(self)
+            for State in [Empty, Loaded, Stacked, Busy, Solved]
+        }
+        self.set_state('empty')
         self.test_service = part_manager.test_service
         if key not in self.test_service.inspectors.keys():
             self.test_service.start_inspector(key)
 
         self.inspector = part_manager.test_service.inspectors[key]
-        self.get_part_info = lambda key: part_manager.get_part_info(key)
-        self.part_is_present = lambda key: part_manager.part_is_present(key)
+        self.get_part_info = lambda: part_manager.get_part_info(self.key)
+        self.part_is_present = lambda: part_manager.part_is_present(self.key)
+        self.part_is_ready = lambda: part_manager.is_ready()
         self.part_manager = part_manager
         self.part = None
 
     def restart(self, reinsert_orders=True):
         self.part_manager.test_service.restart_inspector(self.key,
                                                          reinsert_orders)
+    def set_state(self, value):
+        if self._state.name != value:
+            self._state = self._states[value]
+            self.part_manager.cavity_state_has_changed(self.key)
+
+    def stack_part(self):
+         part_info = self.cavity.get_part_info()
+         self.test_service.stack_part(
+                part_info,
+                self.part_manager.responsible.key,
+                self.key
+         )
 
     def refresh(self):
         """Refresh state of cavity
         """
-
-        state = self.state
-        inspector_state = self.inspector.state
-        logger.debug('Inspector state is {} and state is  {}'.format(
-            inspector_state, state
-        ))
-        if self.state == 'empty' and self.part_is_present(self.key) and self.part_manager.is_ready():
-            state = 'loaded'
-        elif self.state == 'loaded' and self.inspector.state == 'idle':
-            try:
-                part_info = self.get_part_info(self.key)
-                self.test_service.stack_part(
-                    part_info,
-                    self.part_manager.responsible.key,
-                    self.key
-                )
-                state = 'stacked'
-            except Exception:  # if problems getting info is because no part
-                state = 'empty'
-
-        elif self.state == 'stacked' and self.inspector.state == 'busy':
-            state = 'busy'
-            self.part = self.inspector.part
-        elif self.state == 'busy' and self.inspector.state == 'idle':
-            state = self.inspector.test.state
-        elif self.state == 'busy' and self.inspector.state != 'busy':
-            logger.info('Inspector state is {}'.format(self.inspector.state))
-        elif (self.state in ('success', 'failed', 'cancelled') and
-              not self.part_is_present(self.key)):
-            state = 'empty'
-            self.part = None
-
-        if state != self.state:
-            self.state = state
-            self.part_manager.cavity_state_has_changed(self.key)
+        self._state.handle()
 
     def __del__(self):
         self.inspector.stop()
