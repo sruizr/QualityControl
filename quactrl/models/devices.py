@@ -28,6 +28,8 @@ class DeviceModel(Resource):
 
 class Device(qua.Subject):
     def __init__(self, device_model, tracking, pars=None):
+        super().__init__()
+
         self.model = device_model
         self.tracking = tracking
         self.pars = pars if pars else {}

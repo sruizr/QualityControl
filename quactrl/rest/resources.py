@@ -152,7 +152,7 @@ _RESOURCES = {
     'part_model': PartModelResource,
     'batch': BatchResource,
     'responsible': ResponsibleResource
-}
+    }
 
 
 @cherrypy.expose

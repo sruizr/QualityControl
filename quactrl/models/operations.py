@@ -15,6 +15,7 @@ class Location(Node):
         self.key = key
         self.name = name if name else key
         self.description = description
+        self.sub_locations = {}
 
 
 class Action(Flow):

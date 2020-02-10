@@ -26,7 +26,11 @@ class Cavity:
         self.get_part_info = lambda key: part_manager.get_part_info(key)
         self.part_is_present = lambda key: part_manager.part_is_present(key)
         self.part_manager = part_manager
-        self.part = None
+
+    @property
+    def part(self):
+        if self.state in ('busy', 'iddle'):
+            return self.inspector.part
 
     def restart(self, reinsert_orders=True):
         self.part_manager.test_service.restart_inspector(self.key,
@@ -41,10 +45,10 @@ class Cavity:
         logger.debug('Inspector state is {} and state is  {}'.format(
             inspector_state, state
         ))
-        if self.state == 'empty' and (self.part_is_present(self.key)
-                                      and self.part_manager.is_ready()):
+        if self.state == 'empty' and self.part_is_present(self.key):
             state = 'loaded'
-        elif self.state == 'loaded' and self.inspector.state == 'idle':
+        elif self.state == 'loaded' and self.inspector.state == 'idle' and self.part_manager.is_ready():
+            print("has entrado en bucle loaded" )
             try:
                 part_info = self.get_part_info(self.key)
                 self.test_service.stack_part(
@@ -56,9 +60,10 @@ class Cavity:
             except Exception as e:  # if problems getting info is because no part
                 logger.exception(e)
                 state = 'empty'
+        elif self.state == 'loaded' and not self.part_is_present(self.key):
+            state = 'empty' 
         elif self.state == 'stacked' and self.inspector.state == 'busy':
             state = 'busy'
-            self.part = self.inspector.part
         elif self.state == 'busy' and self.inspector.state == 'idle':
             state = self.inspector.test.state if self.inspector.test else 'cancelled'
         elif self.state == 'busy' and self.inspector.state != 'busy':
@@ -66,7 +71,6 @@ class Cavity:
         elif (self.state in ('success', 'failed', 'cancelled') and
               not self.part_is_present(self.key)):
             state = 'empty'
-            self.part = None
 
         if state != self.state:
             self.state = state

@@ -91,6 +91,7 @@ class Data(containers.DynamicContainer):
         return RepoClass
 
     def _load_repos(self):
+
         for model in self._MODELS:
             RepoClass = self._find_repo_class(model)
             if RepoClass:
@@ -114,4 +115,3 @@ class Repository:
 
     def remove(self, obj):
         self.session.delete(obj)
-
