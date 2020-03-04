@@ -27,6 +27,8 @@ class DeviceModel(Resource):
 
 
 class Device(qua.Subject):
+    """Implementation of device
+    """
     def __init__(self, device_model, tracking, pars=None):
         super().__init__()
 

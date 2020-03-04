@@ -4,6 +4,8 @@ import cherrypy
 from quactrl.rest.parsing import parse
 from quactrl.helpers import is_num
 
+"""Module with all resources to have an APIREST with testing
+"""
 
 def try_int(cavity):
     if is_num(cavity):

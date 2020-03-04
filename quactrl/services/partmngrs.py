@@ -87,6 +87,12 @@ class Cavity:
         self.part_manager = part_manager
         self.part = None
         self.resolution = None
+        self.current_part = None
+
+    @property
+    def part(self):
+        if self.state in ('busy', 'iddle'):
+            return self.current_part
 
     def restart(self, reinsert_orders=True):
         self.part_manager.test_service.restart_inspector(self.key,
@@ -141,6 +147,8 @@ class MultiPartManager(threading.Thread):
         self.cavities = {}
 
     def add_cavity(self, key=None):
+        """Add new cavity for allocating part
+        """
         self.cavities[key] = Cavity(self, key)
 
     def remove_cavity(self, key=None):

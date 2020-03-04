@@ -14,6 +14,8 @@ class DefectFound(Exception):
 
 
 class Subject(UnitaryItem):
+    """Element under quality control, can be a device or a part
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.measurements = []
@@ -225,18 +227,13 @@ class Measurement(Item):
         self.characteristic = self.resource
         self.value = None
 
-    def eval_value(self, value, specs, uncertainty=0):
-        self.value = value
+    def _eval_discrete_value(self, value, ref_value):
+        if value != ref_value:
+            return 'wr'
 
-        low_limit = high_limit = None
-        if 'limits' in specs:
-            low_limit, high_limit = specs['limits']
-            value = self.value
-        elif 'max_abs' in specs:
-            high_limit = specs['max_abs']
-            value = abs(self.value)
-
+    def _eval_continous_value(self, value, limits, uncertainty):
         mode_key = None
+        low_limit, high_limit = limits
         if high_limit is not None and value > high_limit - uncertainty:
             mode_key = 'hi' if value > high_limit else 'shi'
 
@@ -246,11 +243,35 @@ class Measurement(Item):
         if not (low_limit is None or high_limit is None):
             if low_limit > high_limit:
                 mode_key = None if mode_key else 'lo'
-
-        if mode_key and 'max_abs' in specs:
-            mode_key = list(self.characteristic.failure_modes.keys())[0]
-
         return mode_key
+
+    def _eval_abs_value(self, value, abs_limit, uncertainty):
+        if abs(value) > abs_limit - uncertainty:
+            return list(self.characteristic.failure_modes.keys())[0]
+
+    def eval_value(self, value, specs, uncertainty=0):
+        """Eval value of measurement against specs
+        """
+        self.value = value
+
+        if 'limits' in specs:
+            return self._eval_continous_value(value, specs['limits'], uncertainty)
+        elif 'max_abs' in specs:
+            return self._eval_abs_value(value, specs['max_abs'], uncertainty)
+        elif 'value' in specs:
+            return self._eval_discrete_value(value, specs['value'])
+
+    def get_measure(self, check):
+        """Retrieve measure value from check, if check invalid, None
+        """
+        for token in self.tokens:
+            if token.flow == check:
+                return token.qty
+
+    def get_measure(self, check):
+        for token in self.tokens:
+            if token.flow == check:
+                return token.qty
 
 
 class Control(op.Step):

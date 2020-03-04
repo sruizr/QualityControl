@@ -33,7 +33,8 @@ class Data(containers.DynamicContainer):
         'products.Requirement',
         'quality.Test', 'quality.Mode',
         'devices.DeviceModel', 'devices.Device',
-        'documents.Directory', 'documents.Form'
+        'documents.Directory', 'documents.Form',
+        'quality.Measurement'
     ]
 
     def __init__(self, module_name, connection_string=None,
@@ -104,6 +105,8 @@ class Data(containers.DynamicContainer):
 
 class Repository:
     def __init__(self, data):
+        """Base class for a repositry class with session pattern
+        """
         self.data = data
 
     @property

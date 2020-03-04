@@ -1,7 +1,12 @@
 import re
+import inspect
 from quactrl.helpers import get_class
 from quactrl.models.core import Resource
 import quactrl.models.quality as qua
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class PartGroup(Resource):
@@ -48,6 +53,8 @@ class PartModel(PartGroup):
 
     @property
     def Device(self):
+        """Returns a class instance for creating a dut
+        """
         if not hasattr(self, '_Device'):
             device_class = self.pars.get('device_class')
             if device_class is None:
@@ -64,11 +71,25 @@ class PartModel(PartGroup):
                 return group.Device, group.kwargs.copy()
         return None, None
 
-    def create_dut(self, connection):
+    def create_dut(self, toolbox, cavity=None):
         """Return a device instance if part model is a device
         """
         if self.Device:
-            return self.Device(connection, **self.kwargs)
+            arg_names = inspect.getargspec(self.Device.__init__).args
+            arg_names.pop(0)   # remove self parameter
+            kwargs = {}
+            logger.debug(arg_names)
+            for name in arg_names:
+                if name in self.kwargs:
+                    kwargs[name] = self.kwargs[name]
+                elif hasattr(toolbox, name):
+                    value = getattr(toolbox, name)()
+                    if type(value) is list:
+                        kwargs[name] = value[cavity]
+                    else:
+                        kwargs[name] = value
+
+                return self.Device(**kwargs)
 
     def is_device(self):
         return self.Device is not None
@@ -84,8 +105,8 @@ class Part(qua.Subject):
         self.pars = pars
         self.dut = None
 
-    def set_dut(self, connection):
-        self.dut = self.model.create_dut(connection)
+    def set_dut(self, toolbox, cavity=None):
+        self.dut = self.model.create_dut(toolbox, cavity)
 
 
 class Requirement(Resource):

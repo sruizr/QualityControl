@@ -2,7 +2,6 @@ import cherrypy
 import logging
 
 
-
 class Server:
     def __init__(self, root_resource, host='127.0.0.1', port=8080,
                  config=None):

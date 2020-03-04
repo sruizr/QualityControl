@@ -33,6 +33,8 @@ class Item:
 
     @property
     def stocks(self):
+        """Return stocks of item on each node
+        """
         stocks = {}
         for token in self.tokens:
             if token.current:

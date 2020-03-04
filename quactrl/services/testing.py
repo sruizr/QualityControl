@@ -3,12 +3,10 @@ import sys
 import traceback
 from queue import Queue
 from quactrl.models.devices import Toolbox
-from quactrl.data import NotFoundPath, NotFoundItem, NotFoundResource, NotFoundPart
-import quactrl.models.operations as op
+from quactrl.data import NotFoundPath, NotFoundResource, NotFoundPart
 import quactrl.models.products as prd
 from quactrl.models.quality import DefectFound
 import logging
-
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +27,8 @@ class InspectorException(Exception):
 
 class Service:
     """Test parts from a location"""
-    def __init__(self, database, location, till_first_failure=True, create_part=True):
+    def __init__(self, database, location, till_first_failure=True,
+                 create_part=True):
 
         self.db = database
         self.tff = till_first_failure
@@ -42,7 +41,8 @@ class Service:
 
         all_devices = self.db.Devices().get_all_from(self.location_key)
 
-        logger.info('Loaded {} devices at {}'.format(len(all_devices), location))
+        logger.info('Loaded {} devices at {}'.format(len(all_devices),
+                                                     location))
         logger.debug('Sesssion on main is {}'.format(self.db.Session()))
         self.toolbox = Toolbox(all_devices)
 
@@ -174,17 +174,17 @@ class Service:
 
 
 class Inspector(threading.Thread):
-    """Inspector of one cavity sharing some devices on a location
-    """
     def __init__(self, database, toolbox, location_key,
                  cavity=None, tff=True, create_part=True):
-        """Args:
-        database(Container): Persistence layer container of providers
-        toolbox(Container): Container of devices
-        location_key: where is located the test station and all its devices
-        cavity: cavity number, None is the station is not multicavity
-        tff(Boolean): Till first failure, stops test when first failure is found
+        """Inspector of one cavity sharing some devices on a location
+            Args:
+            database(Container): Persistence layer container of providers
+            toolbox(Container): Container of devices
+            location_key: where is located the test station and all its devices
+            cavity: cavity number, None is the station is not multicavity
+            tff(Boolean): Till first failure, stops test when first failure is found
         """
+
         name = 'Inspector'
         if cavity is not None:
             name += '_{}'.format(cavity)
@@ -219,28 +219,32 @@ class Inspector(threading.Thread):
             self.responsible = self.db.Persons().get(responsible_key)
 
     def set_part_model(self, part_number):
+        """Set part model to be generated or found before test
+        """
         if (self.part_model is None
                 or self.part_model.key != part_number):
             self.part_model = self.db.PartModels().get(part_number)
             if self.part_model is None:
-                raise NotFoundResource('Not found part model for partnumber{}'.format(part_number))
+                raise NotFoundResource(
+                    'Not found part model for partnumber{}'.format(part_number)
+                )
 
         if (self.control_plan is None
-            or self.part_model not in
-            self.control_plan.outputs):
+                or self.part_model not in self.control_plan.outputs):
             self.control_plan = (self.db.ControlPlans()
                                  .get_by(self.part_model, self.location))
             if self.control_plan is None:
-                raise NotFoundPath('Not found control plan for {}'.format(part_number))
+                raise NotFoundPath(
+                    'Not found control plan for {}'.format(part_number))
 
             self.destination_key = self.control_plan.destination.key
-
 
     def run(self):
         """Thread activation processing order by order"""
         self.location = self.db.Locations().get(self.location_key)
         self.devices = {device.tracking: device
-                        for device in self.db.Devices().get_all_from(self.location_key)}
+                        for device in self.db.Devices().get_all_from(
+                                self.location_key)}
 
         while not self._stop_event.is_set():
             try:
@@ -268,7 +272,8 @@ class Inspector(threading.Thread):
         """
 
         part = self.db.Parts().get_by(self.part_model, serial_number)
-        if part and part.location != self.location and part.location.key != self.destination_key:
+        if (part and part.location != self.location
+                and part.location.key != self.destination_key):
             raise WrongLocationError(
                 'Part {} with sn {} found on {}'.format(
                     part.model.key, part.tracking, part.location.key
@@ -276,17 +281,15 @@ class Inspector(threading.Thread):
             )
 
         if (part is None) and (not self.create_part):
-            raise NotFoundPart('Part with sn {} not found, remove'.format(serial_number))
+            raise NotFoundPart('Part with sn {} not found, remove'.format(
+                serial_number))
 
         if part is None:
             part = prd.Part(self.part_model, serial_number,
                             pars=pars)
 
         if part.model.is_device():
-            connection = self.toolbox.modbus_conn()
-            connection = connection if self.cavity is None \
-                else connection[self.cavity]
-            part.set_dut(connection)
+            part.set_dut(self.toolbox, self.cavity)
 
         return part
 

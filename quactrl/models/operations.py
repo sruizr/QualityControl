@@ -47,7 +47,7 @@ class Action(Flow):
                     self.status = 'done'
 
     def cancel(self):
-        """Cancel execution of operation
+        """Cancel execution of action
         """
         if self.status == 'ongoing':
             self.thread.cancel()
