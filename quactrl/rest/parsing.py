@@ -1,4 +1,6 @@
 def parse(obj):
+    """Parse an object to a dict, compatible to a json transform
+    """
     if obj is None:
         return None
 
@@ -39,10 +41,14 @@ def _parse_test(test):
 
 
 def _parse_cavity(cavity):
+    """Parse cavity object to dict
+    """
     result = {
         'state': cavity.state,
-        'part': parse(cavity.part)
+        'part': parse(cavity.part),
+        'resolution': cavity.resolution
     }
+
     return result
 
 

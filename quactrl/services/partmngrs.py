@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 class SetupException(Exception):
     pass
 
+
 class CavityState:
 
     def __init__(self, cavity):
@@ -27,17 +28,20 @@ class Empty(CavityState):
         if self.cavity.part_is_present():
             self.cavity.part = None
             self.cavity.set_state('loaded')
-            logger.debug('Has part {}'.format(self.cavity.part_manager._part_info))
+            logger.debug('Has part {}'.format(
+                self.cavity.part_manager._part_info))
+
 
 class Loaded(CavityState):
     def handle(self):
         if not self.cavity.part_is_present():
             self.cavity.set_state('empty')
-            logger.debug('Has part {}'.format(self.cavity.part_manager._part_info))
+            logger.debug('Has part {}'.format(
+                self.cavity.part_manager._part_info))
             return
 
-        # logger.info('Has part info {} and inspector state is {}'.format(self.cavity.part_manager.has_part_info(), self.cavity.inspector.state))
-        if self.cavity.part_is_ready() and self.cavity.inspector.state == 'idle':
+        if (self.cavity.part_is_ready() and
+                self.cavity.inspector.state == 'idle'):
             self.cavity.stack_part()
             self.cavity.set_state('stacked')
 
@@ -53,12 +57,10 @@ class Busy(CavityState):
     def handle(self):
         if self.cavity.inspector.state != 'busy':
             self.cavity.set_state('solved')
-            self.cavity.resolution = self.cavity.inspector.state
 
 
 class Solved(CavityState):
     def handle(self):
-        print(self.cavity.part_is_present())
         if not self.cavity.part_is_present():
             self.cavity.set_state('empty')
 
@@ -84,22 +86,29 @@ class Cavity:
         self.part_is_ready = lambda: part_manager.is_ready()
         self.part_manager = part_manager
         self.part = None
+        self.resolution = None
 
     def restart(self, reinsert_orders=True):
         self.part_manager.test_service.restart_inspector(self.key,
                                                          reinsert_orders)
+
     def set_state(self, value):
         if self._state.name != value:
             self._state = self._states[value]
+            if value == 'solved':
+                self.resolution = self.inspector.test.status
+            elif value in ('loaded', 'stacked', 'busy'):
+                self.resolution = None
             self.part_manager.cavity_state_has_changed(self.key)
-            logger.info('Cavity {} has changed to {}'.format(self.key, self.state))
-            
+            logger.info('Cavity {} has changed to {}'.format(
+                self.key, self.state))
+
     @property
     def state(self):
         return self._state.name
 
     def stack_part(self):
-        logger.debug('Stack part is called' )
+        logger.debug('Stack part is called')
         part_info = self.get_part_info()
         self.test_service.stack_part(
             part_info,
@@ -119,7 +128,7 @@ class Cavity:
 class MultiPartManager(threading.Thread):
     """Base class for all part managers
     """
-    def __init__(self, test_service, refresh_time=0):
+    def __init__(self, test_service, refresh_time=0.2):
         super().__init__()
         self.test_service = test_service
         self.data = test_service.db
@@ -143,6 +152,7 @@ class MultiPartManager(threading.Thread):
             cavities = list(self.cavities.values())
             for cavity in cavities:
                 cavity.refresh()
+            time.sleep(self.refresh_time)
 
     def stop(self):
         self._continue = False

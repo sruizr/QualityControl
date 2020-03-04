@@ -23,7 +23,8 @@ class PartGroup(Resource):
             device_class = self.pars.get('device_class')
             self._Device = None
             if device_class is not None:
-                self._Device = get_class(device_class) if device_class else None
+                self._Device = (get_class(device_class) if device_class
+                                else None)
                 self.kwargs = self.pars.get('kwargs', {})
         return self._Device
 
@@ -111,6 +112,13 @@ class Requirement(Resource):
 
     def add_requi(self, requirement):
         self.requirements[requirement.key] = requirement
+
+    def get_requirement(self, filter_key):
+        """Returns a subrequirement by a substring of key
+        """
+        for key in self.requirements.keys():
+            if filter_key in key:
+                return self.requirements[key]
 
 
 class Characteristic(Resource):
