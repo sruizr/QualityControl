@@ -79,20 +79,23 @@ class Cavity:
         self.test_service = part_manager.test_service
         if key not in self.test_service.inspectors.keys():
             self.test_service.start_inspector(key)
-
         self.inspector = part_manager.test_service.inspectors[key]
+
+        self._part = None
         self.get_part_info = lambda: part_manager.get_part_info(self.key)
         self.part_is_present = lambda: part_manager.part_is_present(self.key)
         self.part_is_ready = lambda: part_manager.is_ready()
         self.part_manager = part_manager
-        self.part = None
         self.resolution = None
-        self.current_part = None
 
     @property
     def part(self):
         if self.state in ('busy', 'iddle'):
-            return self.current_part
+            return self._part
+
+    @part.setter
+    def part(self, value):
+        self._part = value
 
     def restart(self, reinsert_orders=True):
         self.part_manager.test_service.restart_inspector(self.key,

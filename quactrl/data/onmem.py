@@ -198,3 +198,8 @@ class TestRepo(Repository):
         session = self.data.Session()
         with session.lock:
             session.tests.append(test)
+
+
+class MeasurementRepo(Repository):
+    def get_all(self, check):
+        return check.measurements
