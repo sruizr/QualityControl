@@ -14,18 +14,17 @@ _providers = {
 
 
 class DevicesConstructor:
-    def __init__(self, definitions)
+    def __init__(self, definitions):
+        pass
 
-def construct_device_container(dev_definitions):
-    devices = DynamicContainer()
-    for definition in dev_definitions:
-        provider =  _providers[definition['strategy']](
-            get_class(definition['class']),
-        )
-        setattr(devices, definition['name'],)
-
-
-    return devices
+    def construct_device_container(dev_definitions):
+        devices = DynamicContainer()
+        for definition in dev_definitions:
+            provider =  _providers[definition['strategy']](
+                get_class(definition['class']),
+            )
+            setattr(devices, definition['name'],)
+        return devices
 
 
 class DeviceManager:

@@ -63,12 +63,6 @@ class PartModel(PartGroup):
                 return group.Device, group.kwargs.copy()
         return None, None
 
-    def create_dut(self, connection):
-        """Return a device instance if part model is a device
-        """
-        if self.Device:
-            return self.Device(connection, **self.kwargs)
-
     def is_device(self):
         return self.Device is not None
 
@@ -80,11 +74,6 @@ class Part(qua.Subject):
         self.model = model
         self.serial_number = serial_number
         self.pars = pars if pars else {}
-
-        self.dut = None
-
-    def set_dut(self, connection):
-        self.dut = self.model.create_dut(connection)
 
 
 class Requirement(Resource):

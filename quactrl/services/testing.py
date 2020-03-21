@@ -226,7 +226,6 @@ class Inspector(threading.Thread):
             if self.control_plan is None:
                 raise NotFoundPath('Not found control plan for {}'.format(part_number))
 
-
     def run(self):
         """Thread activation processing order by order"""
         self.location = self.db.Locations().get(self.location_key)
@@ -271,10 +270,7 @@ class Inspector(threading.Thread):
                             pars=pars)
 
         if part.model.is_device():
-            connection = self.toolbox.modbus_conn()
-            connection = connection if self.cavity is None \
-                else connection[self.cavity]
-            part.set_dut(connection)
+            part.dut = self.toolbox.dut(part.model, self.cavity)
 
         return part
 
