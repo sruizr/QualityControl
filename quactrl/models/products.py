@@ -71,26 +71,6 @@ class PartModel(PartGroup):
                 return group.Device, group.kwargs.copy()
         return None, None
 
-    def create_dut(self, toolbox, cavity=None):
-        """Return a device instance if part model is a device
-        """
-        if self.Device:
-            arg_names = inspect.getargspec(self.Device.__init__).args
-            arg_names.pop(0)   # remove self parameter
-            kwargs = {}
-            logger.debug(arg_names)
-            for name in arg_names:
-                if name in self.kwargs:
-                    kwargs[name] = self.kwargs[name]
-                elif hasattr(toolbox, name):
-                    value = getattr(toolbox, name)()
-                    if type(value) is list:
-                        kwargs[name] = value[cavity]
-                    else:
-                        kwargs[name] = value
-
-                return self.Device(**kwargs)
-
     def is_device(self):
         return self.Device is not None
 
@@ -99,14 +79,9 @@ class Part(qua.Subject):
     """Part with unique serial number
     """
     def __init__(self, model, serial_number, pars=None):
-        super().__init__(resource=model, tracking=serial_number, **pars)
-        self.model = self.resource
-        self.serial_number = self.tracking
-        self.pars = pars
-        self.dut = None
-
-    def set_dut(self, toolbox, cavity=None):
-        self.dut = self.model.create_dut(toolbox, cavity)
+        self.model = model
+        self.serial_number = serial_number
+        self.pars = pars if pars else {}
 
 
 class Requirement(Resource):

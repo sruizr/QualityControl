@@ -49,21 +49,60 @@ class Device(qua.Subject):
         return self.pars.get('kwargs', {})
 
 
+class DutFactory:
+    def __init__(self, conn_provider):
+        self._conn = conn_provider
+
+    def __call__(self, Model, cavity=None):
+        Device = Model.Device
+        args = Model.get('args', [])
+        kwargs = Model.get('kwargs')
+
+        if cavity is None:
+            return Device(self._conn(), *args, **kwargs)
+        else:
+            return Device(self._conn(cavity), *args, **kwargs)
+
+
+class MultiplexedDutFactory(DutFactory):
+    def __init__(self, conn_provider, multiplexor_factory):
+        self.multiplexor_factory = multiplexor_factory
+        super().__init__(conn_provider)
+
+    def __call__(self, Model, cavity):
+        conn_index = (None if len(self.multiplexor_factory) == 1
+                      else cavity // len(self.multiplexor_factory))
+
+        dut = super().__call__(Model, conn_index)
+        return self.multiplexor_factory(dut, cavity)
+
+
+class ConnectionProvider(provides.Provider):
+    def __init__(self, Connection, port, *args, **kwargs):
+        super().__init__()
+        ports = port if type(port) is list else [port]
+        self._singletons = [providers.ThreadSafeSingleton(Connection, port, *args, **kwargs)
+                            for port in ports]
+
+    def __call__(self, cavity=None):
+        cavity = 0 if cavity is None else cavity
+        return self._singletons[cavity]()
+
+
 class DeviceProvider(providers.Provider):
     """Provider of devices, with tracking attribute inserted
     """
     def __init__(self, Device, *args, **kwargs):
         "docstring"
-        args = list(args)
+        logger.debug(' Creating device with tracking {}'.format(self.tracking))
         self.tracking = args.pop(0)
-        logger.debug('Creating device with tracking {}'.format(self.tracking))
         self._singleton = providers.ThreadSafeSingleton(Device, *args,
                                                         **kwargs)
         self._device = None
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self):
         if not self._device:
-            self._device = self._singleton(*args, **kwargs)
+            self._device = self._singleton()
             self._device.tracking = self.tracking
 
         return self._device
@@ -77,7 +116,8 @@ class Toolbox(containers.DynamicContainer):
         'factory': providers.Factory,
         'thread_safe_sing': providers.ThreadSafeSingleton,
         'local_safe_sing': providers.ThreadLocalSingleton,
-        'device': DeviceProvider
+        'device': DeviceProvider,
+        # 'multiplexed': MultiplexorProvider
     }
 
     def __init__(self, devices):
@@ -89,6 +129,12 @@ class Toolbox(containers.DynamicContainer):
         self._load_device_configs(devices)
         for name in self._devices.keys():
             self._inject_provider(name)
+
+
+        if hasattr(self, 'dut_multiplexor'):
+            self.dut = MultiplexedDutProvider(self.dut_multiplexor(), self.conn)
+        else:
+            self.dut = DutProvider(self.conn)
 
     def _load_device_configs(self, devices):
         for device in devices:
@@ -114,7 +160,6 @@ class Toolbox(containers.DynamicContainer):
         kwargs = config.get('kwargs', {})
         for key, value in kwargs.items():
             kwargs[key] = self._process_value(value)
-
 
         self._devices[name] = {
             'class': config.get('class'),

@@ -236,7 +236,6 @@ class Inspector(threading.Thread):
             if self.control_plan is None:
                 raise NotFoundPath(
                     'Not found control plan for {}'.format(part_number))
-
             self.destination_key = self.control_plan.destination.key
 
     def run(self):
@@ -289,7 +288,7 @@ class Inspector(threading.Thread):
                             pars=pars)
 
         if part.model.is_device():
-            part.set_dut(self.toolbox, self.cavity)
+            part.dut = self.toolbox.dut(part.model, self.cavity)
 
         return part
 
