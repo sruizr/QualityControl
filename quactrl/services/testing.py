@@ -236,12 +236,8 @@ class Inspector(threading.Thread):
             if self.control_plan is None:
                 raise NotFoundPath(
                     'Not found control plan for {}'.format(part_number))
-
-<<<<<<< HEAD
             self.destination_key = self.control_plan.destination.key
 
-=======
->>>>>>> 46e8e316de58476ff4a1e986da96ff9f47df7519
     def run(self):
         """Thread activation processing order by order"""
         self.location = self.db.Locations().get(self.location_key)
@@ -292,11 +288,7 @@ class Inspector(threading.Thread):
                             pars=pars)
 
         if part.model.is_device():
-<<<<<<< HEAD
-            part.set_dut(self.toolbox, self.cavity)
-=======
             part.dut = self.toolbox.dut(part.model, self.cavity)
->>>>>>> 46e8e316de58476ff4a1e986da96ff9f47df7519
 
         return part
 
