@@ -15,7 +15,8 @@ mapper(op.Location, inherits=core.Node,
            'sub_locations': node_relationship(
                op.Location,
                collection_class=attribute_mapped_collection('key')
-           )}
+           )
+       }
 )
 
 

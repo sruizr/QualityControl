@@ -82,6 +82,13 @@ class LocationRepo(KeyRepo):
     def __init__(self, data):
         super().__init__(data, Location)
 
+    def get(self, key):
+        return self.session.query(Location).filter(
+            Location.key == location_key).one()
+
+    def where_is(self, location):
+        return self.session.query(Location).filter(location in Location.sub_locations).first()
+
 
 class PersonRepo(KeyRepo):
     def __init__(self, data):
@@ -137,17 +144,25 @@ class DeviceRepo(Repository):
     def __init__(self, data):
         super().__init__(data)
 
-    def get_all_from(self, location_key):
+    def get_all_from(self, location_key, include_parents=True):
         """Returns all devices from a location given its key
         """
-        location = self.session.query(Location).filter(
-            Location.key == location_key).one()
-        logger.info('Location is {}'.format(location.key))
+        devices = []
+        location_repo = self.data.location_repo()
+        location = location_repo.get(location_key)
+        if include_parents:
+            parent = location_repo.where_is(location)
+            if parent:
+                devices.extend(self.get_all_from(parent.key, include_parents))
+
         results = self.session.query(Device, Token).filter(
             Device.id == Token.item_id).filter(
                 Token.node == location).all()
-        logger.info('Number of devices are: {}'.format(len(results)))
-        return [result[0] for result in results]
+
+        devices.extend([result[0] for result in results])
+        logger.info('Number of devices in {} are: {}'.format(location_key, results))
+
+        return devices
 
 
 class PartRepo(Repository):
