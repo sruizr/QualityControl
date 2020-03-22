@@ -54,16 +54,17 @@ class DeviceProvider(providers.Provider):
     """
     def __init__(self, Device, *args, **kwargs):
         "docstring"
+        super().__init__()
         args = list(args)
         self.tracking = args.pop(0)
         logger.debug('Creating device with tracking {}'.format(self.tracking))
-        self._singleton = providers.ThreadSafeSingleton(Device, *args,
+        self._injector = providers.ThreadSafeSingleton(Device, *args,
                                                         **kwargs)
         self._device = None
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self):
         if not self._device:
-            self._device = self._singleton(*args, **kwargs)
+            self._device = self._injector()
             self._device.tracking = self.tracking
 
         return self._device
@@ -75,7 +76,7 @@ class Toolbox(containers.DynamicContainer):
     _providers = {
         'singleton': providers.Singleton,
         'factory': providers.Factory,
-        'thread_safe_sing': providers.ThreadSafeSingleton,
+            'thread_safe_sing': providers.ThreadSafeSingleton,
         'local_safe_sing': providers.ThreadLocalSingleton,
         'device': DeviceProvider
     }
