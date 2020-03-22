@@ -49,26 +49,66 @@ class Device(qua.Subject):
         return self.pars.get('kwargs', {})
 
 
+class DutFactory:
+    def __init__(self, conn_provider):
+        self._conn = conn_provider
+
+    def __call__(self, model, cavity=None):
+        Device = model.Device
+        args = getattr(model,'args', [])
+        kwargs = getattr(model, 'kwargs', {})
+
+        if cavity is None:
+            return Device(self._conn(), *args, **kwargs)
+        else:
+            return Device(self._conn(cavity), *args, **kwargs)
+
+
+class MultiplexedDutFactory(DutFactory):
+    def __init__(self, conn_provider, multiplexor_factory):
+        self.multiplexor_factory = multiplexor_factory
+        super().__init__(conn_provider)
+
+    def __call__(self, model, cavity):
+        conn_index = (None if len(self.multiplexor_factory) == 1
+                      else cavity // 8)
+
+        dut = super().__call__(model, conn_index)
+        return self.multiplexor_factory(dut, cavity)
+
+
 class DeviceProvider(providers.Provider):
     """Provider of devices, with tracking attribute inserted
     """
     def __init__(self, Device, *args, **kwargs):
         "docstring"
         super().__init__()
-        args = list(args)
-        self.tracking = args.pop(0)
+        self.tracking = kwargs.pop('tracking', None)
         logger.debug('Creating device with tracking {}'.format(self.tracking))
-        self._injector = providers.ThreadSafeSingleton(Device, *args,
-                                                        **kwargs)
-        self._device = None
 
-    def __call__(self):
-        if not self._device:
-            self._device = self._injector()
-            self._device.tracking = self.tracking
+        field = kwargs.pop('multi_dev_on', None)
+        self._injectors = []
+        if field is None:
+            self._injectors.append(
+                providers.ThreadSafeSingleton(Device, *args, **kwargs)
+            )
+        else:
+            values = kwargs.pop(field)
+            for value in values:
+                new_kwargs = kwargs.copy()
+                new_kwargs[field] = value
+                self._injectors.append(
+                    providers.ThreadSafeSingleton(Device, *args, **new_kwargs)
+                )
 
-        return self._device
+    def __call__(self, cavity=None):
+        cavity = 0 if cavity is None else cavity
+        device = self._injectors[cavity]()
+        device.tracking = self.tracking
+        return device
 
+    def __len__(self):
+        return len(self._injectors)
 
 class Toolbox(containers.DynamicContainer):
     """Container of devices and its components
@@ -76,7 +116,7 @@ class Toolbox(containers.DynamicContainer):
     _providers = {
         'singleton': providers.Singleton,
         'factory': providers.Factory,
-            'thread_safe_sing': providers.ThreadSafeSingleton,
+        'thread_safe_sing': providers.ThreadSafeSingleton,
         'local_safe_sing': providers.ThreadLocalSingleton,
         'device': DeviceProvider
     }
@@ -84,25 +124,30 @@ class Toolbox(containers.DynamicContainer):
     def __init__(self, devices):
         """Receive a list of devices and loads a container of them and subcomponents
         """
-        super().__init__()
         logger.info('Composing {} devices'.format(len(devices)))
+        super().__init__()
+
         self._devices = {}
         self._load_device_configs(devices)
         for name in self._devices.keys():
             self._inject_provider(name)
 
+        if hasattr(self, 'dut_conn'):
+            if hasattr(self, 'dut_multiplexor'):
+                self.dut = MultiplexedDutFactory(self.dut_multiplexor(), self.dut_conn)
+            else:
+                self.dut = DutFactory(self.dut_conn)
+
     def _load_device_configs(self, devices):
         for device in devices:
-            config = {'strategy': 'device', 'class': device.model.class_name,
-                      'name': device.name}
-            args = [device.tracking]
-            args.extend(device.args)
-            config['args'] = args
+            config = {'strategy': 'device',
+                'class': device.model.class_name,
+                'name': device.name}
 
-            kwargs = {}
+            config['args'] = device.args
+            kwargs = {'tracking': device.tracking}
             kwargs.update(device.kwargs)
-            if kwargs:
-                config['kwargs'] = kwargs
+            config['kwargs'] = kwargs
 
             self._load_component(config)
 
@@ -115,7 +160,6 @@ class Toolbox(containers.DynamicContainer):
         kwargs = config.get('kwargs', {})
         for key, value in kwargs.items():
             kwargs[key] = self._process_value(value)
-
 
         self._devices[name] = {
             'class': config.get('class'),

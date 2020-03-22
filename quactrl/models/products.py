@@ -71,6 +71,7 @@ class PartModel(PartGroup):
                 return group.Device, group.kwargs.copy()
         return None, None
 
+<<<<<<< HEAD
     def create_dut(self, toolbox, cavity=None):
         """Return a device instance if part model is a device
         """
@@ -91,6 +92,8 @@ class PartModel(PartGroup):
 
                 return self.Device(**kwargs)
 
+=======
+>>>>>>> 46e8e316de58476ff4a1e986da96ff9f47df7519
     def is_device(self):
         return self.Device is not None
 
@@ -99,6 +102,7 @@ class Part(qua.Subject):
     """Part with unique serial number
     """
     def __init__(self, model, serial_number, pars=None):
+<<<<<<< HEAD
         super().__init__(resource=model, tracking=serial_number, **pars)
         self.model = self.resource
         self.serial_number = self.tracking
@@ -107,6 +111,11 @@ class Part(qua.Subject):
 
     def set_dut(self, toolbox, cavity=None):
         self.dut = self.model.create_dut(toolbox, cavity)
+=======
+        self.model = model
+        self.serial_number = serial_number
+        self.pars = pars if pars else {}
+>>>>>>> 46e8e316de58476ff4a1e986da96ff9f47df7519
 
 
 class Requirement(Resource):
