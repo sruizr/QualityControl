@@ -9,6 +9,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class DeviceModel(Resource):
@@ -24,6 +25,12 @@ class DeviceModel(Resource):
     @property
     def class_name(self):
         return self.pars['class']
+
+
+class AutomaticTestEquipment:
+    def __init__(self, **components):
+        for name, component in components.items():
+            setattr(self, name, component)
 
 
 class Device(qua.Subject):
@@ -54,27 +61,20 @@ class DutFactory:
         self._conn = conn_provider
 
     def __call__(self, model, cavity=None):
-        Device = model.Device
-        args = getattr(model,'args', [])
-        kwargs = getattr(model, 'kwargs', {})
+        Dut, args, kwargs = model.get_device_pars()
+        return Dut(self._conn(cavity), *args, **kwargs)
 
-        if cavity is None:
-            return Device(self._conn(), *args, **kwargs)
-        else:
-            return Device(self._conn(cavity), *args, **kwargs)
+# class MultiplexedDutFactory(DutFactory):
+#     def __init__(self, conn_provider, multiplexor_factory):
+#         self.multiplexor_factory = multiplexor_factory
+#         super().__init__(conn_provider)
 
+#     def __call__(self, model, cavity):
+#         conn_index = (None if len(self.multiplexor_factory) == 1
+#                       else cavity // 8)
 
-class MultiplexedDutFactory(DutFactory):
-    def __init__(self, conn_provider, multiplexor_factory):
-        self.multiplexor_factory = multiplexor_factory
-        super().__init__(conn_provider)
-
-    def __call__(self, model, cavity):
-        conn_index = (None if len(self.multiplexor_factory) == 1
-                      else cavity // 8)
-
-        dut = super().__call__(model, conn_index)
-        return self.multiplexor_factory(dut, cavity)
+#         dut = super().__call__(model, conn_index)
+#         return self.multiplexor_factory(dut, cavity)
 
 
 class DeviceProvider(providers.Provider):
@@ -86,31 +86,28 @@ class DeviceProvider(providers.Provider):
         self.tracking = kwargs.pop('tracking', None)
         logger.debug('Creating device with tracking {}'.format(self.tracking))
 
-        field = kwargs.pop('multi_dev_on', None)
-        self._injectors = []
-        if field is None:
-            self._injectors.append(
-                providers.ThreadSafeSingleton(Device, *args, **kwargs)
-            )
-        else:
-            values = kwargs.pop(field)
-            for value in values:
-                new_kwargs = kwargs.copy()
-                new_kwargs[field] = value
-                self._injectors.append(
-                    providers.ThreadSafeSingleton(Device, *args, **new_kwargs)
-                )
+        self._injector = providers.Singleton(Device, *args, **kwargs)
 
-    def __call__(self, cavity=None):
-        cavity = 0 if cavity is None else cavity
-        device = self._injectors[cavity]()
+    def __call__(self):
+        device = self._injector()
         device.tracking = self.tracking
         return device
 
-    def __len__(self):
-        return len(self._injectors)
 
-class Toolbox(containers.DynamicContainer):
+class Toolbox:
+    def __init__(self, devices):
+        "docstring"
+
+        container = DeviceContainer(devices)
+        for device in devices:
+            setattr(self, device.name,
+                    getattr(container, device.name)())
+
+        if hasattr(self, 'ate') and hasattr(self.ate, 'dut_conn'):
+            self.dut_factory = DutFactory(self.ate.dut_conn)
+
+
+class DeviceContainer(containers.DynamicContainer):
     """Container of devices and its components
     """
     _providers = {
@@ -127,18 +124,13 @@ class Toolbox(containers.DynamicContainer):
         logger.info('Composing {} devices'.format(len(devices)))
         super().__init__()
 
-        self._devices = {}
+        self._components = {}
         self._load_device_configs(devices)
-        for name in self._devices.keys():
+        for name in self._components.keys():
             self._inject_provider(name)
 
-        if hasattr(self, 'dut_conn'):
-            if hasattr(self, 'dut_multiplexor'):
-                self.dut = MultiplexedDutFactory(self.dut_multiplexor(), self.dut_conn)
-            else:
-                self.dut = DutFactory(self.dut_conn)
-
     def _load_device_configs(self, devices):
+        self.devices = {}
         for device in devices:
             config = {'strategy': 'device',
                 'class': device.model.class_name,
@@ -149,6 +141,7 @@ class Toolbox(containers.DynamicContainer):
             kwargs.update(device.kwargs)
             config['kwargs'] = kwargs
 
+            self.devices[device.name] =None
             self._load_component(config)
 
     def _load_component(self, config):
@@ -161,9 +154,9 @@ class Toolbox(containers.DynamicContainer):
         for key, value in kwargs.items():
             kwargs[key] = self._process_value(value)
 
-        self._devices[name] = {
+        self._components[name] = {
             'class': config.get('class'),
-            'strategy': config.get('strategy', 'thread_safe_sing'),
+            'strategy': config.get('strategy', 'singleton'),
             'name': name,
             'args': args,
             'kwargs': kwargs,
@@ -176,9 +169,9 @@ class Toolbox(containers.DynamicContainer):
         else:
             return value
 
-    def _inject_provider(self, dev_name):
-        if not hasattr(self, dev_name):
-            config = self._devices[dev_name]
+    def _inject_provider(self, name):
+        if not hasattr(self, name):
+            config = self._components[name]
 
             Provider = self._providers[config['strategy']]
             DeviceClass = get_class(config['class'])
@@ -194,9 +187,9 @@ class Toolbox(containers.DynamicContainer):
                 if type(value) is str and value and value[0] == '>':
                     kwargs[key] = self._inject_provider(value[1:])
 
-            setattr(self, dev_name, Provider(DeviceClass, *args, **kwargs))
+            setattr(self, name, Provider(DeviceClass, *args, **kwargs))
 
-        return getattr(self, dev_name)
+        return getattr(self, name)
 
 
 class DeviceRack(list):

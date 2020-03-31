@@ -70,7 +70,7 @@ class Subject(UnitaryItem):
                 for loc in check.location.sub_locations:
                     defect.clear(loc, check)
 
-        for req in requi.requirements.values():
+        for req in requi.requirements:
             self._clear_requi_defects(req, check)
 
 
@@ -94,8 +94,8 @@ class Test(op.Operation):
         elif self.part.location == self.control_plan.destination:
             self.part.move(self.part.location, self.control_plan.source, self)
         elif self.part.location != self.control_plan.source:
-            raise NotFoundPart('Part with sn {} is in  {}'.format(self.part.tracking,
-                                                                  self.part.location.key
+            raise NotFoundPart('Part with sn {} is in  {}'.format(
+                self.part.tracking, self.part.location.key
             ))
         else:
             logger.warning('Current location is  {} for tracking {}'.format(self.part.location.key,
@@ -162,7 +162,7 @@ class Check(op.Action):
             location = (
                 self.location
                 if self.cavity is None else
-                 self.location.sub_locations['{}_{}'.format(self.location.key, self.cavity)]
+                 self.location.get_location('{}_{}'.format(self.location.key, self.cavity))
             )
 
             for defect in self.defects:
@@ -281,13 +281,12 @@ class Control(op.Step):
     """
     _sampling_par = {'100%': (1, 1)}
 
-    def __init__(self, route, requirement, method_name, method_pars=None,
+    def __init__(self, route, method_name, method_pars=None, requirement=None,
                  sampling='100%', reaction=None):
 
         super().__init__(route, method_name, method_pars)
         self.requirement = requirement
         self.reaction_name = reaction
-        self.source = None
 
     def implement(self, operation):
         """Counts item (time or units)

@@ -137,6 +137,7 @@ class Flow:
         for att, value in kwargs.items():
             setattr(self, att, value)
         self.finished_on = None
+        self.state = None
 
     @property
     def status(self):

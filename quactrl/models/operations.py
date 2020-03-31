@@ -1,7 +1,5 @@
 import datetime
-import threading
-from quactrl.helpers import get_function
-from .core import Node, Resource, UnitaryItem, Path, Flow, Token
+from .core import Node, Path, Flow
 
 
 class NotAuthorizedException(Exception):
@@ -15,7 +13,12 @@ class Location(Node):
         self.key = key
         self.name = name if name else key
         self.description = description
-        self.sub_locations = {}
+        self.sublocations = []
+
+    def get_location(self, key):
+        for location in self.sublocations:
+            if location.key == key:
+                return location
 
 
 class Action(Flow):
@@ -142,7 +145,7 @@ class Operation(Flow):
 class Route(Path):
     """Planning of an operation over resources
     """
-    def __init__(self, role, source=None, destination=None,
+    def __init__(self, source=None, destination=None, role=None,
                  outputs=None, parent=None,
                  method_name=None, method_pars=None):
         """Create route from planned inputs and outputs, can be embebed
@@ -165,7 +168,9 @@ class Route(Path):
     def can_implement(self, Implementation, responsible, update):
         if not self.is_authorized(responsible):
             raise NotAuthorizedException(
-                'Responsible {} can not execute flow'.format(responsible.description)
+                'Responsible {} can not execute flow'.format(
+                    responsible.description
+                )
             )
         return Implementation(self, responsible, update)
 
@@ -178,35 +183,18 @@ class Route(Path):
 class Step(Path):
     """Planning of a sub action for a Route
     """
-    def __init__(self, route, method_name, method_pars):
+    def __init__(self, route, method_name, method_pars, sequence=None):
         self.route = route
-        self.sequence = 0 if not route.steps else route.steps[-1].sequence + 5
+        self.sequence = (sequence if sequence is None
+                         else self._get_last_sequence(route))
         self.method_name = method_name
         self.method_pars = method_pars if method_pars else {}
+        self.source = None
+        self.destination = None
         self.outputs = []
+
+    def _get_last_secuence(self, route):
+        return 0 if not route.steps else route.steps[-1].sequence + 5
 
     def implement(self, operation):
         return Action(operation, self, operation.update)
-
-
-class Question(threading.Event):
-    def __init__(self, update=None):
-        self.update = update
-        super().__init__()
-        self.request = {}
-        self.response = {}
-
-    def ask(self, key, **kwargs):
-        """Wait until answer is done by other thread
-        """
-        self.request['key'] = key
-        self.request.update(kwargs)
-        if self.update:
-            self.update('asked', self)
-        self.wait()
-
-    def answer(self, **kwargs):
-        self.response = kwargs
-        if self.update:
-            self.update('answered', self)
-        self.set()

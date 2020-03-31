@@ -1,5 +1,4 @@
 import re
-import inspect
 from quactrl.helpers import get_class
 from quactrl.models.core import Resource
 import quactrl.models.quality as qua
@@ -21,17 +20,23 @@ class PartGroup(Resource):
 
         self.models = []
         self.requirements = {}
+        self.groups = []
 
-    @property
-    def Device(self):
-        if not hasattr(self, '_Device'):
-            device_class = self.pars.get('device_class')
-            self._Device = None
-            if device_class is not None:
-                self._Device = (get_class(device_class) if device_class
-                                else None)
-                self.kwargs = self.pars.get('kwargs', {})
-        return self._Device
+    def get_device_pars(self):
+        if self.is_device():
+            if not hasattr(self, '_device_pars'):
+                device_class = self.pars.get('device_class')
+                if device_class is not None:
+                    device_pars = (get_class(device_class),
+                                   self.pars.get('args', []),
+                                   self.pars.get('kwargs', []))
+                else:
+                    for group in self.groups:
+                        device_pars = group.get_device_pars()
+                        if device_pars:
+                            break
+                self._device_pars = device_pars
+            return self._device_pars
 
     def add_model(self, part_model):
         if part_model not in self.models:
@@ -39,49 +44,52 @@ class PartGroup(Resource):
             part_model.add_group(self)
 
 
+    def is_device(self):
+        if 'device_class' in self.pars:
+            return True
+        for group in self.groups:
+            if group.is_device():
+                return True
+        return False
+
+
 class PartModel(PartGroup):
     """Abstraction of part, type of part
     """
-    def __init__(self, part_number, name=None, description=None, pars=None):
+    def __init__(self, part_number, name=None, description=None, pars=None,
+                 groups=None):
         super().__init__(part_number, name, description, pars)
-        self.groups = []
+        self.groups = [] if groups is None else groups
+
 
     def add_group(self, part_group):
         if part_group not in self.groups:
             self.groups.append(part_group)
             part_group.add_model(self)
-
-    @property
-    def Device(self):
-        """Returns a class instance for creating a dut
-        """
-        if not hasattr(self, '_Device'):
-            device_class = self.pars.get('device_class')
-            if device_class is None:
-                self._Device, self.kwargs = self._find_Device()
-            else:
-                self._Device = get_class(device_class)
-                self.kwargs = self.pars.get('kwargs', {})
-
         return self._Device
 
-    def _find_Device(self):
-        for group in self.groups:
-            if group.Device:
-                return group.Device, group.kwargs.copy()
-        return None, None
-
-    def is_device(self):
-        return self.Device is not None
+    def get_duec_content(self):
+        return {
+            'part_number': self.key,
+            'part_name': self.name,
+            'part_description': self.description
+        }
 
 
 class Part(qua.Subject):
     """Part with unique serial number
     """
     def __init__(self, model, serial_number, pars=None):
+        super().__init__(resource=model, tracking=serial_number)
         self.model = model
         self.serial_number = serial_number
         self.pars = pars if pars else {}
+
+    def get_duec_content(self):
+        content = self.model.get_duec_content()
+        content['serial_number'] = self.serial_number
+        return content
+
 
 
 class Requirement(Resource):
@@ -92,7 +100,7 @@ class Requirement(Resource):
         self.characteristic = characteristic
         self.specs = specs if specs else {}
 
-        self.requirements = {}
+        self.requirements = []
 
     @property
     def eid(self):
@@ -106,15 +114,12 @@ class Requirement(Resource):
                                  self.eid)
         return value
 
-    def add_requi(self, requirement):
-        self.requirements[requirement.key] = requirement
-
     def get_requirement(self, filter_key):
         """Returns a subrequirement by a substring of key
         """
-        for key in self.requirements.keys():
-            if filter_key in key:
-                return self.requirements[key]
+        for req in self.requirements:
+            if filter_key in req.key:
+                return req
 
 
 class Characteristic(Resource):
