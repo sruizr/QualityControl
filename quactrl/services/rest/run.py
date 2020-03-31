@@ -1,10 +1,11 @@
 import cherrypy
 import logging
+from .resources import RootResource
 
 
 class Server:
-    def __init__(self, root_resource, host='127.0.0.1', port=8080,
-                 config=None):
+    def __init__(self, part_manager, host='127.0.0.1', port=8080,
+                 resources=None, config=None):
         if not config:
             self.conf = {
                 '/': {
@@ -13,11 +14,16 @@ class Server:
                     'tools.response_headers.on': True,
                     'tools.response_headers.headers': [
                         ('Access-Control-Allow-Headers', 'Origin, Content-Type'),
-                       ('access-Control-Allow-Origin', '*')
+                        ('access-Control-Allow-Origin', '*')
                     ]
                 }
             }
 
+        if not resources:
+            resources = ['events', 'cavities', 'part_model', 'batch',
+                         'responsible', 'part']
+
+        root_resource = RootResource(part_manager, resources)
         self.host = host
         self.port = port
         cherrypy.tree.mount(root_resource, '/', self.conf)

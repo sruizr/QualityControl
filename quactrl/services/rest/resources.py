@@ -103,7 +103,6 @@ class PartResource(Resource):
         pass
 
 
-
 class EventsResource(Resource):
     @cherrypy.tools.json_out()
     def GET(self, cavity=None, word=None):

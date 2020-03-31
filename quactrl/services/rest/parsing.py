@@ -151,11 +151,12 @@ def _parse_error(error):
     return result
 
 
-def _parse_question(question):
+def _parse_request(request):
     result = {
-        'class': 'Question',
-        'request': question.request,
-        'response': question.response
+        'class': 'Request',
+        'content': request.content,
+        'key': request.key,
+        'response': request.response
     }
     return result
 
@@ -170,7 +171,7 @@ _PARSES = {
     'PartModel': _parse_part_model,
     'Cavity': _parse_cavity,
     'Part': _parse_part,
-    'Question': _parse_question,
+    'Request': _parse_request,
     'Fill': _parse_action,
     'Print': _parse_action
 }
