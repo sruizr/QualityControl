@@ -10,7 +10,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 class WrongLocationError(Exception):
@@ -30,20 +30,21 @@ class Service:
     def __init__(self, database, location, till_first_failure=True,
                  create_part=True):
 
-        self.db = database
-        self.tff = till_first_failure
+        self.dal = database
         self.location_key = location
+
+        self.tff = till_first_failure
+        self.create_part = create_part
 
         self.events = {}
         self.inspectors = {}
         self._lock = threading.Lock()
-        self.create_part = create_part
 
-        all_devices = self.db.Devices().get_all_from(self.location_key)
+        all_devices = self.dal.Devices().get_all_from(self.location_key)
 
         logger.info('Loaded {} devices at {}'.format(len(all_devices),
                                                      location))
-        logger.debug('Sesssion on main is {}'.format(self.db.Session()))
+        logger.debug('Sesssion on main is {}'.format(self.dal.Session()))
         self.toolbox = Toolbox(all_devices)
 
     @property
@@ -51,14 +52,6 @@ class Service:
         """List tests by cavity"""
         return {cavity: inspector.test
                 for cavity, inspector in self.inspectors.items()}
-
-    def start(self, cavities):
-        """Start the testing service from cavity
-        """
-        if type(cavities) is int:
-            cavities = [cavities]
-        for cavity in cavities:
-            self.start_inspector(cavity)
 
     def start_inspector(self, cavity=None):
         """Start a cavity asigning an inspector
@@ -70,7 +63,7 @@ class Service:
             self.restart_inspector(cavity)
         else:
             self.inspectors[cavity] = inspector = Inspector(
-                self.db, self.toolbox,
+                self.dal, self.toolbox,
                 self.location_key, cavity, self.tff,
                 self.create_part
             )
@@ -174,12 +167,12 @@ class Service:
 
 
 class Inspector(threading.Thread):
-    def __init__(self, database, toolbox, location_key,
+    def __init__(self, data_access_layer, toolbox, location_key,
                  cavity=None, tff=True, create_part=True):
         """Inspector of one cavity sharing some devices on a location
             Args:
             database(Container): Persistence layer container of providers
-            toolbox(Container): Container of devices
+            toolbox(Containser): Container of devices
             location_key: where is located the test station and all its devices
             cavity: cavity number, None is the station is not multicavity
             tff(Boolean): Till first failure, stops test when first failure is found
@@ -190,7 +183,7 @@ class Inspector(threading.Thread):
             name += '_{}'.format(cavity)
         super().__init__(name=name)
 
-        self.db = database
+        self.dal = data_access_layer
         self.toolbox = toolbox
         self.location_key = location_key
         self.destination_key = None
@@ -201,7 +194,7 @@ class Inspector(threading.Thread):
         # Inputs and Outputs of inspector
         self.orders = Queue()
         self.events = Queue()
-        self.state = 'avalaible'
+        self.state = None
 
         # Batch variables
         self.responsible = None
@@ -209,21 +202,21 @@ class Inspector(threading.Thread):
         self.part = None
         self.control_plan = None
         self.test = None
-
+        self._request = None
         self._stop_event = threading.Event()
 
     def set_responsible(self, responsible_key):
         """Loads responsible if it has changed
         """
         if self.responsible is None or self.responsible.key != responsible_key:
-            self.responsible = self.db.Persons().get(responsible_key)
+            self.responsible = self.dal.Persons().get(responsible_key)
 
     def set_part_model(self, part_number):
         """Set part model to be generated or found before test
         """
         if (self.part_model is None
                 or self.part_model.key != part_number):
-            self.part_model = self.db.PartModels().get(part_number)
+            self.part_model = self.dal.PartModels().get(part_number)
             if self.part_model is None:
                 raise NotFoundResource(
                     'Not found part model for partnumber{}'.format(part_number)
@@ -231,7 +224,7 @@ class Inspector(threading.Thread):
 
         if (self.control_plan is None
                 or self.part_model not in self.control_plan.outputs):
-            self.control_plan = (self.db.ControlPlans()
+            self.control_plan = (self.dal.ControlPlans()
                                  .get_by(self.part_model, self.location))
             if self.control_plan is None:
                 raise NotFoundPath(
@@ -240,9 +233,9 @@ class Inspector(threading.Thread):
 
     def run(self):
         """Thread activation processing order by order"""
-        self.location = self.db.Locations().get(self.location_key)
+        self.location = self.dal.Locations().get(self.location_key)
         self.devices = {device.tracking: device
-                        for device in self.db.Devices().get_all_from(
+                        for device in self.dal.Devices().get_all_from(
                                 self.location_key)}
 
         while not self._stop_event.is_set():
@@ -270,7 +263,7 @@ class Inspector(threading.Thread):
         """Get part from data layer if exist or create a new one
         """
 
-        part = self.db.Parts().get_by(self.part_model, serial_number)
+        part = self.dal.Parts().get_by(self.part_model, serial_number)
         if (part and part.location != self.location
                 and part.location.key != self.destination_key):
             raise WrongLocationError(
@@ -287,16 +280,23 @@ class Inspector(threading.Thread):
             part = prd.Part(self.part_model, serial_number,
                             pars=pars)
 
+        logger.debug('Part {} is device: {}'.format(part.model.key, part.model.is_device()))
         if part.model.is_device():
-            part.dut = self.toolbox.dut(part.model, self.cavity)
+            part.dut = self.toolbox.dut_factory(part.model, self.cavity)
 
         return part
+
+    @property
+    def part_sn(self):
+        if self.part is None:
+            return
+        return self.part.serial_number
 
     def run_test(self, order):
         """Process a full test  from an order
         """
         try:
-            logger.info('Init testing on cavity {}'.format(self.cavity))
+            logger.debug('Init testing on cavity {}'.format(self.cavity))
             part_info, responsible_key = order
             self.set_responsible(responsible_key)
 
@@ -307,17 +307,13 @@ class Inspector(threading.Thread):
             self.test = test = self.control_plan.implement(self.responsible,
                                                            self.update)
 
-            self.db.Tests().add(test)
-            self.db.Parts().add(part)
+            self.dal.Tests().add(test)
+            self.dal.Parts().add(part)
             logger.info('Test has been added on cavity {}'.format(self.cavity))
             test.start(part=part, toolbox=self.toolbox, devices=self.devices,
-                       cavity=self.cavity, tff=self.tff)
+                       inspector=self, cavity=self.cavity, tff=self.tff)
             try:
-                if part.dut and hasattr(part.dut, 'supply_voltage'):
-                    self.toolbox.dyncir().switch_on_dut(
-                        voltage=part.dut.supply_voltage,
-                        wait_after=1, cavity=self.cavity
-                    )
+                self._switch_dut(part, 'on')
                 test.walk()
                 test.execute()
                 test.close()
@@ -329,12 +325,8 @@ class Inspector(threading.Thread):
                 self.update('test_error', e, traceback.format_tb(trc[2]))
                 test.cancel()
             finally:
-                self.db.Session().commit()
-                if part.dut and hasattr(part.dut, 'supply_voltage'):
-                    self.toolbox.dyncir().switch_off_dut(
-                        voltage=part.dut.supply_voltage,
-                        wait_after=0, cavity=self.cavity
-                    )
+                self.dal.Session().commit()
+                self._switch_dut(part, 'off')
 
         except NotFoundPart as e:
             logger.exception(e)
@@ -350,6 +342,19 @@ class Inspector(threading.Thread):
             trc = sys.exc_info()
             self.update('crash', e, traceback.format_tb(trc[2]))
             raise e
+
+    def _switch_dut(self, part, on_off):
+        try:
+            switch = {
+                'on': self.toolbox.dyncir.switch_on_dut,
+                'off': self.toolbox.dyncir.switich_off_dut
+            }
+            switch[on_off](
+                voltage=part.dut.supply_voltage,
+                wait_after=1, cavity=self.cavity
+            )
+        except AttributeError:
+            pass
 
     def update(self, state, obj, *args):
         """Receive from test notications of states
@@ -373,9 +378,15 @@ class Inspector(threading.Thread):
 
         return pending_orders
 
+    def request(self, key, **kwargs):
+        self._request = Request(self)
+        self.update('requested', self._request)
+        self._request.send(key, **kwargs)
+        self.update('responded', self._request)
+        return self._request.response
+
     def answer(self, **kwargs):
-        if hasattr(self.test, 'question'):
-            self.test.question.answer(**kwargs)
+        self._request.answer(**kwargs)
 
     def get_last_events(self):
         """Retrieve a list of last events of current test
@@ -393,3 +404,30 @@ class Inspector(threading.Thread):
     def cancel(self):
         if self.state == 'busy':
             self.test.cancel()
+
+
+class Request(threading.Event):
+    def __init__(self, sender):
+        super().__init__()
+        self.sender = sender
+        self.content = {}
+        self.response = {}
+        self.key = None
+
+    def send(self, key, **content):
+        """Wait until answer is done by other thread
+        """
+        self.key = key
+        self.content = content
+        self._prev_state = self.sender.state
+
+        self.sender.state = 'waiting'
+        logger.debug('{} has changed to state waiting'.format(self.sender.cavity))
+        self.wait()
+
+        return self.response
+
+    def answer(self, **content):
+        self.response = content
+        self.sender.state = self._prev_state
+        self.set()
