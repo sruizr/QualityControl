@@ -1,4 +1,4 @@
-from sqlalchemy import MetaData, create_engine, and_, cast, desc, BigInteger
+from sqlalchemy import MetaDal, create_engine, and_, cast, desc, BigInteger
 from sqlalchemy.orm import sessionmaker
 from quactrl.models.core import Token, Item
 from quactrl.models.hhrr import Person, Role
@@ -8,18 +8,18 @@ from quactrl.models.devices import Device, DeviceModel
 from quactrl.models.products import (Requirement, Element, Attribute,
                                      PartModel, PartGroup, Characteristic, Part)
 from quactrl.models.documents import (Form, Directory)
-from quactrl.data import Repository
+import quactrl.dal.repositories as _
 import logging
 
 
 logger = logging.getLogger(__name__)
 
 
-metadata = MetaData()
+metadal = MetaDal()
 
 
-class Db:
-    """Database connection layer
+class Dalbase:
+    """Dalbase connection layer
     """
     def __init__(self, connection_string):
         if connection_string[:6] == 'sqlite':
@@ -32,28 +32,28 @@ class Db:
         self.engine = create_engine(connection_string,
                                     connect_args=connect_args,
                                     **kwargs)
-        metadata.bind = self.engine
+        metadal.bind = self.engine
 
         # load all mappers
-        from quactrl.data.sqlalchemy.mappers import load_all_mappers
+        from quactrl.dal.sqlalchemy.mappers import load_all_mappers
         load_all_mappers()
 
         self.Session = sessionmaker(bind=self.engine, autoflush=False)
 
     def create_schema(self):
-        metadata.create_all()
+        metadal.create_all()
 
     def drop_all(self):
         """Drop all tables, be carefull
         """
-        metadata.drop_all()
+        metadal.drop_all()
 
 
-class KeyRepo(Repository):
-    def __init__(self, data, Model):
+class KeyRepo:
+    def __init__(self, data_access_layer, Model):
         """Base class for repository with a key field
         """
-        super().__init__(data)
+        self.dal = data_access_layer
         self.Model = Model
 
     def get(self, key):
@@ -68,87 +68,82 @@ class KeyRepo(Repository):
         return self.session.query(self.Model).all()
 
 
-class RequirementRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Requirement)
+class RequirementRepo(KeyRepo, _.RequirementRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Requirement)
 
 
-class RoleRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Role)
+class RoleRepo(KeyRepo, _.RoleRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Role)
 
 
-class LocationRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Location)
-
-    def get(self, key):
-        return self.session.query(Location).filter(
-            Location.key == location_key).one()
+class LocationRepo(KeyRepo, _.LocationRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Location)
 
     def where_is(self, location):
-        return self.session.query(Location).filter(location in Location.sub_locations).first()
+        return self.session.query(Location).filter(
+            location in Location.sub_locations
+        ).first()
 
 
-class PersonRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Person)
+class PersonRepo(KeyRepo, _.PersonRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Person)
 
 
-class ModeRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Mode)
+class ModeRepo(KeyRepo, _.ModeRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Mode)
 
 
-class CharacteristicRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Characteristic)
+class CharacteristicRepo(KeyRepo, _.CharacteristicRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Characteristic)
 
 
-class ElementRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Element)
+class ElementRepo(KeyRepo, _.ElementRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Element)
 
 
-class AttributeRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Attribute)
+class AttributeRepo(KeyRepo, _.AttributeRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Attribute)
 
 
-class PartModelRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, PartModel)
+class PartModelRepo(KeyRepo, _.PartModelRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, PartModel)
 
 
-class DirectoryRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Directory)
+class DirectoryRepo(KeyRepo, _.DirectoryRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Directory)
 
 
-class FormRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, Form)
+class FormRepo(KeyRepo, _.FormRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, Form)
 
 
-class PartGroupRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, PartGroup)
+class PartGroupRepo(KeyRepo, _.PartGroupRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, PartGroup)
 
 
-class DeviceModelRepo(KeyRepo):
-    def __init__(self, data):
-        super().__init__(data, DeviceModel)
+class DeviceModelRepo(KeyRepo, _.DeviceModelRepo):
+    def __init__(self, dal):
+        KeyRepo.__init__(self, dal, DeviceModel)
 
 
-class DeviceRepo(Repository):
-    def __init__(self, data):
-        super().__init__(data)
-
+class DeviceRepo(_.DeviceRepo):
     def get_all_from(self, location_key, include_parents=True):
         """Returns all devices from a location given its key
         """
         devices = []
-        location_repo = self.data.location_repo()
+        location_repo = self.dal.location_repo()
         location = location_repo.get(location_key)
         if include_parents:
             parent = location_repo.where_is(location)
@@ -165,10 +160,7 @@ class DeviceRepo(Repository):
         return devices
 
 
-class PartRepo(Repository):
-    def __init__(self, data):
-        super().__init__(data)
-
+class PartRepo(_.PartRepo):
     def get_by(self, part_model, serial_number):
         return self.session.query(Part).filter(and_(
             Part.serial_number == serial_number,
@@ -188,7 +180,7 @@ class PartRepo(Repository):
             return part.serial_number
 
 
-class ControlPlanRepo(Repository):
+class ControlPlanRepo(_.ControlPlanRepo):
     def get_by(self, part_model, location):
         """Return control plan for a part_model on a location
         """
@@ -212,7 +204,7 @@ class ControlPlanRepo(Repository):
         return control_plan
 
 
-class TestRepo(Repository):
+class TestRepo(_.TestRepo):
     def get_last(self, location_key, tracking):
         location = self.session.query(Location).filter(
             Location.key == location_key
@@ -231,7 +223,7 @@ class TestRepo(Repository):
         return list(samples)
 
 
-class MeasurementRepo(Repository):
+class MeasurementRepo(_.MeasurementRepo):
     def get_all(self, check):
         measurements = self.session.query(Measurement).join(Token).filter(
             Token.flow == check
