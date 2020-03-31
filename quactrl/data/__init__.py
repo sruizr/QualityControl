@@ -3,6 +3,7 @@ from quactrl.helpers import get_class
 import inspect
 import logging
 
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
