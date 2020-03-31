@@ -4,6 +4,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class SetupException(Exception):
@@ -28,8 +29,14 @@ class Empty(CavityState):
         if self.cavity.part_is_present():
             self.cavity.part = None
             self.cavity.set_state('loaded')
-            logger.debug('Has part {}'.format(
-                self.cavity.part_manager._part_info))
+            # logger.debug('Has part {}'.format(
+            #     self.cavity.part_manager._part_info))
+
+
+class Waiting(CavityState):
+    def handle(self):
+        if self.cavity.inspector.state == 'busy':
+            self.cavity.set_state('busy')
 
 
 class Loaded(CavityState):
@@ -48,14 +55,16 @@ class Loaded(CavityState):
 
 class Stacked(CavityState):
     def handle(self):
-        if self.cavity.inspector.state == 'busy':
+        if self.cavity.inspector.part_sn == self.cavity.part_sn:
             self.cavity.part = self.cavity.inspector.part
             self.cavity.set_state('busy')
 
 
 class Busy(CavityState):
     def handle(self):
-        if self.cavity.inspector.state != 'busy':
+        if self.cavity.inspector.state == 'waiting':
+            self.cavity.set_state('waiting')
+        elif self.cavity.inspector.state != 'busy':
             self.cavity.set_state('solved')
 
 
@@ -73,7 +82,7 @@ class Cavity:
 
         self._states = {
             State.__name__.lower(): State(self)
-            for State in [Empty, Loaded, Stacked, Busy, Solved]
+            for State in [Empty, Loaded, Stacked, Busy, Solved, Waiting]
         }
         self._state = self._states['empty']
         self.test_service = part_manager.test_service
@@ -82,11 +91,12 @@ class Cavity:
         self.inspector = part_manager.test_service.inspectors[key]
 
         self._part = None
-        self.get_part_info = lambda: part_manager.get_part_info(self.key)
-        self.part_is_present = lambda: part_manager.part_is_present(self.key)
+        self.get_part_info = lambda: part_manager.get_part_info(self)
+        self.part_is_present = lambda: part_manager.part_is_present(self)
         self.part_is_ready = lambda: part_manager.is_ready()
         self.part_manager = part_manager
         self.resolution = None
+        self._part_sn = None
 
     @property
     def part(self):
@@ -106,9 +116,12 @@ class Cavity:
             self._state = self._states[value]
             if value == 'solved':
                 self.resolution = self.inspector.test.status
+                logger.info('Resolution on cavity {} is {}'.format(
+                    self.key, self.resolution
+                ))
             elif value in ('loaded', 'stacked', 'busy'):
                 self.resolution = None
-            self.part_manager.cavity_state_has_changed(self.key)
+            self.part_manager.cavity_state_has_changed(self)
             logger.info('Cavity {} has changed to {}'.format(
                 self.key, self.state))
 
@@ -117,8 +130,8 @@ class Cavity:
         return self._state.name
 
     def stack_part(self):
-        logger.debug('Stack part is called')
         part_info = self.get_part_info()
+        self.part_sn = part_info['serial_number']
         self.test_service.stack_part(
             part_info,
             self.part_manager.responsible.key,
@@ -140,8 +153,9 @@ class MultiPartManager(threading.Thread):
     def __init__(self, test_service, refresh_time=0.2):
         super().__init__()
         self.test_service = test_service
-        self.data = test_service.db
+        self.data = test_service.dal
         self.refresh_time = refresh_time
+        self.create_part = True
 
         self._continue = True
         self.setDaemon(True)
@@ -165,6 +179,12 @@ class MultiPartManager(threading.Thread):
                 cavity.refresh()
             time.sleep(self.refresh_time)
 
+    def start(self, tff=False):
+        self.test_service.create_part = self.create_part
+        self.test_service.tff = tff
+
+        super().start()
+
     def stop(self):
         self._continue = False
         self.join()
@@ -174,12 +194,12 @@ class MultiPartManager(threading.Thread):
         """
         return self.responsible is not None
 
-    def part_is_present(self, cavity_key):
+    def part_is_present(self, cavity):
         """Retrieve true if the part is on the cavity
         """
         raise NotImplementedError()
 
-    def get_part_info(self, cavity_key):
+    def get_part_info(self, cavity):
         """Retrieves part number and serial number of loaded part
         """
         raise NotImplementedError()
@@ -193,6 +213,8 @@ class MultiPartManager(threading.Thread):
             self.responsible = None
         else:
             self.responsible = self.data.Persons().get(key)
+        if self.responsible:
+            logger.debug('Responsible is set to {}'.format(self.responsible))
 
     def __del__(self):
         self.stop()
