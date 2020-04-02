@@ -162,7 +162,9 @@ class Check(op.Action):
             location = (
                 self.location
                 if self.cavity is None else
-                 self.location.get_location('{}_{}'.format(self.location.key, self.cavity))
+                self.location.get_location(
+                    '{}_{}'.format(self.location.key, self.cavity)
+                )
             )
 
             for defect in self.defects:

@@ -177,3 +177,7 @@ class DirectoryRepo(reps.DirectoryRepo, _KeyRepo):
 
 class TestRepo(reps.TestRepo):
     pass
+
+
+class FormRepo(reps.FormRepo, _KeyRepo):
+    pass

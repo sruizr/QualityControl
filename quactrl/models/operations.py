@@ -82,6 +82,11 @@ class Operation(Flow):
 
         return self._docs
 
+    def get_doc(self, tracking):
+        for doc in self._docs:
+            if doc.tracking == tracking:
+                return doc
+
     def execute(self):
         """Execute method asociated to route
         """

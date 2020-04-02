@@ -1,7 +1,7 @@
 import os
 import datetime
 import cherrypy
-from quactrl.rest.parsing import parse
+from quactrl.services.rest.parsing import parse
 from quactrl.helpers import is_num
 
 """Module with all resources to have an APIREST with testing

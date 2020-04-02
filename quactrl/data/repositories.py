@@ -101,7 +101,7 @@ class LocationRepo(Base):
 
 class StepRepo(Base):
     _CLASSES = {
-        '.doc.': docs.AdminStep,
+        '.docs.': docs.AdminStep,
         '.qua.': qua.Control,
         '.setup.': ops.Step
     }
