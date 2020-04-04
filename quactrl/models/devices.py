@@ -9,7 +9,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 class DeviceModel(Resource):
@@ -100,6 +100,7 @@ class Toolbox:
 
         container = DeviceContainer(devices)
         for device in devices:
+            logger.debug('Loading device {} on memory'.format(device.name))
             setattr(self, device.name,
                     getattr(container, device.name)())
 
